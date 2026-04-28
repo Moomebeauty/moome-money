@@ -1,4 +1,4 @@
-[沐蜜財務系統.html](https://github.com/user-attachments/files/27158458/default.html)
+[沐蜜財務系統.html](https://github.com/user-attachments/files/27158903/default.html)
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -167,6 +167,7 @@ tr:hover td{background:var(--bg);}
 }
 .toast{position:fixed;bottom:24px;right:24px;background:var(--brown);color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:.3s;pointer-events:none;}
 .toast.show{opacity:1;transform:translateY(0);}
+.pw-err{color:var(--red);font-size:12px;margin-top:8px;text-align:center;min-height:16px;}
 </style>
 </head>
 <body>
@@ -181,6 +182,12 @@ const app=initializeApp(FCFG);
 const db=getFirestore(app);
 const auth=getAuth(app);
 const FID='mumei_studio'; // 沐蜜工作室獨立帳本
+
+// ── 系統密碼設定 ──────────────────────────────────────────
+const SYSTEM_PASSWORD='815391';
+// 後端 Firebase 固定帳號（自動連線，使用者無需知道）
+const BACKEND_EMAIL='luoxi@family.com';
+const BACKEND_PASSWORD='family123';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 const USERS=['珞熙','助理1','助理2','助理3'];
@@ -245,15 +252,35 @@ async function setSub(col,id,data){setSyncing('syncing');try{await setDoc(doc(db
 async function delSub(col,id){setSyncing('syncing');try{await deleteDoc(doc(db,'studios',FID,col,id));setSyncing('synced');}catch{setSyncing('error');toast('刪除失敗');}}
 
 // ── AUTH ───────────────────────────────────────────────────
+// 監聽 Firebase 登入狀態（僅用於後端資料連線）
 onAuthStateChanged(auth,user=>{
-  if(user){S.auth=true;startSync();}
-  else{S.auth=false;render();}
+  if(user){
+    // 後端已連線，若使用者通過密碼驗證才進入主畫面
+    if(sessionStorage.getItem('mumei_unlock')==='1'){
+      S.auth=true;
+      startSync();
+    }
+  }else{
+    // 後端未連線，自動以固定帳號登入
+    signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD).catch(()=>{
+      console.error('後端連線失敗');
+    });
+  }
 });
+
+// 檢查是否已解鎖
+if(sessionStorage.getItem('mumei_unlock')==='1'){
+  S.auth=true;
+}
 
 // ── RENDER ─────────────────────────────────────────────────
 function render(){
   $('app').innerHTML=S.auth?appHTML():loginHTML();
   bindEvents();
+  // 若已解鎖但還沒開始同步，啟動同步
+  if(S.auth&&S.sync==='idle'&&auth.currentUser){
+    startSync();
+  }
 }
 
 function loginHTML(){return`
@@ -262,13 +289,12 @@ function loginHTML(){return`
     <div style="font-size:48px;margin-bottom:8px;">🌸</div>
     <div style="font-family:'Noto Serif TC',serif;font-size:24px;font-weight:900;color:var(--roseDk);margin-bottom:4px;">沐蜜</div>
     <div style="font-size:11px;color:var(--mut);margin-bottom:28px;letter-spacing:2px;">MUMEI STUDIO FINANCE</div>
-    <div class="fgrp" style="margin-bottom:12px;text-align:left;">
-      <label>帳號</label><input type="email" id="m_email" placeholder="studio@mumei.com" value="luoxi@family.com">
+    <div class="fgrp" style="margin-bottom:8px;text-align:left;">
+      <label>請輸入密碼</label>
+      <input type="password" id="m_pw" placeholder="••••••" autofocus onkeydown="if(event.key==='Enter')doLogin()">
     </div>
-    <div class="fgrp" style="margin-bottom:20px;text-align:left;">
-      <label>密碼</label><input type="password" id="m_pw" placeholder="••••••••" value="family123">
-    </div>
-    <button class="btn btn-p" style="width:100%;padding:12px;" onclick="doLogin()">進入系統</button>
+    <div class="pw-err" id="pw_err"></div>
+    <button class="btn btn-p" style="width:100%;padding:12px;margin-top:8px;" onclick="doLogin()">進入系統</button>
   </div>
 </div>`;}
 
@@ -363,14 +389,10 @@ function pgOverview(){
   const exp=getExpTotal();
   const profit=rev-exp;
   const svc=getSvcTotal(),prd=getPrdTotal(),crs=getCrsTotal();
-  // 低庫存警示
   const lowStock=S.data.products.filter(p=>{const inv=getInv(p.id);return toN(inv.qty)<toN(inv.minQty||5);});
-  // 本月各員工業績
   const staffSales={};
   getSales().forEach(s=>{const u=s.staff||'未分配';staffSales[u]=(staffSales[u]||0)+toN(s.amount);});
-  // 課程待收款
   const pending=(S.data.courseStudents||[]).filter(s=>!s.paid&&s.month===S.month&&s.year===yr());
-  // 近7天銷售
   const now=new Date();
   const week7=new Date(now-7*86400000).toISOString().slice(0,10);
   const recent=S.data.sales.filter(s=>s.date>=week7).reduce((s,r)=>s+toN(r.amount),0);
@@ -382,7 +404,6 @@ function pgOverview(){
 
   ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')} 數量不足，請盡快補貨</div>`:''}
 
-  <!-- 核心指標 -->
   <div class="sg sg4">
     <div class="sc rose">
       <div class="sl">💰 本月總營收</div>
@@ -406,7 +427,6 @@ function pgOverview(){
   </div>
 
   <div class="sg sg3">
-    <!-- 收入結構 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">💰 收入結構</span><button class="btn btn-p btn-sm" onclick="setP('order')">開立銷售單</button></div>
       <div class="card-bd">
@@ -422,7 +442,6 @@ function pgOverview(){
       </div>
     </div>
 
-    <!-- 員工業績 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">👩‍💼 本月業績</span><button class="btn btn-s btn-sm" onclick="setP('staff')">詳細</button></div>
       <div class="card-bd">
@@ -435,7 +454,6 @@ function pgOverview(){
       </div>
     </div>
 
-    <!-- 課程待收款 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">📋 課程待收款</span><button class="btn btn-s btn-sm" onclick="setP('courses')">管理</button></div>
       <div class="card-bd">
@@ -452,7 +470,6 @@ function pgOverview(){
     </div>
   </div>
 
-  <!-- 錢從哪裡來 / 錢從哪裡去 -->
   <div class="sg sg2">
     <div class="card">
       <div class="card-hd"><span class="card-ttl">💰 錢從哪裡來</span></div>
@@ -533,7 +550,6 @@ function pgOrder(){
   <div class="pg-ttl">🧴 銷售開單</div>
   <div class="pg-sub">選擇服務或產品，自動記入收入並扣減庫存</div>
   <div class="sg sg2">
-    <!-- 快速開單：服務 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🌸 快速服務開單</span></div>
       <div class="card-bd">
@@ -557,7 +573,6 @@ function pgOrder(){
       </div>
     </div>
 
-    <!-- 快速開單：產品 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🧴 快速產品銷售</span></div>
       <div class="card-bd">
@@ -581,7 +596,6 @@ function pgOrder(){
     </div>
   </div>
 
-  <!-- 今日銷售明細 -->
   <div class="card">
     <div class="card-hd"><span class="card-ttl">📋 今日銷售</span></div>
     <div class="tw"><table>
@@ -738,7 +752,6 @@ function pgCourses(){
     <div class="sc red"><div class="sl">待收款</div><div class="sv red">$${fmt(pending)}</div></div>
   </div>
   <div class="sg sg2">
-    <!-- 課程列表 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">📚 課程場次</span><button class="btn btn-p btn-sm" onclick="openM('addCourse')">＋ 新增課程</button></div>
       <div class="card-bd">
@@ -755,7 +768,6 @@ function pgCourses(){
       </div>
     </div>
 
-    <!-- 學員收款 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">👥 學員收款</span></div>
       <div class="tw"><table>
@@ -779,7 +791,6 @@ function pgCourses(){
 function pgStaff(){
   const staff=S.data.staff||[];
   const sales=getSales();
-  // 業績統計
   const byStaff={};
   sales.forEach(s=>{
     const u=s.staff||'未分配';
@@ -820,7 +831,6 @@ function pgStaff(){
       </tbody>
     </table></div>
   </div>
-  <!-- 本月業績明細 -->
   <div class="card">
     <div class="card-hd"><span class="card-ttl">📋 本月銷售明細（依員工）</span></div>
     <div class="tw"><table>
@@ -908,7 +918,6 @@ function pgReports(){
   const tRev=moData.reduce((s,m)=>s+m.rev,0);
   const tExp=moData.reduce((s,m)=>s+m.exp,0);
   const maxV=Math.max(...moData.map(m=>Math.max(m.rev,m.exp)),1);
-  // 年度收入結構
   const tSvc=moData.reduce((s,m)=>s+m.svc,0);
   const tPrd=moData.reduce((s,m)=>s+m.prd,0);
   const tCrs=moData.reduce((s,m)=>s+m.crs,0);
@@ -921,7 +930,6 @@ function pgReports(){
     <div class="sc ${tRev-tExp>=0?'grn':'red'}"><div class="sl">年度淨利</div><div class="sv sm ${tRev-tExp>=0?'grn':'red'}">$${fmt(tRev-tExp)}</div></div>
     <div class="sc gold"><div class="sl">年度毛利率</div><div class="sv gold sm">${tRev>0?Math.round((tRev-tExp)/tRev*100):0}%</div></div>
   </div>
-  <!-- 月度走勢 -->
   <div class="card">
     <div class="card-hd"><span class="card-ttl">📊 月度營收走勢</span></div>
     <div class="card-bd" style="overflow-x:auto;">
@@ -942,7 +950,6 @@ function pgReports(){
       </div>
     </div>
   </div>
-  <!-- 年度收入結構 -->
   <div class="sg sg2">
     <div class="card">
       <div class="card-hd"><span class="card-ttl">💰 年度收入結構</span></div>
@@ -983,7 +990,6 @@ function pgSettings(){
   <div class="pg-ttl">⚙️ 基本設定</div>
   <div class="pg-sub">服務項目、產品清單、供應商管理</div>
   <div class="sg sg3">
-    <!-- 服務項目 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🌸 服務項目</span><button class="btn btn-p btn-sm" onclick="openM('addService')">＋ 新增</button></div>
       <div class="card-bd" style="padding:0;">
@@ -994,7 +1000,6 @@ function pgSettings(){
           </div>`).join('')}
       </div>
     </div>
-    <!-- 產品清單 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🧴 產品清單</span><button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增</button></div>
       <div class="card-bd" style="padding:0;">
@@ -1005,7 +1010,6 @@ function pgSettings(){
           </div>`).join('')}
       </div>
     </div>
-    <!-- 供應商 -->
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🏭 供應商</span><button class="btn btn-p btn-sm" onclick="openM('addSupplier')">＋ 新增</button></div>
       <div class="card-bd" style="padding:0;">
@@ -1183,7 +1187,6 @@ function renderModal(){
 function bindEvents(){
   const mbg=$('modal-bg');
   if(mbg)mbg.onclick=e=>{if(e.target===mbg)closeMod();};
-  // 產品選擇自動填價格
   const pd1=$('m_pd1');
   if(pd1)pd1.onchange=()=>{
     const opt=pd1.options[pd1.selectedIndex];
@@ -1242,7 +1245,6 @@ window.saveOrder=async(type)=>{
     const item=prdSel?.options[prdSel.selectedIndex]?.text.split('（')[0]||'';
     const d=new Date(date);
     await addSub('sales',{date,type:'product',item,amount:total,qty,unitPrice:price,payMethod:$('m_pd7')?.value,staff:$('m_pd6')?.value,customer:$('m_pd5')?.value,month:d.getMonth()+1,year:d.getFullYear()});
-    // 自動扣庫存
     if(pid&&pid!=='custom'){
       const inv=getInv(pid);
       const newQty=Math.max(0,toN(inv.qty)-qty);
@@ -1280,7 +1282,6 @@ window.savePurchase=async()=>{
   const productName=isCustom?$('m_p2')?.value:(S.data.products||[]).find(p=>p.id===pid)?.name||'';
   const d=new Date(date);
   await addSub('purchases',{date,productId:isCustom?'':pid,productName,qty,unitCost,totalCost,supplier:$('m_p6')?.value,note:$('m_p7')?.value,month:d.getMonth()+1,year:d.getFullYear()});
-  // 自動增加庫存
   if(!isCustom&&pid){
     const inv=getInv(pid);
     const newQty=toN(inv.qty)+qty;
@@ -1384,31 +1385,52 @@ window.saveStaff=async()=>{
 };
 window.delStaff=async id=>{if(!confirm('確認刪除？'))return;await saveMain({staff:(S.data.staff||[]).filter(s=>s.id!==id)});toast('已刪除');};
 
-// Auth
+// ── AUTH（密碼登入）─────────────────────────────────────
 window.doLogin=async()=>{
-  try{await signInWithEmailAndPassword(auth,$('m_email')?.value,$('m_pw')?.value);}
-  catch{alert('登入失敗，請確認帳號密碼');}
+  const pw=$('m_pw')?.value||'';
+  const errEl=$('pw_err');
+  if(pw!==SYSTEM_PASSWORD){
+    if(errEl)errEl.textContent='❌ 密碼錯誤，請重新輸入';
+    if($('m_pw')){$('m_pw').value='';$('m_pw').focus();}
+    return;
+  }
+  // 密碼正確 → 標記已解鎖
+  sessionStorage.setItem('mumei_unlock','1');
+  S.auth=true;
+  // 確保 Firebase 後端已連線
+  if(!auth.currentUser){
+    try{
+      await signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD);
+    }catch(e){
+      console.error('後端連線失敗',e);
+    }
+  }
+  // 啟動同步並重新渲染
+  if(S.sync==='idle')startSync();
+  render();
+  toast('✅ 歡迎進入沐蜜系統');
 };
-window.doOut=async()=>{await signOut(auth);};
+
+window.doOut=async()=>{
+  sessionStorage.removeItem('mumei_unlock');
+  S.auth=false;
+  S.sync='idle';
+  render();
+};
 
 // Export
 window.exportXLSX=()=>{
   if(typeof XLSX==='undefined'){toast('⏳ 載入中請稍候');return;}
   const wb=XLSX.utils.book_new();
   const ds=new Date().toISOString().slice(0,10);
-  // 銷售
   const salesRows=[['日期','類型','項目','金額','付款','員工','客戶','備註'],...S.data.sales.map(s=>[s.date,s.type==='service'?'服務':s.type==='product'?'產品':'課程',s.item,s.amount,s.payMethod,s.staff,s.customer,s.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(salesRows),'銷售記錄');
-  // 支出
   const expRows=[['日期','類別','金額','付款','備註'],...S.data.expenses.map(e=>[e.date,e.category,e.amount,e.payMethod,e.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(expRows),'支出記錄');
-  // 庫存
   const invRows=[['產品名稱','類別','現有庫存','最低庫存','售價','成本','庫存價值'],...(S.data.products||[]).map(p=>{const i=getInv(p.id);return[p.name,p.category,i.qty,i.minQty||5,p.price,p.cost||0,toN(i.qty)*toN(p.cost||0)];})];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(invRows),'庫存清單');
-  // 進貨
   const purRows=[['日期','產品','數量','單價','總成本','供應商'],...S.data.purchases.map(p=>[p.date,p.productName,p.qty,p.unitCost,p.totalCost,p.supplier])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(purRows),'進貨記錄');
-  // 現金流
   const cfRows=[['日期','金額','類別','說明'],...S.data.cashFlow.map(c=>[c.date,c.amount,c.cat,c.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cfRows),'現金流水帳');
   XLSX.writeFile(wb,`沐蜜財務_${ds}.xlsx`);
