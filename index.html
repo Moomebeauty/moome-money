@@ -218,24 +218,25 @@ const MOS=['一月','二月','三月','四月','五月','六月','七月','八�
 let S={
   auth:false,page:'overview',month:new Date().getMonth()+1,
   subTab:0,sync:'idle',modal:null,
+  selectedCustomer:null, // 目前在客戶管理頁查看的客戶 ID
   data:{
     sales:[],expenses:[],purchases:[],inventory:[],
     courses:[],courseStudents:[],
     services:[],products:[],suppliers:[],staff:[],
     cashFlow:[],assets:[],settings:{},
-    // 新增：分流比例設定
+    // 客戶資料
+    customers:[],
+    // 儲值入帳記錄（公司負債）
+    deposits:[],
+    // 分流比例設定
     allocation:{
       risk:10,operation:25,salary:40,study:10,invest:15,
       bigPurchaseLimit:30000,
       monthlyHouseFund:0
     },
-    // 新增：買房頭期專款記錄
     houseFund:[],
-    // 新增：季度檢視紀錄
     quarterReviews:[],
-    // 新增：冷靜期購買決策紀錄
     coolingDecisions:[],
-    // 新增：與AI財務踩剎車對話歷史
     advisorChats:[]
   }
 };
@@ -271,7 +272,7 @@ function startSync(){
     setSyncing('synced');render();
   },()=>setSyncing('error'));
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','customers','deposits'].forEach(col=>{
     onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -341,6 +342,7 @@ function appHTML(){
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'profit',ico:'💎',lbl:'獲利分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
+    {id:'customers',ico:'👤',lbl:'客戶管理'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
     {id:'expenses',ico:'💸',lbl:'支出記帳'},
@@ -382,6 +384,7 @@ function renderPage(){
     case'overview':  return pgOverview();
     case'profit':    return pgProfit();
     case'advisor':   return pgAdvisor();
+    case'customers': return pgCustomers();
     case'sales':     return pgSales();
     case'order':     return pgOrder();
     case'expenses':  return pgExpenses();
@@ -409,6 +412,35 @@ function getPrdTotal(mo){return getSales(mo).filter(s=>s.type==='product').reduc
 function getCrsTotal(mo){return getSales(mo).filter(s=>s.type==='course').reduce((s,r)=>s+toN(r.amount),0);}
 function getExpTotal(mo){return getExp(mo).reduce((s,e)=>s+toN(e.amount),0);}
 function getRevTotal(mo){return getSales(mo).reduce((s,r)=>s+toN(r.amount),0);}
+
+// ── 客戶儲值相關計算 ──
+// 客戶當前儲值餘額 = 累計儲值 - 累計儲值扣款消費
+function getCustomerBalance(custName){
+  if(!custName)return 0;
+  const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).reduce((s,d)=>s+toN(d.amount),0);
+  // 用儲值扣款的銷售
+  const usedDeposits=(S.data.sales||[]).filter(s=>s.customer===custName&&s.payMethod==='儲值扣款').reduce((s,r)=>s+toN(r.amount),0);
+  return deposits-usedDeposits;
+}
+// 公司總儲值負債（所有客戶未消費的儲值總和）
+function getTotalDepositLiability(){
+  const allCustomers=new Set();
+  (S.data.deposits||[]).forEach(d=>{if(d.customer)allCustomers.add(d.customer);});
+  let total=0;
+  allCustomers.forEach(c=>{total+=getCustomerBalance(c);});
+  return total;
+}
+// 已實現營收（排除儲值入帳，只計入有實際服務的金額）
+// 注意：sales 紀錄的本來就是已實現營收（包含儲值扣款，因為儲值扣款代表服務已提供）
+// deposits 紀錄是預收款（未提供服務），不計入 sales
+function getCustomerHistory(custName){
+  if(!custName)return{services:[],deposits:[],totalSpent:0,visitCount:0};
+  const services=(S.data.sales||[]).filter(s=>s.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const totalSpent=services.reduce((s,r)=>s+toN(r.amount),0);
+  const dates=new Set(services.map(s=>s.date));
+  return{services,deposits,totalSpent,visitCount:dates.size};
+}
 
 // ─── OVERVIEW ──────────────────────────────────────────────
 function pgOverview(){
@@ -496,6 +528,25 @@ function pgOverview(){
       <div class="sl">🗂️ 庫存品項</div>
       <div class="sv gold">${S.data.products.length}</div>
       <div class="ss">低庫存 ${lowStock.length} 項</div>
+    </div>
+  </div>
+
+  <!-- 財務體質指標 -->
+  <div class="sg sg3" style="margin-bottom:18px;">
+    <div class="sc" style="border-top-color:var(--blu);">
+      <div class="sl">💳 儲值負債餘額</div>
+      <div class="sv sm" style="color:var(--blu);">$${fmt(getTotalDepositLiability())}</div>
+      <div class="ss">公司欠客戶的服務（不算營收）</div>
+    </div>
+    <div class="sc rose">
+      <div class="sl">👥 客戶總數</div>
+      <div class="sv rose sm">${(S.data.customers||[]).length}</div>
+      <div class="ss">建檔中的客戶</div>
+    </div>
+    <div class="sc grn">
+      <div class="sl">⭐ 有儲值客戶</div>
+      <div class="sv grn sm">${(S.data.customers||[]).filter(c=>getCustomerBalance(c.name)>0).length}</div>
+      <div class="ss">未消費完的客戶數</div>
     </div>
   </div>
 
@@ -882,6 +933,166 @@ function pgAdvisor(){
 }
 
 // ─── SALES ─────────────────────────────────────────────────
+// ─── 客戶管理 ──────────────────────────────────────────────
+function pgCustomers(){
+  const customers=S.data.customers||[];
+  // 從銷售紀錄自動補齊客戶（防止漏建）
+  const allNames=new Set(customers.map(c=>c.name));
+  const salesNames=new Set();
+  (S.data.sales||[]).forEach(s=>{if(s.customer)salesNames.add(s.customer);});
+  (S.data.deposits||[]).forEach(d=>{if(d.customer)salesNames.add(d.customer);});
+  const ghostCustomers=Array.from(salesNames).filter(n=>!allNames.has(n)).map(n=>({id:'ghost_'+n,name:n,phone:'',note:'(未建檔)',ghost:true}));
+  const allCustomers=[...customers,...ghostCustomers];
+
+  // 為每個客戶計算統計
+  const customerStats=allCustomers.map(c=>{
+    const h=getCustomerHistory(c.name);
+    const balance=getCustomerBalance(c.name);
+    const lastVisit=h.services.length>0?h.services[0].date:null;
+    return{...c,...h,balance,lastVisit};
+  }).sort((a,b)=>(b.lastVisit||'').localeCompare(a.lastVisit||''));
+
+  const totalLiability=getTotalDepositLiability();
+  const totalCustomers=allCustomers.length;
+
+  // 若有選定客戶，顯示詳細資料
+  if(S.selectedCustomer){
+    const c=customerStats.find(x=>x.name===S.selectedCustomer);
+    if(!c)return pgCustomersList(customerStats,totalLiability,totalCustomers);
+    return pgCustomerDetail(c);
+  }
+  return pgCustomersList(customerStats,totalLiability,totalCustomers);
+}
+
+function pgCustomersList(customerStats,totalLiability,totalCustomers){
+  return`
+  <div class="pg-ttl">👤 客戶管理</div>
+  <div class="pg-sub">客戶資料、消費歷史、儲值餘額一目了然</div>
+
+  <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">
+    💡 <b>會計提醒：</b>客戶儲值金屬於公司「<b>預收款負債</b>」，<b>不</b>計入營收。實際提供服務時（用儲值扣款消費）才轉為營收。
+  </div>
+
+  <div class="sg sg4">
+    <div class="sc rose">
+      <div class="sl">👥 客戶總數</div>
+      <div class="sv rose">${totalCustomers}</div>
+    </div>
+    <div class="sc gold">
+      <div class="sl">💳 儲值負債（未消費）</div>
+      <div class="sv gold sm">$${fmt(totalLiability)}</div>
+      <div class="ss">公司欠客戶的服務</div>
+    </div>
+    <div class="sc grn">
+      <div class="sl">💰 累計營收</div>
+      <div class="sv grn sm">$${fmt((S.data.sales||[]).reduce((s,r)=>s+toN(r.amount),0))}</div>
+      <div class="ss">已實現服務金額</div>
+    </div>
+    <div class="sc pur">
+      <div class="sl">⭐ 有儲值客戶</div>
+      <div class="sv" style="color:var(--pur);">${customerStats.filter(c=>c.balance>0).length}</div>
+    </div>
+  </div>
+
+  <div class="sec-hd">
+    <span class="sec-ttl">客戶清單</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-y btn-sm" onclick="openM('addDeposit')">💳 客戶儲值入帳</button>
+      <button class="btn btn-p btn-sm" onclick="openM('addCustomer')">＋ 新增客戶</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>客戶姓名</th><th>電話</th><th>消費次數</th><th>累計消費</th><th>儲值餘額</th><th>最後造訪</th><th>備註</th><th></th></tr></thead>
+      <tbody>${customerStats.length===0?`<tr><td colspan="8"><div class="empty"><div class="empty-ico">👤</div><p>尚無客戶資料</p></div></td></tr>`:
+        customerStats.map(c=>`<tr style="cursor:pointer;" onclick="viewCustomer('${c.name}')">
+          <td><b>${c.name}</b>${c.ghost?' <span class="bdg" style="background:var(--redL);color:var(--red);">未建檔</span>':''}</td>
+          <td class="tm">${c.phone||'-'}</td>
+          <td>${c.visitCount}</td>
+          <td class="ap">$${fmt(c.totalSpent)}</td>
+          <td>${c.balance>0?`<span class="ag" style="font-weight:700;">$${fmt(c.balance)}</span>`:'<span class="tm">-</span>'}</td>
+          <td class="tm">${c.lastVisit||'-'}</td>
+          <td class="tm">${c.note||''}</td>
+          <td onclick="event.stopPropagation()">${c.ghost?`<button class="btn btn-s btn-sm" onclick="openM('addCustomer','${c.name}')">建檔</button>`:`<button class="bdel" onclick="delCustomer('${c.id}')">×</button>`}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+function pgCustomerDetail(c){
+  return`
+  <div style="margin-bottom:12px;">
+    <button class="btn btn-s btn-sm" onclick="backToCustomers()">← 返回客戶清單</button>
+  </div>
+  <div class="pg-ttl">👤 ${c.name}</div>
+  <div class="pg-sub">${c.phone||'未填電話'}　${c.note||''}</div>
+
+  <div class="sg sg4">
+    <div class="sc rose">
+      <div class="sl">📅 消費次數</div>
+      <div class="sv rose">${c.visitCount}</div>
+    </div>
+    <div class="sc grn">
+      <div class="sl">💰 累計消費</div>
+      <div class="sv grn sm">$${fmt(c.totalSpent)}</div>
+    </div>
+    <div class="sc gold">
+      <div class="sl">💳 儲值餘額</div>
+      <div class="sv gold">$${fmt(c.balance)}</div>
+      <div class="ss">累計儲值 - 已用</div>
+    </div>
+    <div class="sc pur">
+      <div class="sl">📌 最後造訪</div>
+      <div class="sv sm" style="color:var(--pur);">${c.lastVisit||'-'}</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+    <button class="btn btn-y" onclick="openM('addDepositFor','${c.name}')">💳 為此客戶儲值</button>
+    ${!c.ghost?`<button class="btn btn-s" onclick="openM('editCustomer','${c.id}')">✏️ 編輯資料</button>`:''}
+  </div>
+
+  <div class="sg sg2">
+    <!-- 儲值紀錄 -->
+    <div class="card">
+      <div class="card-hd"><span class="card-ttl">💳 儲值入帳紀錄</span></div>
+      <div class="tw"><table>
+        <thead><tr><th>日期</th><th>金額</th><th>付款方式</th><th>備註</th><th></th></tr></thead>
+        <tbody>${c.deposits.length===0?`<tr><td colspan="5"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
+          c.deposits.map(d=>`<tr>
+            <td>${d.date}</td>
+            <td class="ag">+$${fmt(d.amount)}</td>
+            <td><span class="bdg">${d.payMethod||''}</span></td>
+            <td class="tm">${d.note||''}</td>
+            <td><button class="bdel" onclick="delDeposit('${d.id}')">×</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- 服務歷史 -->
+    <div class="card">
+      <div class="card-hd"><span class="card-ttl">🌸 服務歷史</span></div>
+      <div class="tw"><table>
+        <thead><tr><th>日期</th><th>項目</th><th>金額</th><th>付款</th><th>老師</th></tr></thead>
+        <tbody>${c.services.length===0?`<tr><td colspan="5"><div class="empty"><p>尚無服務紀錄</p></div></td></tr>`:
+          c.services.map(s=>`<tr>
+            <td>${s.date}</td>
+            <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
+            <td class="ap">$${fmt(s.amount)}</td>
+            <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
+            <td class="tm">${s.staff||''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  </div>`;
+}
+
+
+// ─── SALES ─────────────────────────────────────────────────
 function pgSales(){
   const sales=getSales().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const rev=getRevTotal();
@@ -910,7 +1121,7 @@ function pgSales(){
           <td><b>${s.item||''}</b></td>
           <td class="tm">${s.subNote||''}</td>
           <td class="ap">$${fmt(s.amount)}</td>
-          <td><span class="bdg">${s.payMethod||''}</span></td>
+          <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
           <td>${s.staff||''}</td>
           <td class="tm">${s.customer||''}</td>
           <td style="white-space:nowrap;">
@@ -948,9 +1159,19 @@ function pgOrder(){
           <div class="fgrp"><label>自訂項目名稱（若選自訂）</label><input type="text" id="m_od2" placeholder="若選自訂請填寫"></div>
           <div class="fgrp"><label>服務細項備註</label><input type="text" id="m_odNote" placeholder="如：第3次療程、加購精油等"></div>
           <div class="fgrp"><label>金額</label><input type="number" id="m_od3" placeholder="0"></div>
-          <div class="fgrp"><label>客戶姓名</label><input type="text" id="m_od4" placeholder="選填"></div>
+          <div class="fgrp"><label>客戶姓名</label>
+            <select id="m_od4" onchange="updateBalanceHint('od')">
+              <option value="">-- 選擇客戶 --</option>
+              ${(S.data.customers||[]).map(c=>`<option value="${c.name}">${c.name}（餘額 $${fmt(getCustomerBalance(c.name))}）</option>`).join('')}
+              <option value="__new__">+ 新客戶（直接輸入）</option>
+            </select>
+            <input type="text" id="m_od4_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+            <div id="m_od_hint" class="tm" style="margin-top:4px;"></div>
+          </div>
           <div class="fgrp"><label>服務老師</label><select id="m_od5">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
-          <div class="fgrp"><label>付款方式</label><select id="m_od6">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
+          <div class="fgrp"><label>付款方式</label>
+            <select id="m_od6" onchange="updateBalanceHint('od')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('service',false)">✓ 確認並關閉</button>
@@ -975,9 +1196,19 @@ function pgOrder(){
           <div class="fgrp"><label>單價</label><input type="number" id="m_pd3" placeholder="0" onchange="calcPrdTotal()"></div>
           <div class="fgrp"><label>小計</label><input type="number" id="m_pd4" placeholder="0" readonly style="background:var(--bg2);"></div>
           <div class="fgrp"><label>細項備註</label><input type="text" id="m_pdNote" placeholder="選填"></div>
-          <div class="fgrp"><label>客戶</label><input type="text" id="m_pd5" placeholder="選填"></div>
+          <div class="fgrp"><label>客戶</label>
+            <select id="m_pd5" onchange="updateBalanceHint('pd')">
+              <option value="">-- 選擇客戶 --</option>
+              ${(S.data.customers||[]).map(c=>`<option value="${c.name}">${c.name}（餘額 $${fmt(getCustomerBalance(c.name))}）</option>`).join('')}
+              <option value="__new__">+ 新客戶（直接輸入）</option>
+            </select>
+            <input type="text" id="m_pd5_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+            <div id="m_pd_hint" class="tm" style="margin-top:4px;"></div>
+          </div>
           <div class="fgrp"><label>服務老師</label><select id="m_pd6">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
-          <div class="fgrp"><label>付款方式</label><select id="m_pd7">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
+          <div class="fgrp"><label>付款方式</label>
+            <select id="m_pd7" onchange="updateBalanceHint('pd')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('product',false)">✓ 確認並關閉</button>
@@ -1050,15 +1281,23 @@ function pgExpenses(){
 function pgPurchase(){
   const purchases=S.data.purchases.filter(p=>p.month===S.month&&p.year===yr()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total=purchases.reduce((s,p)=>s+toN(p.totalCost),0);
+  const paidTotal=purchases.filter(p=>p.paidToExpense).reduce((s,p)=>s+toN(p.totalCost),0);
+  const unpaidTotal=total-paidTotal;
   return`
   <div class="pg-ttl">📦 進貨管理</div>
-  <div class="pg-sub">支援批次輸入，一次新增多筆進貨</div>
+  <div class="pg-sub">支援批次輸入，可手動點「✓ 已付款」同步到支出記帳</div>
   ${moSel()}
-  <div class="sg sg3">
+  <div class="sg sg4">
     <div class="sc gold"><div class="sl">本月進貨筆數</div><div class="sv gold">${purchases.length}</div></div>
-    <div class="sc red"><div class="sl">本月進貨成本</div><div class="sv red">$${fmt(total)}</div></div>
-    <div class="sc"><div class="sl">供應商數</div><div class="sv">${(S.data.suppliers||[]).length}</div></div>
+    <div class="sc red"><div class="sl">本月進貨成本</div><div class="sv red sm">$${fmt(total)}</div></div>
+    <div class="sc grn"><div class="sl">已付款</div><div class="sv grn sm">$${fmt(paidTotal)}</div></div>
+    <div class="sc"><div class="sl">未付款</div><div class="sv sm" style="color:var(--gold);">$${fmt(unpaidTotal)}</div></div>
   </div>
+
+  <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">
+    💡 進貨記錄不會自動寫入「支出記帳」。等實際付款（信用卡扣款 / 轉帳）後，再點該筆進貨的「<b>✓ 已付款</b>」按鈕，才會寫入支出。
+  </div>
+
   <div class="sec-hd">
     <span class="sec-ttl">進貨記錄</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -1066,11 +1305,12 @@ function pgPurchase(){
       <button class="btn btn-p btn-sm" onclick="openM('addPurchase')">＋ 單筆新增</button>
     </div>
   </div>
+
   <div class="card">
     <div class="tw"><table>
-      <thead><tr><th>日期</th><th>產品</th><th>類別</th><th>數量</th><th>單價</th><th>總成本</th><th>供應商</th><th>備註</th><th></th></tr></thead>
-      <tbody>${purchases.length===0?`<tr><td colspan="9"><div class="empty"><div class="empty-ico">📦</div><p>本月尚無進貨記錄</p></div></td></tr>`:
-        purchases.map(p=>`<tr>
+      <thead><tr><th>日期</th><th>產品</th><th>類別</th><th>數量</th><th>單價</th><th>總成本</th><th>供應商</th><th>備註</th><th>付款狀態</th><th></th></tr></thead>
+      <tbody>${purchases.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>本月尚無進貨記錄</p></div></td></tr>`:
+        purchases.map(p=>`<tr style="${p.paidToExpense?'background:var(--grnL);':''}">
           <td>${p.date||''}</td>
           <td><b>${p.productName||''}</b></td>
           <td><span class="bdg gold">${p.category||''}</span></td>
@@ -1079,7 +1319,14 @@ function pgPurchase(){
           <td class="an">$${fmt(p.totalCost)}</td>
           <td class="tm">${p.supplier||''}</td>
           <td class="tm">${p.note||''}</td>
-          <td><button class="bdel" onclick="delPurchase('${p.id}')">×</button></td>
+          <td>${p.paidToExpense?
+            `<div><span class="pill grn">✅ 已付款</span><div class="tm" style="margin-top:4px;font-size:11px;">${p.paidDate||''} ${p.paidMethod||''}</div></div>`
+            :`<button class="btn btn-g btn-sm" onclick="openM('payPurchase','${p.id}')">✓ 標記已付款</button>`}</td>
+          <td style="white-space:nowrap;">
+            ${p.paidToExpense?`<button class="btn btn-s btn-sm" onclick="unpayPurchase('${p.id}')">取消付款</button>`:''}
+            <button class="bdel" style="color:#aaa;" onclick="openM('editPurchase','${p.id}')">✏️</button>
+            <button class="bdel" onclick="delPurchase('${p.id}')">×</button>
+          </td>
         </tr>`).join('')}
       </tbody>
     </table></div>
@@ -1088,47 +1335,77 @@ function pgPurchase(){
 
 // ─── INVENTORY ─────────────────────────────────────────────
 function pgInventory(){
+function pgInventory(){
   const prods=S.data.products||[];
+  // 統計各類別產品數
+  const cats=['全部',...PRODUCT_CATS];
+  const curCat=cats[S.subTab]||'全部';
+  const filtered=curCat==='全部'?prods:prods.filter(p=>p.category===curCat);
+  // 統計
+  const lowCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)<toN(i.minQty||5);}).length;
+  const totalValue=prods.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(p.cost||0);},0);
+  const okCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)>=toN(i.minQty||5);}).length;
   return`
   <div class="pg-ttl">🗂️ 庫存盤點</div>
-  <div class="pg-sub">即時庫存數量，低量自動警示</div>
+  <div class="pg-sub">點上方分頁切換不同類別，方便快速查找產品售價</div>
   <div class="sg sg4">
     <div class="sc"><div class="sl">產品總數</div><div class="sv">${prods.length}</div></div>
-    <div class="sc red"><div class="sl">低庫存警示</div><div class="sv red">${prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)<toN(i.minQty||5);}).length}</div></div>
-    <div class="sc gold"><div class="sl">庫存總價值</div><div class="sv gold sm">$${fmt(prods.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(p.cost||0);},0))}</div></div>
-    <div class="sc grn"><div class="sl">正常庫存</div><div class="sv grn">${prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)>=toN(i.minQty||5);}).length}</div></div>
+    <div class="sc red"><div class="sl">低庫存警示</div><div class="sv red">${lowCount}</div></div>
+    <div class="sc gold"><div class="sl">庫存總價值</div><div class="sv gold sm">$${fmt(totalValue)}</div></div>
+    <div class="sc grn"><div class="sl">正常庫存</div><div class="sv grn">${okCount}</div></div>
   </div>
+
+  <!-- 類別分頁 -->
+  <div class="tab-bar">${cats.map((c,i)=>{
+    const cnt=c==='全部'?prods.length:prods.filter(p=>p.category===c).length;
+    return`<button class="tab-p${S.subTab===i?' active':''}" onclick="setT(${i})">${c}（${cnt}）</button>`;
+  }).join('')}</div>
+
   <div class="card">
-    <div class="card-hd"><span class="card-ttl">庫存清單</span><button class="btn btn-p btn-sm" onclick="openM('stockCheck')">📋 手動盤點</button></div>
+    <div class="card-hd">
+      <span class="card-ttl">${curCat==='全部'?'所有產品':curCat}　共 ${filtered.length} 項</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-y btn-sm" onclick="openM('stockCheck')">📋 手動盤點</button>
+        <button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增產品</button>
+      </div>
+    </div>
     <div class="tw"><table>
-      <thead><tr><th>產品名稱</th><th>類別</th><th>現有庫存</th><th>最低庫存</th><th>狀態</th><th>成本單價</th><th>庫存價值</th><th>快速調整</th></tr></thead>
-      <tbody>${prods.length===0?`<tr><td colspan="8"><div class="empty"><div class="empty-ico">📦</div><p>尚未建立產品，請先到「基本設定」新增產品</p></div></td></tr>`:
-        prods.map(p=>{
+      <thead><tr><th>產品名稱</th><th>類別</th><th>售價</th><th>成本</th><th>現有庫存</th><th>最低庫存</th><th>狀態</th><th>庫存價值</th><th>快速調整</th><th></th></tr></thead>
+      <tbody>${filtered.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>${curCat==='全部'?'尚未建立產品，請先到「基本設定」或「進貨管理」新增':'此類別尚無產品'}</p></div></td></tr>`:
+        filtered.map(p=>{
           const inv=getInv(p.id);
           const qty=toN(inv.qty);
           const minQty=toN(inv.minQty||5);
           const val=qty*toN(p.cost||0);
           const status=qty<=0?'<span class="tag tag-low">缺貨</span>':qty<minQty?'<span class="tag tag-warn">偏低</span>':'<span class="tag tag-ok">正常</span>';
           return`<tr style="${qty<minQty?'background:var(--redL);':''}">
-            <td><b>${p.name}</b></td>
-            <td><span class="bdg">${p.category||''}</span></td>
+            <td><b>${p.name}</b>${p.note?`<div class="tm">${p.note}</div>`:''}</td>
+            <td><span class="bdg gold">${p.category||''}</span></td>
+            <td><b style="color:var(--rose);font-size:16px;">$${fmt(p.price||0)}</b></td>
+            <td class="tm">$${fmt(p.cost||0)}</td>
             <td style="font-size:18px;font-weight:700;color:${qty<minQty?'var(--red)':'var(--grn)'};">${qty}</td>
             <td class="tm">${minQty}</td>
             <td>${status}</td>
-            <td class="tm">$${fmt(p.cost||0)}</td>
             <td class="ag">$${fmt(val)}</td>
             <td>
               <div style="display:flex;align-items:center;gap:6px;">
                 <button class="btn btn-s btn-sm" onclick="adjInv('${p.id}',-1)">－</button>
                 <span style="font-weight:700;min-width:32px;text-align:center;">${qty}</span>
                 <button class="btn btn-p btn-sm" onclick="adjInv('${p.id}',1)">＋</button>
-                <button class="btn btn-s btn-sm" onclick="openM('setInv','${p.id}')">設定</button>
               </div>
+            </td>
+            <td style="white-space:nowrap;">
+              <button class="bdel" style="color:#aaa;" onclick="openM('editProduct','${p.id}')">✏️</button>
+              <button class="bdel" onclick="delProduct('${p.id}')">×</button>
             </td>
           </tr>`;
         }).join('')}
       </tbody>
     </table></div>
+    ${filtered.length>0?`<div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div><b>${curCat==='全部'?'總計':curCat}：</b>${filtered.length} 項</div>
+      <div><b>合計庫存價值：</b><span class="ag" style="font-size:16px;">$${fmt(filtered.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(p.cost||0);},0))}</span></div>
+    </div>`:''}
   </div>`;
 }
 
@@ -1158,9 +1435,9 @@ function pgCourses(){
           <div style="border:1.5px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:10px;">
             <div class="fbb">
               <div><b>${c.name}</b><span class="bdg pur" style="margin-left:8px;">${c.category||''}</span></div>
-              <button class="bdel" onclick="delCourse('${c.id}')">×</button>
+              <div><button class="bdel" style="color:#aaa;" onclick="openM('editCourse','${c.id}')">✏️</button><button class="bdel" onclick="delCourse('${c.id}')">×</button></div>
             </div>
-            <div class="tm" style="margin-top:6px;">📅 ${c.date} ｜ 👩‍🏫 ${c.instructor||''} ｜ 💰 $${fmt(c.price)}/人</div>
+            <div class="tm" style="margin-top:6px;">📅 ${c.date} ｜ 👩‍🏫 ${c.instructor||''} ｜ 💰 $${fmt(c.price)}/人${c.note?` ｜ 📝 ${c.note}`:''}</div>
             <button class="btn btn-s btn-sm" style="margin-top:10px;" onclick="openM('addStudent','${c.id}')">＋ 新增學員</button>
           </div>`).join('')}
       </div>
@@ -1169,14 +1446,16 @@ function pgCourses(){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">👥 學員收款</span></div>
       <div class="tw"><table>
-        <thead><tr><th>學員</th><th>課程</th><th>金額</th><th>狀態</th><th></th></tr></thead>
-        <tbody>${moStudents.length===0?`<tr><td colspan="5"><div class="empty"><p>尚無學員</p></div></td></tr>`:
+        <thead><tr><th>學員</th><th>課程</th><th>金額</th><th>備註</th><th>狀態</th><th></th></tr></thead>
+        <tbody>${moStudents.length===0?`<tr><td colspan="6"><div class="empty"><p>尚無學員</p></div></td></tr>`:
           moStudents.sort((a,b)=>a.paid-b.paid).map(s=>`<tr>
             <td><b>${s.studentName}</b></td>
             <td class="tm">${s.courseName||''}</td>
             <td class="${s.paid?'ap':'an'}">$${fmt(s.amount)}</td>
+            <td class="tm">${s.note||''}</td>
             <td>${s.paid?'<span class="pill grn">已收款</span>':'<span class="pill red">待收款</span>'}</td>
-            <td>${s.paid?'':` <button class="btn btn-g btn-sm" onclick="markPaid('${s.id}')">收款</button>`}
+            <td style="white-space:nowrap;">${s.paid?'':` <button class="btn btn-g btn-sm" onclick="markPaid('${s.id}')">收款</button>`}
+              <button class="bdel" style="color:#aaa;" onclick="openM('editStudent','${s.id}')">✏️</button>
               <button class="bdel" onclick="delStudent('${s.id}')">×</button></td>
           </tr>`).join('')}
         </tbody>
@@ -1276,7 +1555,7 @@ function pgCashflow(){
             <td><span class="bdg">${r.cat||''}</span></td>
             <td class="tm">${r.note||''}</td>
             <td class="run-bal" style="color:${r.run>=0?'var(--grn)':'var(--red)'};">$${fmt(r.run)}</td>
-            <td><button class="bdel" onclick="delCF('${r.id}')">×</button></td>
+            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editCF','${r.id}')">✏️</button><button class="bdel" onclick="delCF('${r.id}')">×</button></td>
           </tr>`).join('')}
         <tr style="background:${moBal>=0?'var(--grnL)':'var(--redL)'};font-weight:700;border-top:2px solid var(--bdr);">
           <td colspan="2" class="tm">💰 本月結餘</td>
@@ -1475,7 +1754,39 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="savePurchase()">✓ 確認進貨</button></div>`;}
 
-  if(m.t==='batchPurchase'){
+  if(m.t==='editPurchase'){const p=(S.data.purchases||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✏️ 編輯進貨</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${p.date||today()}"></div>
+      <div class="fgrp"><label>產品類別</label><select id="m_pCat">${PRODUCT_CATS.map(cc=>`<option${cc===p.category?' selected':''}>${cc}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>產品名稱</label><input type="text" id="m_p2" value="${p.productName||''}"></div>
+      <div class="fgrp"><label>進貨數量</label><input type="number" id="m_p3" value="${p.qty||0}" onchange="calcPTotal()"></div>
+      <div class="fgrp"><label>進貨單價</label><input type="number" id="m_p4" value="${p.unitCost||0}" onchange="calcPTotal()"></div>
+      <div class="fgrp"><label>總成本</label><input type="number" id="m_p5" value="${p.totalCost||0}"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>供應商</label>
+        <select id="m_p6" onchange="toggleCustomSupplier()">
+          ${SUPPLIER_PRESETS.map(s=>`<option${s===p.supplier?' selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_p7" value="${p.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updPurchase('${p.id}')">✓ 更新</button></div>`;}
+
+  if(m.t==='payPurchase'){const p=(S.data.purchases||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✓ 標記已付款</div>
+    <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">
+      💡 確認後會自動寫入「支出記帳」一筆，類別為「進貨成本」。
+    </div>
+    <div style="background:var(--bg2);padding:14px;border-radius:10px;margin-bottom:14px;">
+      <div class="tm">產品</div><div style="font-size:16px;font-weight:700;">${p.productName||''}</div>
+      <div class="tm" style="margin-top:8px;">總成本</div><div style="font-size:20px;font-weight:700;color:var(--red);">$${fmt(p.totalCost)}</div>
+      <div class="tm" style="margin-top:8px;">供應商：${p.supplier||'-'}　日期：${p.date||''}</div>
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>實際付款日期</label><input type="date" id="m_pay0" value="${today()}"></div>
+      <div class="fgrp"><label>付款方式</label><select id="m_pay1">${PAY.map(pp=>`<option>${pp}</option>`).join('')}</select></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註（選填）</label><input type="text" id="m_pay2" placeholder="如：刷玉山卡 6/15 帳單"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-g" onclick="payPurchase('${p.id}')">✓ 確認已付款</button></div>`;}
+
     const rows=S.modal.rows||[{}];
     c=`<div class="mttl">📦 批次進貨輸入</div>
     <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -1526,16 +1837,38 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCourse()">✓ 新增</button></div>`;}
 
+  if(m.t==='editCourse'){const co=(S.data.courses||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✏️ 編輯課程</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>課程名稱</label><input type="text" id="m_c0" value="${co.name||''}"></div>
+      <div class="fgrp"><label>類別</label><select id="m_c1">${COURSE_CATS.map(cc=>`<option${cc===co.category?' selected':''}>${cc}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>日期</label><input type="date" id="m_c2" value="${co.date||today()}"></div>
+      <div class="fgrp"><label>講師</label><select id="m_c3">${TEACHERS.map(u=>`<option${u===co.instructor?' selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>學費/人</label><input type="number" id="m_c4" value="${co.price||0}"></div>
+      <div class="fgrp"><label>備註</label><input type="text" id="m_c5" value="${co.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updCourse('${co.id}')">✓ 更新</button></div>`;}
+
   if(m.t==='addStudent'){const crs=(S.data.courses||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">👥 新增學員：${crs.name||''}</div>
     <div class="fg">
       <div class="fgrp"><label>學員姓名</label><input type="text" id="m_st0" placeholder="姓名"></div>
       <div class="fgrp"><label>學費金額</label><input type="number" id="m_st1" value="${crs.price||0}"></div>
       <div class="fgrp"><label>付款狀態</label><select id="m_st2"><option value="0">未付款</option><option value="1">已付款</option></select></div>
       <div class="fgrp"><label>付款方式</label><select id="m_st3">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>備註</label><input type="text" id="m_st4" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveStudent('${m.x}','${crs.name||''}')">✓ 新增</button></div>`;}
 
-  if(m.t==='addCF'){const CF_CATS=['存入','服務收入','產品收入','課程收入','現金提款','費用支出','進貨','薪資發放','其他'];c=`<div class="mttl">🏦 新增現金流記錄</div>
+  if(m.t==='editStudent'){const st=(S.data.courseStudents||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✏️ 編輯學員</div>
+    <div class="fg">
+      <div class="fgrp"><label>學員姓名</label><input type="text" id="m_st0" value="${st.studentName||''}"></div>
+      <div class="fgrp"><label>學費金額</label><input type="number" id="m_st1" value="${st.amount||0}"></div>
+      <div class="fgrp"><label>付款狀態</label><select id="m_st2"><option value="0"${!st.paid?' selected':''}>未付款</option><option value="1"${st.paid?' selected':''}>已付款</option></select></div>
+      <div class="fgrp"><label>付款方式</label><select id="m_st3">${PAY.map(p=>`<option${p===st.payMethod?' selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>備註</label><input type="text" id="m_st4" value="${st.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updStudent('${st.id}')">✓ 更新</button></div>`;}
+
+  if(m.t==='addCF'){const CF_CATS=['存入','服務收入','產品收入','課程收入','儲值入帳','儲值退款','現金提款','費用支出','進貨','薪資發放','其他'];c=`<div class="mttl">🏦 新增現金流記錄</div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_cf0" value="${today()}"></div>
       <div class="fgrp"><label>金額（正=收入 / 負=支出）</label><input type="number" id="m_cf1" placeholder="0"></div>
@@ -1543,6 +1876,15 @@ function renderModal(){
       <div class="fgrp"><label>說明</label><input type="text" id="m_cf3" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCF()">✓ 新增</button></div>`;}
+
+  if(m.t==='editCF'){const cf=(S.data.cashFlow||[]).find(x=>x.id===m.x)||{};const CF_CATS=['存入','服務收入','產品收入','課程收入','儲值入帳','儲值退款','現金提款','費用支出','進貨','薪資發放','其他'];c=`<div class="mttl">✏️ 編輯現金流</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_cf0" value="${cf.date||today()}"></div>
+      <div class="fgrp"><label>金額</label><input type="number" id="m_cf1" value="${cf.amount||0}"></div>
+      <div class="fgrp"><label>類別</label><select id="m_cf2">${CF_CATS.map(cc=>`<option${cc===cf.cat?' selected':''}>${cc}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>說明</label><input type="text" id="m_cf3" value="${cf.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updCF('${cf.id}')">✓ 更新</button></div>`;}
 
   if(m.t==='addService'){c=`<div class="mttl">🌸 新增服務項目</div>
     <div class="fg fg2">
@@ -1560,8 +1902,21 @@ function renderModal(){
       <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" placeholder="0"></div>
       <div class="fgrp"><label>初始庫存</label><input type="number" id="m_pr4" placeholder="0"></div>
       <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="5" value="5"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註（選填）</label><input type="text" id="m_pr6" placeholder="如：適合敏感肌、規格 50ml"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveProduct()">✓ 新增</button></div>`;}
+
+  if(m.t==='editProduct'){const pr=(S.data.products||[]).find(x=>x.id===m.x)||{};const inv=getInv(m.x);c=`<div class="mttl">✏️ 編輯產品</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>產品名稱</label><input type="text" id="m_pr0" value="${pr.name||''}"></div>
+      <div class="fgrp"><label>類別</label><select id="m_pr1">${PRODUCT_CATS.map(cc=>`<option${cc===pr.category?' selected':''}>${cc}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" value="${pr.price||0}"></div>
+      <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" value="${pr.cost||0}"></div>
+      <div class="fgrp"><label>現有庫存</label><input type="number" id="m_pr4" value="${inv.qty||0}"></div>
+      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" value="${inv.minQty||5}"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_pr6" value="${pr.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updProduct('${pr.id}')">✓ 更新</button></div>`;}
 
   if(m.t==='addSupplier'){c=`<div class="mttl">🏭 新增供應商</div>
     <div class="fg fg2">
@@ -1580,6 +1935,73 @@ function renderModal(){
       <div class="fgrp"><label>備註</label><input type="text" id="m_sf3" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveStaff()">✓ 新增</button></div>`;}
+
+  // ─── 新增客戶 ───
+  if(m.t==='addCustomer'){
+    const presetName=m.x||'';
+    c=`<div class="mttl">👤 新增客戶</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>客戶姓名 *</label><input type="text" id="m_cu0" placeholder="姓名" value="${presetName}"></div>
+      <div class="fgrp"><label>電話</label><input type="text" id="m_cu1" placeholder="選填"></div>
+      <div class="fgrp"><label>生日</label><input type="date" id="m_cu2"></div>
+      <div class="fgrp"><label>來源</label><select id="m_cu3"><option>朋友介紹</option><option>IG</option><option>FB</option><option>Google</option><option>路過</option><option>其他</option></select></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註（喜好、肌膚狀況、注意事項）</label><textarea id="m_cu4" rows="3" placeholder="選填"></textarea></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCustomer()">✓ 新增</button></div>`;
+  }
+
+  // ─── 編輯客戶 ───
+  if(m.t==='editCustomer'){
+    const cu=(S.data.customers||[]).find(x=>x.id===m.x)||{};
+    c=`<div class="mttl">✏️ 編輯客戶資料</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>姓名</label><input type="text" id="m_cu0" value="${cu.name||''}"></div>
+      <div class="fgrp"><label>電話</label><input type="text" id="m_cu1" value="${cu.phone||''}"></div>
+      <div class="fgrp"><label>生日</label><input type="date" id="m_cu2" value="${cu.birthday||''}"></div>
+      <div class="fgrp"><label>來源</label><select id="m_cu3">${['朋友介紹','IG','FB','Google','路過','其他'].map(s=>`<option${s===cu.source?' selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><textarea id="m_cu4" rows="3">${cu.note||''}</textarea></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updCustomer('${cu.id}')">✓ 更新</button></div>`;
+  }
+
+  // ─── 客戶儲值入帳 ───
+  if(m.t==='addDeposit'){c=`<div class="mttl">💳 客戶儲值入帳</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 儲值金不計入營收，記為公司「預收款負債」。客人來消費時用「儲值扣款」付款方式才會轉為營收。
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_dp0" value="${today()}"></div>
+      <div class="fgrp"><label>客戶</label>
+        <select id="m_dp1">
+          <option value="">-- 選擇客戶 --</option>
+          ${(S.data.customers||[]).map(cu=>`<option value="${cu.name}">${cu.name}（目前餘額 $${fmt(getCustomerBalance(cu.name))}）</option>`).join('')}
+          <option value="__new__">+ 新客戶（直接輸入）</option>
+        </select>
+        <input type="text" id="m_dp1_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+      </div>
+      <div class="fgrp"><label>儲值金額 *</label><input type="number" id="m_dp2" placeholder="如：10000"></div>
+      <div class="fgrp"><label>實際收款方式</label><select id="m_dp3"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註（如：方案名稱、贈送金額）</label><input type="text" id="m_dp4" placeholder="如：儲一萬送兩千方案"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDeposit()">✓ 確認入帳</button></div>`;
+    bindDepositCustomerToggle();
+  }
+
+  // ─── 為指定客戶儲值 ───
+  if(m.t==='addDepositFor'){
+    const custName=m.x||'';
+    c=`<div class="mttl">💳 為「${custName}」儲值入帳</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 目前餘額：<b>$${fmt(getCustomerBalance(custName))}</b>
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_dp0" value="${today()}"></div>
+      <div class="fgrp"><label>儲值金額 *</label><input type="number" id="m_dp2" placeholder="如：10000"></div>
+      <div class="fgrp"><label>實際收款方式</label><select id="m_dp3"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
+      <div class="fgrp"><label>備註</label><input type="text" id="m_dp4" placeholder="選填"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDepositFor('${custName}')">✓ 確認入帳</button></div>`;
+  }
 
   // ─── 新增分流比例編輯 ───
   if(m.t==='editAlloc'){
@@ -1755,19 +2177,39 @@ window.saveOrder=async(type,continueInput)=>{
       if(!amount||amount<=0){alert('請輸入金額（必須大於 0）');return;}
       const sel=$('m_od1')?.value||'';
       const item=sel==='自訂項目'?($('m_od2')?.value?.trim()||'自訂服務'):sel;
+      // 客戶處理
+      let customer=$('m_od4')?.value||'';
+      if(customer==='__new__')customer=$('m_od4_new')?.value?.trim()||'';
+      const payMethod=$('m_od6')?.value||'';
+      // 儲值扣款檢核
+      if(payMethod==='儲值扣款'){
+        if(!customer){alert('儲值扣款必須選擇客戶');return;}
+        const bal=getCustomerBalance(customer);
+        if(bal<amount){
+          if(!confirm(`⚠️ 客戶儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(amount)}\n\n是否仍要記錄？（餘額會變負數）`))return;
+        }
+      }
       const d=new Date(date);
       await addSub('sales',{
         date,type:'service',item,
         subNote:$('m_odNote')?.value||'',
         amount,
-        payMethod:$('m_od6')?.value||'',
+        payMethod,
         staff:$('m_od5')?.value||'',
-        customer:$('m_od4')?.value||'',
+        customer,
         month:d.getMonth()+1,year:d.getFullYear()
       });
+      // 新客戶自動建檔
+      if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
+        const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
+        await saveMain({customers});
+      }
       toast(`✅ 已記帳 $${fmt(amount)}`);
       if(continueInput){
-        ['m_od2','m_odNote','m_od3','m_od4'].forEach(id=>{if($(id))$(id).value='';});
+        ['m_od2','m_odNote','m_od3'].forEach(id=>{if($(id))$(id).value='';});
+        if($('m_od4'))$('m_od4').value='';
+        if($('m_od4_new')){$('m_od4_new').value='';$('m_od4_new').style.display='none';}
+        if($('m_od_hint'))$('m_od_hint').innerHTML='';
         $('m_od2')?.focus();
       }else{
         const c=$('pg-content');if(c)c.innerHTML=renderPage();
@@ -1781,14 +2223,25 @@ window.saveOrder=async(type,continueInput)=>{
       if(!total||total<=0){alert('請輸入單價（小計必須大於 0）');return;}
       const prdSel=$('m_pd1'),pid=prdSel?.value||'';
       const item=prdSel&&prdSel.selectedIndex>=0?(prdSel.options[prdSel.selectedIndex]?.text.split('（')[0]||'產品'):'產品';
+      // 客戶處理
+      let customer=$('m_pd5')?.value||'';
+      if(customer==='__new__')customer=$('m_pd5_new')?.value?.trim()||'';
+      const payMethod=$('m_pd7')?.value||'';
+      if(payMethod==='儲值扣款'){
+        if(!customer){alert('儲值扣款必須選擇客戶');return;}
+        const bal=getCustomerBalance(customer);
+        if(bal<total){
+          if(!confirm(`⚠️ 客戶儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(total)}\n\n是否仍要記錄？`))return;
+        }
+      }
       const d=new Date(date);
       await addSub('sales',{
         date,type:'product',item,
         subNote:$('m_pdNote')?.value||'',
         amount:total,qty,unitPrice:price,
-        payMethod:$('m_pd7')?.value||'',
+        payMethod,
         staff:$('m_pd6')?.value||'',
-        customer:$('m_pd5')?.value||'',
+        customer,
         month:d.getMonth()+1,year:d.getFullYear()
       });
       if(pid&&pid!==''){
@@ -1797,10 +2250,18 @@ window.saveOrder=async(type,continueInput)=>{
         const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
         await saveMain({inventory:newInv});
       }
+      // 新客戶自動建檔
+      if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
+        const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
+        await saveMain({customers});
+      }
       toast(`✅ 已記帳 $${fmt(total)}`);
       if(continueInput){
-        ['m_pd2','m_pd3','m_pd4','m_pdNote','m_pd5'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
+        ['m_pd2','m_pd3','m_pd4','m_pdNote'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
         if($('m_pd1'))$('m_pd1').value='';
+        if($('m_pd5'))$('m_pd5').value='';
+        if($('m_pd5_new')){$('m_pd5_new').value='';$('m_pd5_new').style.display='none';}
+        if($('m_pd_hint'))$('m_pd_hint').innerHTML='';
         $('m_pd1')?.focus();
       }else{
         const c=$('pg-content');if(c)c.innerHTML=renderPage();
@@ -1860,6 +2321,59 @@ window.savePurchase=async()=>{
   toast(`✅ 進貨完成，庫存已增加 ${qty} 個`);closeMod();
 };
 window.delPurchase=async id=>{if(!confirm('確認刪除？'))return;await delSub('purchases',id);toast('已刪除');};
+
+window.updPurchase=async(id)=>{
+  const date=$('m_p0')?.value;
+  const productName=$('m_p2')?.value?.trim();
+  const category=$('m_pCat')?.value;
+  const qty=parseFloat($('m_p3')?.value)||0;
+  const unitCost=parseFloat($('m_p4')?.value)||0;
+  const totalCost=parseFloat($('m_p5')?.value)||qty*unitCost;
+  if(!date||!qty||!productName){alert('請填日期、產品名稱和數量');return;}
+  const supSel=$('m_p6')?.value;
+  const supplier=supSel==='其他手動輸入廠商'?($('m_p6c')?.value||'').trim():supSel;
+  const d=new Date(date);
+  const old=(S.data.purchases||[]).find(x=>x.id===id)||{};
+  await setSub('purchases',id,{...old,date,productName,category,qty,unitCost,totalCost,supplier,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  toast('✅ 進貨已更新');closeMod();
+};
+
+// ── 進貨同步支出 ──
+window.payPurchase=async(id)=>{
+  const p=(S.data.purchases||[]).find(x=>x.id===id);
+  if(!p){toast('找不到進貨記錄');return;}
+  if(p.paidToExpense){toast('已付款過');return;}
+  const paidDate=$('m_pay0')?.value||today();
+  const paidMethod=$('m_pay1')?.value||'';
+  const payNote=$('m_pay2')?.value||'';
+  const d=new Date(paidDate);
+  // 1. 寫入支出記帳
+  const expenseRef=await addSub('expenses',{
+    date:paidDate,
+    category:'進貨成本',
+    amount:toN(p.totalCost),
+    payMethod:paidMethod,
+    note:`【進貨】${p.productName||''}　${p.supplier||''}　數量 ${p.qty||0}${payNote?'　'+payNote:''}`,
+    fromPurchaseId:id,
+    month:d.getMonth()+1,year:d.getFullYear()
+  });
+  // 2. 標記進貨已付款
+  await setSub('purchases',id,{...p,paidToExpense:true,paidDate,paidMethod,payNote,expenseId:expenseRef?.id||''});
+  toast(`✅ 已標記付款，自動記入支出 $${fmt(p.totalCost)}`);
+  closeMod();
+};
+window.unpayPurchase=async(id)=>{
+  if(!confirm('取消付款？\n會同時刪除「支出記帳」中對應的那筆支出'))return;
+  const p=(S.data.purchases||[]).find(x=>x.id===id);
+  if(!p)return;
+  // 1. 刪除對應的支出
+  if(p.expenseId){
+    try{await delSub('expenses',p.expenseId);}catch(e){console.warn('刪除支出失敗',e);}
+  }
+  // 2. 還原進貨狀態
+  await setSub('purchases',id,{...p,paidToExpense:false,paidDate:'',paidMethod:'',payNote:'',expenseId:''});
+  toast('已取消付款狀態');
+};
 
 // ── Purchase 批次 ──
 window.addBatchRow=()=>{
@@ -1954,19 +2468,36 @@ window.saveCourse=async()=>{
   await addSub('courses',{name,category:$('m_c1')?.value,date:$('m_c2')?.value,instructor:$('m_c3')?.value,price:parseFloat($('m_c4')?.value)||0,note:$('m_c5')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 課程已新增');closeMod();
 };
+window.updCourse=async(id)=>{
+  const name=$('m_c0')?.value;if(!name){alert('請填課程名稱');return;}
+  const d=new Date($('m_c2')?.value||today());
+  await setSub('courses',id,{name,category:$('m_c1')?.value,date:$('m_c2')?.value,instructor:$('m_c3')?.value,price:parseFloat($('m_c4')?.value)||0,note:$('m_c5')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  toast('✅ 課程已更新');closeMod();
+};
 window.delCourse=async id=>{if(!confirm('確認刪除？'))return;await delSub('courses',id);toast('已刪除');};
+
 window.saveStudent=async(courseId,courseName)=>{
   const name=$('m_st0')?.value;if(!name){alert('請填學員姓名');return;}
   const paid=$('m_st2')?.value==='1';
   const amount=parseFloat($('m_st1')?.value)||0;
-  await addSub('courseStudents',{studentName:name,courseId,courseName,amount,paid,payMethod:paid?$('m_st3')?.value:'',month:S.month,year:yr()});
-  if(paid){const d=new Date();await addSub('sales',{date:today(),type:'course',item:courseName,subNote:'',amount,payMethod:$('m_st3')?.value,staff:'',customer:name,month:d.getMonth()+1,year:d.getFullYear()});}
+  const note=$('m_st4')?.value||'';
+  await addSub('courseStudents',{studentName:name,courseId,courseName,amount,paid,payMethod:paid?$('m_st3')?.value:'',note,month:S.month,year:yr()});
+  if(paid){const d=new Date();await addSub('sales',{date:today(),type:'course',item:courseName,subNote:note,amount,payMethod:$('m_st3')?.value,staff:'',customer:name,month:d.getMonth()+1,year:d.getFullYear()});}
   toast('✅ 學員已新增');closeMod();
+};
+window.updStudent=async(id)=>{
+  const old=(S.data.courseStudents||[]).find(x=>x.id===id);if(!old)return;
+  const name=$('m_st0')?.value;if(!name){alert('請填學員姓名');return;}
+  const paid=$('m_st2')?.value==='1';
+  const amount=parseFloat($('m_st1')?.value)||0;
+  const note=$('m_st4')?.value||'';
+  await setSub('courseStudents',id,{...old,studentName:name,amount,paid,payMethod:paid?$('m_st3')?.value:old.payMethod||'',note});
+  toast('✅ 學員已更新');closeMod();
 };
 window.markPaid=async(id)=>{
   const s=(S.data.courseStudents||[]).find(x=>x.id===id);if(!s)return;
   await setSub('courseStudents',id,{...s,paid:true,payMethod:'現金'});
-  await addSub('sales',{date:today(),type:'course',item:s.courseName,subNote:'',amount:s.amount,payMethod:'現金',staff:'',customer:s.studentName,month:s.month,year:s.year});
+  await addSub('sales',{date:today(),type:'course',item:s.courseName,subNote:s.note||'',amount:s.amount,payMethod:'現金',staff:'',customer:s.studentName,month:s.month,year:s.year});
   toast('✅ 已收款並記入收入');
 };
 window.delStudent=async id=>{if(!confirm('確認刪除？'))return;await delSub('courseStudents',id);toast('已刪除');};
@@ -1978,6 +2509,13 @@ window.saveCF=async()=>{
   const d=new Date(date);
   await addSub('cashFlow',{date,amount,cat:$('m_cf2')?.value,note:$('m_cf3')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 已新增');closeMod();
+};
+window.updCF=async(id)=>{
+  const date=$('m_cf0')?.value,amount=parseFloat($('m_cf1')?.value)||0;
+  if(!date||!amount){alert('請填日期和金額');return;}
+  const d=new Date(date);
+  await setSub('cashFlow',id,{date,amount,cat:$('m_cf2')?.value,note:$('m_cf3')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  toast('✅ 已更新');closeMod();
 };
 window.delCF=async id=>{if(!confirm('確認刪除？'))return;await delSub('cashFlow',id);toast('已刪除');};
 
@@ -1994,9 +2532,17 @@ window.saveProduct=async()=>{
   const pid=uid();
   const qty=parseFloat($('m_pr4')?.value)||0;
   const minQty=parseFloat($('m_pr5')?.value)||5;
-  const prods=[...(S.data.products||[]),{id:pid,name,category:$('m_pr1')?.value,price:parseFloat($('m_pr2')?.value)||0,cost:parseFloat($('m_pr3')?.value)||0}];
+  const prods=[...(S.data.products||[]),{id:pid,name,category:$('m_pr1')?.value,price:parseFloat($('m_pr2')?.value)||0,cost:parseFloat($('m_pr3')?.value)||0,note:$('m_pr6')?.value||''}];
   const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty}];
   await saveMain({products:prods,inventory:newInv});toast('✅ 產品已新增');closeMod();
+};
+window.updProduct=async(id)=>{
+  const name=$('m_pr0')?.value?.trim();if(!name){alert('請填產品名稱');return;}
+  const qty=parseFloat($('m_pr4')?.value)||0;
+  const minQty=parseFloat($('m_pr5')?.value)||5;
+  const prods=(S.data.products||[]).map(p=>p.id===id?{...p,name,category:$('m_pr1')?.value,price:parseFloat($('m_pr2')?.value)||0,cost:parseFloat($('m_pr3')?.value)||0,note:$('m_pr6')?.value||''}:p);
+  const newInv=[...S.data.inventory.filter(i=>i.productId!==id),{productId:id,qty,minQty}];
+  await saveMain({products:prods,inventory:newInv});toast('✅ 產品已更新');closeMod();
 };
 window.delProduct=async id=>{
   if(!confirm('確認刪除？'))return;
@@ -2016,6 +2562,132 @@ window.saveStaff=async()=>{
   await saveMain({staff});toast('✅ 已新增');closeMod();
 };
 window.delStaff=async id=>{if(!confirm('確認刪除？'))return;await saveMain({staff:(S.data.staff||[]).filter(s=>s.id!==id)});toast('已刪除');};
+
+// ── 客戶管理 ──
+window.viewCustomer=(name)=>{S.selectedCustomer=name;render();};
+window.backToCustomers=()=>{S.selectedCustomer=null;render();};
+
+window.saveCustomer=async()=>{
+  const name=$('m_cu0')?.value?.trim();
+  if(!name){alert('請填客戶姓名');return;}
+  // 檢查是否已存在
+  if((S.data.customers||[]).find(c=>c.name===name)){
+    alert('此客戶姓名已存在');return;
+  }
+  const customers=[...(S.data.customers||[]),{
+    id:uid(),name,
+    phone:$('m_cu1')?.value||'',
+    birthday:$('m_cu2')?.value||'',
+    source:$('m_cu3')?.value||'',
+    note:$('m_cu4')?.value||'',
+    createdAt:today()
+  }];
+  await saveMain({customers});
+  toast('✅ 客戶已建檔');
+  closeMod();
+};
+
+window.updCustomer=async(id)=>{
+  const customers=(S.data.customers||[]).map(c=>c.id===id?{
+    ...c,
+    name:$('m_cu0')?.value?.trim()||c.name,
+    phone:$('m_cu1')?.value||'',
+    birthday:$('m_cu2')?.value||'',
+    source:$('m_cu3')?.value||'',
+    note:$('m_cu4')?.value||''
+  }:c);
+  await saveMain({customers});
+  toast('✅ 已更新');
+  closeMod();
+};
+
+window.delCustomer=async(id)=>{
+  if(!confirm('確認刪除這位客戶？\n（消費紀錄與儲值紀錄不會被刪除）'))return;
+  await saveMain({customers:(S.data.customers||[]).filter(c=>c.id!==id)});
+  toast('已刪除');
+};
+
+// ── 儲值入帳 ──
+function bindDepositCustomerToggle(){
+  setTimeout(()=>{
+    const sel=$('m_dp1');
+    if(sel)sel.onchange=()=>{
+      const newInput=$('m_dp1_new');
+      if(newInput)newInput.style.display=sel.value==='__new__'?'block':'none';
+    };
+  },50);
+}
+
+window.saveDeposit=async()=>{
+  let customer=$('m_dp1')?.value||'';
+  if(customer==='__new__')customer=$('m_dp1_new')?.value?.trim()||'';
+  const date=$('m_dp0')?.value;
+  const amount=parseFloat($('m_dp2')?.value)||0;
+  if(!customer){alert('請選擇或輸入客戶');return;}
+  if(!date||!amount){alert('請填日期和金額');return;}
+  // 同步加入現金流（實際有收到錢）
+  const payMethod=$('m_dp3')?.value||'轉帳';
+  const note=$('m_dp4')?.value||'';
+  const d=new Date(date);
+  await addSub('deposits',{date,customer,amount,payMethod,note,month:d.getMonth()+1,year:d.getFullYear()});
+  // 同步現金流（這是實收金錢）
+  await addSub('cashFlow',{date,amount,cat:'儲值入帳',note:`${customer} 儲值 ${note?'('+note+')':''}`,month:d.getMonth()+1,year:d.getFullYear()});
+  // 若是新客戶，自動建檔
+  if(!(S.data.customers||[]).find(c=>c.name===customer)){
+    const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
+    await saveMain({customers});
+  }
+  toast(`✅ 儲值入帳成功，記入「預收款負債」`);
+  closeMod();
+};
+
+window.saveDepositFor=async(customer)=>{
+  const date=$('m_dp0')?.value;
+  const amount=parseFloat($('m_dp2')?.value)||0;
+  if(!date||!amount){alert('請填日期和金額');return;}
+  const payMethod=$('m_dp3')?.value||'轉帳';
+  const note=$('m_dp4')?.value||'';
+  const d=new Date(date);
+  await addSub('deposits',{date,customer,amount,payMethod,note,month:d.getMonth()+1,year:d.getFullYear()});
+  await addSub('cashFlow',{date,amount,cat:'儲值入帳',note:`${customer} 儲值 ${note?'('+note+')':''}`,month:d.getMonth()+1,year:d.getFullYear()});
+  toast(`✅ 已為 ${customer} 儲值 $${fmt(amount)}`);
+  closeMod();
+};
+
+window.delDeposit=async id=>{
+  if(!confirm('確認刪除這筆儲值紀錄？'))return;
+  await delSub('deposits',id);
+  toast('已刪除');
+};
+
+// ── 銷售開單時即時顯示客戶儲值餘額 ──
+window.updateBalanceHint=(prefix)=>{
+  const sel=$('m_'+prefix+'4')||$('m_'+prefix+'5');
+  const newInput=$('m_'+prefix+'4_new')||$('m_'+prefix+'5_new');
+  const hint=$('m_'+prefix+'_hint');
+  const paySel=$('m_'+prefix+'6')||$('m_'+prefix+'7');
+  if(sel&&newInput){
+    newInput.style.display=sel.value==='__new__'?'block':'none';
+  }
+  if(hint&&sel){
+    const name=sel.value;
+    if(name&&name!=='__new__'&&name!==''){
+      const bal=getCustomerBalance(name);
+      const payMethod=paySel?.value||'';
+      if(payMethod==='儲值扣款'){
+        if(bal>0){
+          hint.innerHTML=`💳 儲值餘額 <b style="color:var(--gold);">$${fmt(bal)}</b>　(扣款後將剩餘 $${fmt(bal-(parseFloat($('m_'+prefix+'3')?.value)||parseFloat($('m_'+prefix+'4')?.value)||0))})`;
+        }else{
+          hint.innerHTML=`<span style="color:var(--red);">⚠️ 此客戶儲值餘額為 0，無法用儲值扣款</span>`;
+        }
+      }else{
+        hint.innerHTML=bal>0?`💳 此客戶儲值餘額：<b>$${fmt(bal)}</b>`:'';
+      }
+    }else{
+      hint.innerHTML='';
+    }
+  }
+};
 
 // ── 分流比例 ──
 window.saveAlloc=async()=>{
@@ -2142,6 +2814,15 @@ window.exportXLSX=()=>{
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(purRows),'進貨記錄');
   const cfRows=[['日期','金額','類別','說明'],...S.data.cashFlow.map(c=>[c.date,c.amount,c.cat,c.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cfRows),'現金流水帳');
+  // 客戶資料
+  const custRows=[['姓名','電話','生日','來源','儲值餘額','累計消費','消費次數','備註'],...(S.data.customers||[]).map(c=>{
+    const h=getCustomerHistory(c.name);
+    return[c.name,c.phone||'',c.birthday||'',c.source||'',getCustomerBalance(c.name),h.totalSpent,h.visitCount,c.note||''];
+  })];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(custRows),'客戶資料');
+  // 儲值紀錄
+  const dpRows=[['日期','客戶','儲值金額','實際收款方式','備註'],...(S.data.deposits||[]).map(d=>[d.date,d.customer,d.amount,d.payMethod,d.note])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dpRows),'儲值入帳');
   XLSX.writeFile(wb,`沐蜜財務_${ds}.xlsx`);
   toast('✅ Excel 已下載');
 };
