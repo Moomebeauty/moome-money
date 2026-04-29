@@ -1335,7 +1335,6 @@ function pgPurchase(){
 
 // ─── INVENTORY ─────────────────────────────────────────────
 function pgInventory(){
-function pgInventory(){
   const prods=S.data.products||[];
   // 統計各類別產品數
   const cats=['全部',...PRODUCT_CATS];
@@ -1787,6 +1786,7 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-g" onclick="payPurchase('${p.id}')">✓ 確認已付款</button></div>`;}
 
+  if(m.t==='batchPurchase'){
     const rows=S.modal.rows||[{}];
     c=`<div class="mttl">📦 批次進貨輸入</div>
     <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
