@@ -186,7 +186,14 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-ap
 import{getFirestore,doc,collection,onSnapshot,setDoc,addDoc,deleteDoc,getDocs,query,where,orderBy,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-const FCFG={apiKey:"AIzaSyC5lPGRmFjkpBa4dIeGSIHPyMVJVxSNp3k",authDomain:"family-finance-97e44.firebaseapp.com",projectId:"family-finance-97e44"};
+const FCFG={
+  apiKey:"AIzaSyCnVJQe7pSazJKMNc9XXshWk3S3gk-O2A4",
+  authDomain:"money-a362d.firebaseapp.com",
+  projectId:"money-a362d",
+  storageBucket:"money-a362d.firebasestorage.app",
+  messagingSenderId:"884211458396",
+  appId:"1:884211458396:web:78e6394bcdf97b666de199"
+};
 const app=initializeApp(FCFG);
 const db=getFirestore(app);
 const auth=getAuth(app);
@@ -194,8 +201,8 @@ const FID='mumei_studio';
 
 // ── 系統密碼設定 ──────────────────────────────────────────
 const SYSTEM_PASSWORD='815391';
-const BACKEND_EMAIL='luoxi@family.com';
-const BACKEND_PASSWORD='family123';
+const BACKEND_EMAIL='moome5391@gmail.com';
+const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 const TEACHERS=['珞熙','璇璇','婉甄','其他']; // 服務老師
@@ -296,8 +303,8 @@ onAuthStateChanged(auth,user=>{
       if(S.sync==='idle')startSync();
     }
   }else{
-    signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD).catch(()=>{
-      console.error('後端連線失敗');
+    signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD).catch(err=>{
+      console.error('Firebase 登入失敗',err);
     });
   }
 });
@@ -1740,57 +1747,68 @@ window.delSale=async id=>{if(!confirm('確認刪除？'))return;await delSub('sa
 
 // ── Order ──（連續輸入版）
 window.saveOrder=async(type,continueInput)=>{
-  if(type==='service'){
-    const date=$('m_od0')?.value,amount=parseFloat($('m_od3')?.value)||0;
-    if(!date||!amount){alert('請填日期和金額');return;}
-    const sel=$('m_od1')?.value;
-    const item=sel==='自訂項目'?($('m_od2')?.value||'自訂服務'):sel;
-    const d=new Date(date);
-    await addSub('sales',{
-      date,type:'service',item,
-      subNote:$('m_odNote')?.value||'',
-      amount,
-      payMethod:$('m_od6')?.value,
-      staff:$('m_od5')?.value,
-      customer:$('m_od4')?.value||'',
-      month:d.getMonth()+1,year:d.getFullYear()
-    });
-    toast(`✅ 已記帳 $${fmt(amount)}`);
-    if(continueInput){
-      // 清空可變欄位，保留日期、付款、老師
-      ['m_od2','m_odNote','m_od3','m_od4'].forEach(id=>{if($(id))$(id).value='';});
-      $('m_od2')?.focus();
+  try{
+    if(type==='service'){
+      const date=$('m_od0')?.value;
+      const amount=parseFloat($('m_od3')?.value)||0;
+      if(!date){alert('請選擇日期');return;}
+      if(!amount||amount<=0){alert('請輸入金額（必須大於 0）');return;}
+      const sel=$('m_od1')?.value||'';
+      const item=sel==='自訂項目'?($('m_od2')?.value?.trim()||'自訂服務'):sel;
+      const d=new Date(date);
+      await addSub('sales',{
+        date,type:'service',item,
+        subNote:$('m_odNote')?.value||'',
+        amount,
+        payMethod:$('m_od6')?.value||'',
+        staff:$('m_od5')?.value||'',
+        customer:$('m_od4')?.value||'',
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+      toast(`✅ 已記帳 $${fmt(amount)}`);
+      if(continueInput){
+        ['m_od2','m_odNote','m_od3','m_od4'].forEach(id=>{if($(id))$(id).value='';});
+        $('m_od2')?.focus();
+      }else{
+        const c=$('pg-content');if(c)c.innerHTML=renderPage();
+      }
+    }else{
+      const date=$('m_pd0')?.value;
+      const qty=parseFloat($('m_pd2')?.value)||1;
+      const price=parseFloat($('m_pd3')?.value)||0;
+      const total=qty*price;
+      if(!date){alert('請選擇日期');return;}
+      if(!total||total<=0){alert('請輸入單價（小計必須大於 0）');return;}
+      const prdSel=$('m_pd1'),pid=prdSel?.value||'';
+      const item=prdSel&&prdSel.selectedIndex>=0?(prdSel.options[prdSel.selectedIndex]?.text.split('（')[0]||'產品'):'產品';
+      const d=new Date(date);
+      await addSub('sales',{
+        date,type:'product',item,
+        subNote:$('m_pdNote')?.value||'',
+        amount:total,qty,unitPrice:price,
+        payMethod:$('m_pd7')?.value||'',
+        staff:$('m_pd6')?.value||'',
+        customer:$('m_pd5')?.value||'',
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+      if(pid&&pid!==''){
+        const inv=getInv(pid);
+        const newQty=Math.max(0,toN(inv.qty)-qty);
+        const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
+        await saveMain({inventory:newInv});
+      }
+      toast(`✅ 已記帳 $${fmt(total)}`);
+      if(continueInput){
+        ['m_pd2','m_pd3','m_pd4','m_pdNote','m_pd5'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
+        if($('m_pd1'))$('m_pd1').value='';
+        $('m_pd1')?.focus();
+      }else{
+        const c=$('pg-content');if(c)c.innerHTML=renderPage();
+      }
     }
-  }else{
-    const date=$('m_pd0')?.value,qty=parseFloat($('m_pd2')?.value)||1,price=parseFloat($('m_pd3')?.value)||0,total=qty*price;
-    if(!date||!total){alert('請填日期和金額');return;}
-    const prdSel=$('m_pd1'),pid=prdSel?.value;
-    const item=prdSel?.options[prdSel.selectedIndex]?.text.split('（')[0]||'';
-    const d=new Date(date);
-    await addSub('sales',{
-      date,type:'product',item,
-      subNote:$('m_pdNote')?.value||'',
-      amount:total,qty,unitPrice:price,
-      payMethod:$('m_pd7')?.value,
-      staff:$('m_pd6')?.value,
-      customer:$('m_pd5')?.value||'',
-      month:d.getMonth()+1,year:d.getFullYear()
-    });
-    if(pid&&pid!==''){
-      const inv=getInv(pid);
-      const newQty=Math.max(0,toN(inv.qty)-qty);
-      const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
-      await saveMain({inventory:newInv});
-    }
-    toast(`✅ 已記帳 $${fmt(total)}，庫存已扣減`);
-    if(continueInput){
-      ['m_pd2','m_pd3','m_pd4','m_pdNote','m_pd5'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
-      if($('m_pd1'))$('m_pd1').value='';
-      $('m_pd1')?.focus();
-    }
-  }
-  if(!continueInput){
-    const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  }catch(err){
+    console.error('saveOrder 失敗:',err);
+    alert('儲存失敗，請檢查網路連線\n錯誤：'+(err.message||err));
   }
 };
 
@@ -2096,7 +2114,7 @@ window.doLogin=async()=>{
   if(!auth.currentUser){
     try{
       await signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD);
-    }catch(e){console.error('後端連線失敗',e);}
+    }catch(e){console.error('Firebase 連線失敗',e);}
   }
   if(S.sync==='idle')startSync();
   render();
