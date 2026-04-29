@@ -1,4 +1,4 @@
-[沐蜜財務系統.html](https://github.com/user-attachments/files/27158903/default.html)
+[沐蜜財務系統-2.html](https://github.com/user-attachments/files/27186417/-2.html)
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -13,189 +13,199 @@
   --gold:#C4A46B;--goldL:#F9F0E0;--goldDk:#8C6B3A;
   --grn:#5A8C6B;--grnL:#E8F5ED;--red:#C25A5A;--redL:#FAEAEA;
   --blu:#5A7AC2;--bluL:#E8EEFA;--pur:#8C5AC2;--purL:#F0E8FA;
-  --brown:#6B4C3A;--txt:#2D1F1A;--mut:#9E8880;--bdr:#EAE0D8;
+  --brown:#6B4C3A;--txt:#2D1F1A;--mut:#7E6860;--bdr:#EAE0D8;
   --bg:#FDFAF8;--bg2:#F7F0EC;--bg3:#F0E8E2;--card:#FFFFFF;
   --shadow:0 2px 16px rgba(180,100,100,0.08);
   --shadow2:0 4px 32px rgba(180,100,100,0.14);
 }
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--txt);font-size:14px;min-height:100vh;}
-h1,h2,h3{font-family:'Noto Serif TC',serif;}
+*{box-sizing:border-box;margin:0;padding:0;letter-spacing:0.04em;}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--txt);font-size:17px;min-height:100vh;line-height:1.65;}
+h1,h2,h3{font-family:'Noto Serif TC',serif;letter-spacing:0.08em;}
 
 /* ── LAYOUT ── */
 .app{display:flex;min-height:100vh;}
-.sidebar{width:200px;background:linear-gradient(180deg,var(--roseDk) 0%,var(--brown) 100%);padding:0;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:100;}
-.sb-logo{padding:20px 16px 12px;border-bottom:1px solid rgba(255,255,255,0.12);}
-.sb-logo .name{font-family:'Noto Serif TC',serif;font-size:18px;font-weight:900;color:#fff;letter-spacing:2px;}
-.sb-logo .sub{font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px;letter-spacing:1px;}
-.sb-item{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;transition:.2s;color:rgba(255,255,255,0.7);font-size:13px;border-left:3px solid transparent;}
+.sidebar{width:220px;background:linear-gradient(180deg,var(--roseDk) 0%,var(--brown) 100%);padding:14px 0;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:100;}
+.sb-item{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;transition:.2s;color:rgba(255,255,255,0.78);font-size:16px;border-left:4px solid transparent;letter-spacing:0.06em;}
 .sb-item:hover{background:rgba(255,255,255,0.1);color:#fff;}
-.sb-item.active{background:rgba(255,255,255,0.15);color:#fff;border-left-color:var(--gold);font-weight:700;}
-.sb-item .ico{font-size:16px;width:22px;text-align:center;}
-.sb-section{font-size:9px;font-weight:700;color:rgba(255,255,255,0.35);padding:14px 16px 4px;letter-spacing:2px;text-transform:uppercase;}
+.sb-item.active{background:rgba(255,255,255,0.18);color:#fff;border-left-color:var(--gold);font-weight:700;}
+.sb-item .ico{font-size:20px;width:26px;text-align:center;}
 
-.main{margin-left:200px;flex:1;display:flex;flex-direction:column;}
-.topbar{background:var(--card);border-bottom:1px solid var(--bdr);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow);}
-.tb-ttl{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:700;color:var(--roseDk);}
-.tb-right{display:flex;align-items:center;gap:10px;}
-.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--grn);}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;}
+.topbar{background:var(--card);border-bottom:1px solid var(--bdr);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow);}
+.tb-ttl{font-family:'Noto Serif TC',serif;font-size:18px;font-weight:700;color:var(--roseDk);letter-spacing:0.08em;}
+.tb-right{display:flex;align-items:center;gap:12px;}
+.sync-dot{width:10px;height:10px;border-radius:50%;background:var(--grn);}
 .sync-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
 .sync-dot.error{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.btn-out{background:none;border:1.5px solid var(--bdr);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;color:var(--mut);transition:.2s;}
+.btn-out{background:none;border:1.5px solid var(--bdr);border-radius:8px;padding:7px 14px;font-size:14px;cursor:pointer;color:var(--mut);transition:.2s;letter-spacing:0.06em;}
 .btn-out:hover{border-color:var(--rose);color:var(--roseDk);}
 
-.content{padding:24px;flex:1;}
-.pg-ttl{font-family:'Noto Serif TC',serif;font-size:22px;font-weight:900;color:var(--roseDk);margin-bottom:4px;}
-.pg-sub{font-size:12px;color:var(--mut);margin-bottom:20px;}
+.content{padding:28px;flex:1;}
+.pg-ttl{font-family:'Noto Serif TC',serif;font-size:28px;font-weight:900;color:var(--roseDk);margin-bottom:6px;letter-spacing:0.1em;}
+.pg-sub{font-size:14px;color:var(--mut);margin-bottom:24px;letter-spacing:0.08em;}
 
 /* ── CARDS ── */
-.card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden;}
-.card-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bdr);}
-.card-ttl{font-family:'Noto Serif TC',serif;font-size:14px;font-weight:700;color:var(--brown);}
-.card-bd{padding:16px 18px;}
+.card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden;}
+.card-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bdr);gap:12px;flex-wrap:wrap;}
+.card-ttl{font-family:'Noto Serif TC',serif;font-size:17px;font-weight:700;color:var(--brown);letter-spacing:0.08em;}
+.card-bd{padding:18px 20px;}
 
 /* ── STAT GRID ── */
-.sg{display:grid;gap:12px;margin-bottom:16px;}
+.sg{display:grid;gap:14px;margin-bottom:18px;}
 .sg2{grid-template-columns:repeat(2,1fr);}
 .sg3{grid-template-columns:repeat(3,1fr);}
 .sg4{grid-template-columns:repeat(4,1fr);}
-.sc{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);border-top:3px solid var(--bdr);}
+.sc{background:var(--card);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);border-top:3px solid var(--bdr);}
 .sc.rose{border-top-color:var(--rose);}
 .sc.grn{border-top-color:var(--grn);}
 .sc.red{border-top-color:var(--red);}
 .sc.gold{border-top-color:var(--gold);}
 .sc.blu{border-top-color:var(--blu);}
 .sc.pur{border-top-color:var(--pur);}
-.sl{font-size:11px;color:var(--mut);margin-bottom:6px;font-weight:500;}
-.sv{font-family:'Noto Serif TC',serif;font-size:22px;font-weight:700;color:var(--txt);}
-.sv.sm{font-size:18px;}
+.sl{font-size:14px;color:var(--mut);margin-bottom:8px;font-weight:500;letter-spacing:0.06em;}
+.sv{font-family:'Noto Serif TC',serif;font-size:26px;font-weight:700;color:var(--txt);letter-spacing:0.04em;}
+.sv.sm{font-size:21px;}
 .sv.rose{color:var(--rose);}
 .sv.grn{color:var(--grn);}
 .sv.red{color:var(--red);}
 .sv.gold{color:var(--gold);}
 .sv.blu{color:var(--blu);}
-.ss{font-size:11px;color:var(--mut);margin-top:4px;}
+.ss{font-size:13px;color:var(--mut);margin-top:5px;letter-spacing:0.04em;}
 
 /* ── TABLES ── */
 .tw{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-th{background:var(--bg2);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--mut);border-bottom:1px solid var(--bdr);white-space:nowrap;}
-td{padding:10px 12px;border-bottom:1px solid var(--bdr);vertical-align:middle;}
+table{width:100%;border-collapse:collapse;font-size:15px;}
+th{background:var(--bg2);padding:12px 14px;text-align:left;font-size:13px;font-weight:700;color:var(--mut);border-bottom:1px solid var(--bdr);white-space:nowrap;letter-spacing:0.08em;}
+td{padding:13px 14px;border-bottom:1px solid var(--bdr);vertical-align:middle;letter-spacing:0.04em;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:var(--bg);}
 
 /* ── BADGES ── */
-.bdg{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--bg2);color:var(--mut);}
+.bdg{display:inline-block;padding:3px 10px;border-radius:20px;font-size:13px;font-weight:600;background:var(--bg2);color:var(--mut);letter-spacing:0.04em;}
 .bdg.rose{background:var(--roseL);color:var(--roseDk);}
 .bdg.grn{background:var(--grnL);color:var(--grn);}
 .bdg.red{background:var(--redL);color:var(--red);}
 .bdg.gold{background:var(--goldL);color:var(--goldDk);}
 .bdg.blu{background:var(--bluL);color:var(--blu);}
 .bdg.pur{background:var(--purL);color:var(--pur);}
-.pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.pill{display:inline-block;padding:3px 12px;border-radius:20px;font-size:13px;font-weight:700;letter-spacing:0.06em;}
 .pill.grn{background:var(--grnL);color:var(--grn);}
 .pill.red{background:var(--redL);color:var(--red);}
 .pill.gold{background:var(--goldL);color:var(--goldDk);}
 
 /* ── BUTTONS ── */
-.btn{border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;font-weight:600;transition:.2s;}
+.btn{border:none;border-radius:8px;padding:10px 18px;font-size:15px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;font-weight:600;transition:.2s;letter-spacing:0.08em;}
 .btn-p{background:linear-gradient(135deg,var(--rose),var(--roseDk));color:#fff;}
 .btn-p:hover{opacity:.9;transform:translateY(-1px);}
 .btn-s{background:var(--bg2);color:var(--brown);border:1.5px solid var(--bdr);}
 .btn-s:hover{border-color:var(--rose);color:var(--roseDk);}
 .btn-g{background:linear-gradient(135deg,var(--grn),#3a6b4c);color:#fff;}
-.btn-sm{padding:5px 12px;font-size:12px;}
-.bdel{background:none;border:none;color:var(--mut);cursor:pointer;padding:3px 6px;border-radius:6px;font-size:14px;transition:.2s;}
+.btn-y{background:linear-gradient(135deg,var(--gold),var(--goldDk));color:#fff;}
+.btn-pur{background:linear-gradient(135deg,var(--pur),#5A3A85);color:#fff;}
+.btn-sm{padding:7px 14px;font-size:14px;}
+.bdel{background:none;border:none;color:var(--mut);cursor:pointer;padding:5px 8px;border-radius:6px;font-size:18px;transition:.2s;}
 .bdel:hover{background:var(--redL);color:var(--red);}
 
 /* ── PROGRESS ── */
 .pb{background:var(--bg2);border-radius:10px;overflow:hidden;}
 .pf{border-radius:10px;transition:width .4s ease;background:linear-gradient(90deg,var(--rose),var(--gold));}
-.plbl{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:6px;}
+.plbl{display:flex;justify-content:space-between;font-size:14px;color:var(--mut);margin-bottom:7px;letter-spacing:0.04em;}
 
 /* ── FORMS ── */
-.fg{display:grid;gap:14px;}
+.fg{display:grid;gap:16px;}
 .fg2{grid-template-columns:1fr 1fr;}
-.fgrp{display:flex;flex-direction:column;gap:5px;}
-.fgrp label{font-size:12px;font-weight:600;color:var(--brown);}
+.fgrp{display:flex;flex-direction:column;gap:6px;}
+.fgrp label{font-size:14px;font-weight:600;color:var(--brown);letter-spacing:0.06em;}
 .fgrp input,.fgrp select,.fgrp textarea{
-  border:1.5px solid var(--bdr);border-radius:8px;padding:9px 12px;font-size:13px;
-  font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--txt);transition:.2s;width:100%;}
+  border:1.5px solid var(--bdr);border-radius:8px;padding:11px 14px;font-size:15px;
+  font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--txt);transition:.2s;width:100%;letter-spacing:0.04em;}
 .fgrp input:focus,.fgrp select:focus,.fgrp textarea:focus{outline:none;border-color:var(--rose);background:#fff;}
-.yinp{border:1.5px solid var(--goldL);border-radius:8px;background:var(--goldL);}
 
 /* ── MODAL ── */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(45,31,26,0.5);z-index:1000;backdrop-filter:blur(4px);}
 .modal-bg.open{display:flex;align-items:center;justify-content:center;}
-.modal{background:var(--card);border-radius:18px;padding:28px;width:90%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow2);}
-.mttl{font-family:'Noto Serif TC',serif;font-size:17px;font-weight:700;color:var(--roseDk);margin-bottom:20px;}
-.mbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+.modal{background:var(--card);border-radius:18px;padding:30px;width:92%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow2);}
+.modal.lg{max-width:900px;}
+.mttl{font-family:'Noto Serif TC',serif;font-size:20px;font-weight:700;color:var(--roseDk);margin-bottom:22px;letter-spacing:0.08em;}
+.mbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap;}
 
 /* ── MISC ── */
 .fb{display:flex;align-items:center;}
 .fbb{display:flex;align-items:center;justify-content:space-between;}
 .g8{gap:8px;}
-.tm{color:var(--mut);font-size:12px;}
+.tm{color:var(--mut);font-size:14px;letter-spacing:0.04em;}
 .ap{color:var(--grn);font-weight:600;}
 .an{color:var(--red);font-weight:600;}
 .ag{color:var(--gold);font-weight:600;}
-.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.sec-ttl{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:700;color:var(--brown);}
-.mo-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:16px;scrollbar-width:none;}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sec-ttl{font-family:'Noto Serif TC',serif;font-size:18px;font-weight:700;color:var(--brown);letter-spacing:0.08em;}
+.mo-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:18px;scrollbar-width:none;}
 .mo-scroll::-webkit-scrollbar{display:none;}
-.mo-btn{padding:6px 14px;border-radius:20px;border:1.5px solid var(--bdr);background:var(--card);font-size:12px;cursor:pointer;white-space:nowrap;transition:.2s;color:var(--mut);}
+.mo-btn{padding:8px 16px;border-radius:20px;border:1.5px solid var(--bdr);background:var(--card);font-size:14px;cursor:pointer;white-space:nowrap;transition:.2s;color:var(--mut);letter-spacing:0.06em;}
 .mo-btn.active{background:var(--rose);border-color:var(--rose);color:#fff;font-weight:700;}
-.tab-bar{display:flex;gap:6px;margin-bottom:16px;}
-.tab-p{padding:7px 16px;border-radius:20px;border:1.5px solid var(--bdr);background:var(--card);font-size:12px;cursor:pointer;transition:.2s;color:var(--mut);font-weight:500;}
+.tab-bar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;}
+.tab-p{padding:9px 18px;border-radius:20px;border:1.5px solid var(--bdr);background:var(--card);font-size:14px;cursor:pointer;transition:.2s;color:var(--mut);font-weight:500;letter-spacing:0.06em;}
 .tab-p.active{background:var(--rose);border-color:var(--rose);color:#fff;font-weight:700;}
-.empty{text-align:center;padding:40px 20px;color:var(--mut);}
-.empty-ico{font-size:40px;margin-bottom:12px;}
-.tag{display:inline-block;padding:1px 8px;border-radius:12px;font-size:10px;font-weight:700;}
+.empty{text-align:center;padding:44px 20px;color:var(--mut);}
+.empty-ico{font-size:44px;margin-bottom:14px;}
+.tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:700;letter-spacing:0.04em;}
 .tag-low{background:var(--redL);color:var(--red);}
 .tag-ok{background:var(--grnL);color:var(--grn);}
 .tag-warn{background:var(--goldL);color:var(--goldDk);}
-.run-bal{font-weight:700;font-size:12px;}
-.notice{background:var(--roseL);border-left:4px solid var(--rose);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--roseDk);margin-bottom:16px;}
+.run-bal{font-weight:700;font-size:14px;}
+.notice{background:var(--roseL);border-left:4px solid var(--rose);border-radius:8px;padding:12px 16px;font-size:14px;color:var(--roseDk);margin-bottom:18px;letter-spacing:0.04em;}
+.batch-row{display:grid;grid-template-columns:1.4fr 0.8fr 0.8fr 1fr 1fr 0.4fr;gap:8px;align-items:end;padding:10px;border:1px solid var(--bdr);border-radius:10px;margin-bottom:8px;background:var(--bg);}
+.batch-row .fgrp{gap:3px;}
+.batch-row .fgrp label{font-size:12px;}
+.batch-row .fgrp input,.batch-row .fgrp select{padding:8px 10px;font-size:14px;}
+.bdel-row{background:var(--redL);color:var(--red);border:none;border-radius:8px;width:36px;height:36px;font-size:18px;cursor:pointer;align-self:end;}
+.bdel-row:hover{background:var(--red);color:#fff;}
+
 @media(max-width:768px){
-  .sidebar{width:60px;}
-  .sb-logo .name,.sb-logo .sub,.sb-item span:last-child,.sb-section{display:none;}
-  .sb-item{padding:12px;justify-content:center;}
-  .main{margin-left:60px;}
+  body{font-size:16px;}
+  .sidebar{width:64px;}
+  .sb-item span:last-child{display:none;}
+  .sb-item{padding:14px;justify-content:center;}
+  .main{margin-left:64px;}
   .sg4{grid-template-columns:repeat(2,1fr);}
+  .sg3{grid-template-columns:1fr;}
+  .sg2{grid-template-columns:1fr;}
   .fg2{grid-template-columns:1fr;}
+  .batch-row{grid-template-columns:1fr 1fr;gap:6px;}
+  .pg-ttl{font-size:24px;}
+  .content{padding:18px;}
 }
-.toast{position:fixed;bottom:24px;right:24px;background:var(--brown);color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:.3s;pointer-events:none;}
+.toast{position:fixed;bottom:28px;right:28px;background:var(--brown);color:#fff;padding:14px 22px;border-radius:12px;font-size:15px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:.3s;pointer-events:none;letter-spacing:0.06em;}
 .toast.show{opacity:1;transform:translateY(0);}
-.pw-err{color:var(--red);font-size:12px;margin-top:8px;text-align:center;min-height:16px;}
+.pw-err{color:var(--red);font-size:14px;margin-top:10px;text-align:center;min-height:18px;letter-spacing:0.04em;}
 </style>
 </head>
 <body>
-<!-- Firebase -->
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getFirestore,doc,collection,onSnapshot,setDoc,addDoc,deleteDoc,getDocs,query,where,orderBy}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,doc,collection,onSnapshot,setDoc,addDoc,deleteDoc,getDocs,query,where,orderBy,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const FCFG={apiKey:"AIzaSyC5lPGRmFjkpBa4dIeGSIHPyMVJVxSNp3k",authDomain:"family-finance-97e44.firebaseapp.com",projectId:"family-finance-97e44"};
 const app=initializeApp(FCFG);
 const db=getFirestore(app);
 const auth=getAuth(app);
-const FID='mumei_studio'; // 沐蜜工作室獨立帳本
+const FID='mumei_studio';
 
 // ── 系統密碼設定 ──────────────────────────────────────────
 const SYSTEM_PASSWORD='815391';
-// 後端 Firebase 固定帳號（自動連線，使用者無需知道）
 const BACKEND_EMAIL='luoxi@family.com';
 const BACKEND_PASSWORD='family123';
 
 // ── CONSTANTS ──────────────────────────────────────────────
-const USERS=['珞熙','助理1','助理2','助理3'];
-const SERVICE_CATS=['做臉護膚','美體按摩','霧眉','霧唇','熱蠟除毛','彩妝','其他服務'];
-const PRODUCT_CATS=['保養品','彩妝品','耗材','工具','其他'];
+const TEACHERS=['珞熙','璇璇','婉甄','其他']; // 服務老師
+const SERVICE_PRESETS=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩','自訂項目'];
+const PRODUCT_CATS=['保養品販售','做臉耗材','霧唇霧眉耗材','彩妝耗材','熱蠟耗材','美體耗材','工作室耗材'];
+const SUPPLIER_PRESETS=['Ten','EXU','AN','泌美麗','淘寶','蝦皮','其他手動輸入廠商'];
 const COURSE_CATS=['美容課程','彩妝課程','技術課程','其他課程'];
-const EXP_CATS=['房租','水電','材料耗材','薪資','行銷廣告','平台費用','設備維修','進貨成本','雜支','其他'];
-const PAY=['現金','信用卡','轉帳','Line Pay','其他'];
+const EXP_CATS=['房租','水電','材料耗材','薪資','行銷廣告','平台費用','設備維修','進貨成本','進修學費','雜支','其他'];
+const PAY=['轉帳','現金','儲值扣款']; // 付款方式
 const MOS=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 // ── STATE ──────────────────────────────────────────────────
@@ -206,20 +216,31 @@ let S={
     sales:[],expenses:[],purchases:[],inventory:[],
     courses:[],courseStudents:[],
     services:[],products:[],suppliers:[],staff:[],
-    cashFlow:[],assets:[],settings:{}
+    cashFlow:[],assets:[],settings:{},
+    // 新增：分流比例設定
+    allocation:{
+      risk:10,operation:25,salary:40,study:10,invest:15,
+      bigPurchaseLimit:30000,
+      monthlyHouseFund:0
+    },
+    // 新增：買房頭期專款記錄
+    houseFund:[],
+    // 新增：季度檢視紀錄
+    quarterReviews:[],
+    // 新增：冷靜期購買決策紀錄
+    coolingDecisions:[],
+    // 新增：與AI財務踩剎車對話歷史
+    advisorChats:[]
   }
 };
 
 // ── UTILS ──────────────────────────────────────────────────
 const $=id=>document.getElementById(id);
-const g=id=>$('m_'+id)?.value?.trim();
-const n=id=>parseFloat($('m_'+id)?.value||0)||0;
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const fmt=v=>{const n=parseFloat(String(v||0).replace(/,/g,''))||0;return Math.abs(n)>=1000?n.toLocaleString('zh-TW'):String(Math.round(n));};
 const toN=v=>parseFloat(String(v||0).replace(/,/g,''))||0;
 const today=()=>new Date().toISOString().slice(0,10);
-const yr=()=>{const m=S.month;return m>=8?new Date().getFullYear():new Date().getFullYear();};
-const mk=()=>`${yr()}-${String(S.month).padStart(2,'0')}`;
+const yr=()=>new Date().getFullYear();
 const toast=msg=>{const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300)},2800);};
 const setSyncing=s=>{S.sync=s;const d=$('sync-dot');if(d)d.className='sync-dot'+( s==='syncing'?' syncing':s==='error'?' error':'');};
 
@@ -227,7 +248,7 @@ const setSyncing=s=>{S.sync=s;const d=$('sync-dot');if(d)d.className='sync-dot'+
 function startSync(){
   setSyncing('syncing');
   const mainRef=doc(db,'studios',FID);
-  onSnapshot(mainRef,snap=>{
+  onSnapshot(mainRef,async snap=>{
     const d=snap.data()||{};
     S.data.services=d.services||[];
     S.data.products=d.products||[];
@@ -236,39 +257,52 @@ function startSync(){
     S.data.inventory=d.inventory||[];
     S.data.settings=d.settings||{};
     S.data.assets=d.assets||[];
+    S.data.allocation=d.allocation||{risk:10,operation:25,salary:40,study:10,invest:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
+    // 首次登入時，自動建立預設資料
+    if(!d.initialized){
+      await initDefaults();
+    }
     setSyncing('synced');render();
   },()=>setSyncing('error'));
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats'].forEach(col=>{
     onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
     });
   });
 }
-async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');}catch{setSyncing('error');toast('儲存失敗');}}
-async function addSub(col,data){setSyncing('syncing');try{const r=await addDoc(collection(db,'studios',FID,col),{...data,_at:Date.now()});setSyncing('synced');return r;}catch{setSyncing('error');toast('儲存失敗');}}
-async function setSub(col,id,data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID,col,id),{...data,_at:Date.now()});setSyncing('synced');}catch{setSyncing('error');toast('儲存失敗');}}
-async function delSub(col,id){setSyncing('syncing');try{await deleteDoc(doc(db,'studios',FID,col,id));setSyncing('synced');}catch{setSyncing('error');toast('刪除失敗');}}
+
+// 自動建立預設項目
+async function initDefaults(){
+  const services=SERVICE_PRESETS.filter(s=>s!=='自訂項目').map(name=>({
+    id:uid(),name,category:'美容服務',price:0,duration:60
+  }));
+  const suppliers=SUPPLIER_PRESETS.filter(s=>s!=='其他手動輸入廠商').map(name=>({
+    id:uid(),name,contact:'',phone:'',note:''
+  }));
+  await saveMain({services,suppliers,initialized:true});
+}
+
+async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
+async function addSub(col,data){setSyncing('syncing');try{const r=await addDoc(collection(db,'studios',FID,col),{...data,_at:Date.now()});setSyncing('synced');return r;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
+async function setSub(col,id,data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID,col,id),{...data,_at:Date.now()});setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
+async function delSub(col,id){setSyncing('syncing');try{await deleteDoc(doc(db,'studios',FID,col,id));setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('刪除失敗');}}
 
 // ── AUTH ───────────────────────────────────────────────────
-// 監聽 Firebase 登入狀態（僅用於後端資料連線）
 onAuthStateChanged(auth,user=>{
   if(user){
-    // 後端已連線，若使用者通過密碼驗證才進入主畫面
     if(sessionStorage.getItem('mumei_unlock')==='1'){
       S.auth=true;
-      startSync();
+      if(S.sync==='idle')startSync();
     }
   }else{
-    // 後端未連線，自動以固定帳號登入
     signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD).catch(()=>{
       console.error('後端連線失敗');
     });
   }
 });
 
-// 檢查是否已解鎖
 if(sessionStorage.getItem('mumei_unlock')==='1'){
   S.auth=true;
 }
@@ -277,7 +311,6 @@ if(sessionStorage.getItem('mumei_unlock')==='1'){
 function render(){
   $('app').innerHTML=S.auth?appHTML():loginHTML();
   bindEvents();
-  // 若已解鎖但還沒開始同步，啟動同步
   if(S.auth&&S.sync==='idle'&&auth.currentUser){
     startSync();
   }
@@ -285,29 +318,30 @@ function render(){
 
 function loginHTML(){return`
 <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--roseL) 0%,var(--goldL) 100%);">
-  <div style="background:var(--card);border-radius:20px;padding:40px;width:360px;box-shadow:var(--shadow2);text-align:center;">
-    <div style="font-size:48px;margin-bottom:8px;">🌸</div>
-    <div style="font-family:'Noto Serif TC',serif;font-size:24px;font-weight:900;color:var(--roseDk);margin-bottom:4px;">沐蜜</div>
-    <div style="font-size:11px;color:var(--mut);margin-bottom:28px;letter-spacing:2px;">MUMEI STUDIO FINANCE</div>
+  <div style="background:var(--card);border-radius:20px;padding:44px;width:380px;box-shadow:var(--shadow2);text-align:center;">
+    <div style="font-size:54px;margin-bottom:10px;">🌸</div>
+    <div style="font-family:'Noto Serif TC',serif;font-size:26px;font-weight:900;color:var(--roseDk);margin-bottom:32px;letter-spacing:0.12em;">沐蜜</div>
     <div class="fgrp" style="margin-bottom:8px;text-align:left;">
       <label>請輸入密碼</label>
-      <input type="password" id="m_pw" placeholder="••••••" autofocus onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="password" id="m_pw" placeholder="••••••" autofocus onkeydown="if(event.key==='Enter')doLogin()" style="font-size:18px;padding:13px 16px;letter-spacing:0.2em;">
     </div>
     <div class="pw-err" id="pw_err"></div>
-    <button class="btn btn-p" style="width:100%;padding:12px;margin-top:8px;" onclick="doLogin()">進入系統</button>
+    <button class="btn btn-p" style="width:100%;padding:14px;margin-top:10px;font-size:17px;" onclick="doLogin()">進入系統</button>
   </div>
 </div>`;}
 
 function appHTML(){
   const PAGES=[
     {id:'overview',ico:'📊',lbl:'總覽'},
+    {id:'profit',ico:'💎',lbl:'獲利分析'},
+    {id:'advisor',ico:'🧠',lbl:'財務建議'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
     {id:'expenses',ico:'💸',lbl:'支出記帳'},
     {id:'purchase',ico:'📦',lbl:'進貨管理'},
     {id:'inventory',ico:'🗂️',lbl:'庫存盤點'},
     {id:'courses',ico:'📋',lbl:'課程管理'},
-    {id:'staff',ico:'👩‍💼',lbl:'員工業績'},
+    {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
     {id:'cashflow',ico:'🏦',lbl:'現金流水帳'},
     {id:'reports',ico:'📈',lbl:'月報年報'},
     {id:'settings',ico:'⚙️',lbl:'基本設定'},
@@ -316,11 +350,6 @@ function appHTML(){
   return`
 <div class="app">
   <nav class="sidebar">
-    <div class="sb-logo">
-      <div style="font-size:28px;text-align:center;">🌸</div>
-      <div class="name">沐蜜</div>
-      <div class="sub">STUDIO FINANCE</div>
-    </div>
     ${PAGES.map(p=>`<div class="sb-item${S.page===p.id?' active':''}" onclick="setP('${p.id}')">
       <span class="ico">${p.ico}</span><span>${p.lbl}</span>
     </div>`).join('')}
@@ -337,15 +366,16 @@ function appHTML(){
     <div class="content" id="pg-content">${renderPage()}</div>
   </div>
 </div>
-<div class="modal-bg${S.modal?'.open':''}" id="modal-bg" onclick="closeMod(event)">
-  <div class="modal" id="modal-inner" onclick="e=>e.stopPropagation()">${renderModal()}</div>
-</div>
-<div id="toast-area"></div>`;
+<div class="modal-bg${S.modal?' open':''}" id="modal-bg">
+  <div class="modal${S.modal&&S.modal.lg?' lg':''}" id="modal-inner">${renderModal()}</div>
+</div>`;
 }
 
 function renderPage(){
   switch(S.page){
     case'overview':  return pgOverview();
+    case'profit':    return pgProfit();
+    case'advisor':   return pgAdvisor();
     case'sales':     return pgSales();
     case'order':     return pgOrder();
     case'expenses':  return pgExpenses();
@@ -360,23 +390,14 @@ function renderPage(){
   }
 }
 
-// ── MONTH SELECTOR ─────────────────────────────────────────
 function moSel(){
   return`<div class="mo-scroll">${MOS.map((m,i)=>`<button class="mo-btn${S.month===i+1?' active':''}" onclick="setMo(${i+1})">${m}</button>`).join('')}</div>`;
 }
 
 // ── DATA HELPERS ───────────────────────────────────────────
-function getSales(mo){
-  const m=mo||S.month;
-  return S.data.sales.filter(s=>s.month===m&&s.year===yr());
-}
-function getExp(mo){
-  const m=mo||S.month;
-  return S.data.expenses.filter(e=>e.month===m&&e.year===yr());
-}
-function getInv(pid){
-  return S.data.inventory.find(i=>i.productId===pid)||{qty:0,minQty:5};
-}
+function getSales(mo){const m=mo||S.month;return S.data.sales.filter(s=>s.month===m&&s.year===yr());}
+function getExp(mo){const m=mo||S.month;return S.data.expenses.filter(e=>e.month===m&&e.year===yr());}
+function getInv(pid){return S.data.inventory.find(i=>i.productId===pid)||{qty:0,minQty:5};}
 function getSvcTotal(mo){return getSales(mo).filter(s=>s.type==='service').reduce((s,r)=>s+toN(r.amount),0);}
 function getPrdTotal(mo){return getSales(mo).filter(s=>s.type==='product').reduce((s,r)=>s+toN(r.amount),0);}
 function getCrsTotal(mo){return getSales(mo).filter(s=>s.type==='course').reduce((s,r)=>s+toN(r.amount),0);}
@@ -397,18 +418,64 @@ function pgOverview(){
   const week7=new Date(now-7*86400000).toISOString().slice(0,10);
   const recent=S.data.sales.filter(s=>s.date>=week7).reduce((s,r)=>s+toN(r.amount),0);
 
+  // ── 當月獲利重點計算 ──
+  const sales=getSales();
+  const orderCount=sales.length;
+  const avgOrder=orderCount>0?Math.round(rev/orderCount):0;
+  // 客戶分析（回客率）
+  const customers={};
+  sales.forEach(s=>{
+    const c=(s.customer||'').trim();
+    if(c)customers[c]=(customers[c]||0)+1;
+  });
+  const totalCustomers=Object.keys(customers).length;
+  const repeatCustomers=Object.values(customers).filter(n=>n>1).length;
+  const repeatRate=totalCustomers>0?Math.round(repeatCustomers/totalCustomers*100):0;
+  // 高毛利服務分析（依項目別統計收入）
+  const itemMap={};
+  sales.filter(s=>s.type==='service').forEach(s=>{
+    const item=s.item||'未分類';
+    if(!itemMap[item])itemMap[item]={total:0,cnt:0};
+    itemMap[item].total+=toN(s.amount);
+    itemMap[item].cnt++;
+  });
+  const topItems=Object.entries(itemMap).sort((a,b)=>b[1].total-a[1].total).slice(0,3);
+
+  // ── 自動分流建議 ──
+  const al=S.data.allocation||{risk:10,operation:25,salary:40,study:10,invest:15};
+  const allocPlans=[
+    {key:'risk',lbl:'⚠️ 風險儲備金',sub:'營業稅、所得稅、突發狀況、設備損壞',pct:al.risk,color:'var(--red)'},
+    {key:'operation',lbl:'🏪 營運成本',sub:'房租、水電、耗材、平台費用',pct:al.operation,color:'var(--gold)'},
+    {key:'salary',lbl:'👩‍💼 人事薪資',sub:'老師薪資、抽成獎金',pct:al.salary,color:'var(--rose)'},
+    {key:'study',lbl:'📚 品牌進修',sub:'課程進修、技術精進',pct:al.study,color:'var(--blu)'},
+    {key:'invest',lbl:'🏠 投資買房',sub:'轉投資 0050 / 半導體 / 買房頭期專款',pct:al.invest,color:'var(--pur)'},
+  ];
+
+  // ── 季度檢視提醒 ──
+  const curQ=Math.ceil(S.month/3);
+  const reviews=S.data.quarterReviews||[];
+  const thisQReviewed=reviews.find(r=>r.year===yr()&&r.quarter===curQ);
+
   return`
   <div class="pg-ttl">📊 工作室總覽</div>
-  <div class="pg-sub">${yr()}年 ${MOS[S.month-1]} — 沐蜜財務一目了然</div>
+  <div class="pg-sub">${yr()}年 ${MOS[S.month-1]}　第 ${curQ} 季</div>
   ${moSel()}
 
-  ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')} 數量不足，請盡快補貨</div>`:''}
+  ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')}　數量不足，請盡快補貨</div>`:''}
 
+  ${!thisQReviewed?`<div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);">
+    📅 第 ${curQ} 季尚未做季度檢視　
+    <button class="btn btn-sm" style="background:var(--pur);color:#fff;margin-left:8px;" onclick="setP('advisor')">前往檢視 →</button>
+  </div>`:`<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);">
+    ✅ 第 ${curQ} 季已於 ${thisQReviewed.date} 完成季度檢視
+  </div>`}
+
+  <!-- 核心指標 -->
   <div class="sg sg4">
     <div class="sc rose">
       <div class="sl">💰 本月總營收</div>
       <div class="sv rose">$${fmt(rev)}</div>
-      <div class="ss">近7天 $${fmt(recent)}</div>
+      <div class="ss">近 7 天 $${fmt(recent)}</div>
     </div>
     <div class="sc red">
       <div class="sl">💸 本月總支出</div>
@@ -426,18 +493,79 @@ function pgOverview(){
     </div>
   </div>
 
+  <!-- 當月獲利重點 -->
+  <div class="card">
+    <div class="card-hd"><span class="card-ttl">💎 當月獲利重點</span><button class="btn btn-s btn-sm" onclick="setP('profit')">看完整分析 →</button></div>
+    <div class="card-bd">
+      <div class="sg sg3">
+        <div>
+          <div class="sl">💵 平均客單價</div>
+          <div class="sv sm rose">$${fmt(avgOrder)}</div>
+          <div class="ss">${orderCount} 筆訂單</div>
+        </div>
+        <div>
+          <div class="sl">🔁 回客率</div>
+          <div class="sv sm gold">${repeatRate}%</div>
+          <div class="ss">${repeatCustomers} / ${totalCustomers} 位回客</div>
+        </div>
+        <div>
+          <div class="sl">📈 淨利潤率</div>
+          <div class="sv sm ${profit>=0?'grn':'red'}">${rev>0?Math.round(profit/rev*100):0}%</div>
+          <div class="ss">$${fmt(profit)}</div>
+        </div>
+      </div>
+      <div style="margin-top:18px;border-top:1px solid var(--bdr);padding-top:14px;">
+        <div class="sl" style="margin-bottom:10px;">🏆 高毛利服務 TOP 3</div>
+        ${topItems.length===0?'<div class="tm">本月尚無服務記錄</div>':topItems.map((it,i)=>{
+          const medal=['🥇','🥈','🥉'][i];
+          const pct=svc>0?Math.round(it[1].total/svc*100):0;
+          return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bdr);">
+            <div><span style="font-size:18px;margin-right:8px;">${medal}</span><b>${it[0]}</b><span class="tm" style="margin-left:8px;">${it[1].cnt} 次</span></div>
+            <div><span class="ap">$${fmt(it[1].total)}</span><span class="tm" style="margin-left:8px;">${pct}%</span></div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- 自動分流建議 -->
+  <div class="card">
+    <div class="card-hd"><span class="card-ttl">💡 本月淨利自動分流建議</span><button class="btn btn-s btn-sm" onclick="openM('editAlloc')">調整比例</button></div>
+    <div class="card-bd">
+      ${profit<=0?'<div class="empty" style="padding:20px;"><p>本月尚無淨利可分流，先把營收做起來吧 🌸</p></div>':`
+      <div style="background:var(--bg2);padding:14px;border-radius:10px;margin-bottom:14px;">
+        <div class="sl">本月可分流淨利</div>
+        <div class="sv grn">$${fmt(profit)}</div>
+      </div>
+      ${allocPlans.map(p=>{
+        const amt=Math.round(profit*p.pct/100);
+        return`<div style="margin-bottom:14px;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;background:var(--card);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div><b>${p.lbl}</b><span class="bdg" style="margin-left:8px;background:${p.color};color:#fff;">${p.pct}%</span></div>
+            <div style="font-family:'Noto Serif TC',serif;font-size:20px;font-weight:700;color:${p.color};">$${fmt(amt)}</div>
+          </div>
+          <div class="tm">${p.sub}</div>
+          <div class="pb" style="height:8px;margin-top:8px;"><div class="pf" style="width:${p.pct}%;height:8px;background:${p.color};"></div></div>
+        </div>`;
+      }).join('')}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;flex:1;min-width:160px;" onclick="recordHouseFund(${Math.round(profit*al.invest/100)})">💰 紀錄本月買房專款 $${fmt(Math.round(profit*al.invest/100))}</button>
+      </div>`}
+    </div>
+  </div>
+
   <div class="sg sg3">
     <div class="card">
       <div class="card-hd"><span class="card-ttl">💰 收入結構</span><button class="btn btn-p btn-sm" onclick="setP('order')">開立銷售單</button></div>
       <div class="card-bd">
-        ${rev===0?'<div class="empty" style="padding:16px;"><p>本月尚無收入</p></div>':[
+        ${rev===0?'<div class="empty" style="padding:18px;"><p>本月尚無收入</p></div>':[
           {lbl:'🌸 服務',val:svc,color:'var(--rose)'},
           {lbl:'🧴 產品',val:prd,color:'var(--gold)'},
           {lbl:'📚 課程',val:crs,color:'var(--pur)'},
         ].map(({lbl,val,color})=>val>0?`
-          <div style="margin-bottom:12px;">
+          <div style="margin-bottom:14px;">
             <div class="plbl"><span>${lbl}</span><span style="font-weight:700;color:${color};">$${fmt(val)}（${rev>0?Math.round(val/rev*100):0}%）</span></div>
-            <div class="pb" style="height:10px;"><div class="pf" style="width:${rev>0?Math.round(val/rev*100):0}%;height:10px;background:${color};"></div></div>
+            <div class="pb" style="height:11px;"><div class="pf" style="width:${rev>0?Math.round(val/rev*100):0}%;height:11px;background:${color};"></div></div>
           </div>`:'').join('')}
       </div>
     </div>
@@ -445,10 +573,10 @@ function pgOverview(){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">👩‍💼 本月業績</span><button class="btn btn-s btn-sm" onclick="setP('staff')">詳細</button></div>
       <div class="card-bd">
-        ${Object.keys(staffSales).length===0?'<div class="empty" style="padding:16px;"><p>本月尚無業績</p></div>':
+        ${Object.keys(staffSales).length===0?'<div class="empty" style="padding:18px;"><p>本月尚無業績</p></div>':
           Object.entries(staffSales).sort((a,b)=>b[1]-a[1]).map(([u,v])=>`
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr);">
-            <span style="font-size:13px;">${u}</span>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);">
+            <span style="font-size:15px;">${u}</span>
             <span class="ap">$${fmt(v)}</span>
           </div>`).join('')}
       </div>
@@ -457,42 +585,292 @@ function pgOverview(){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">📋 課程待收款</span><button class="btn btn-s btn-sm" onclick="setP('courses')">管理</button></div>
       <div class="card-bd">
-        ${pending.length===0?'<div class="empty" style="padding:16px;"><p>本月無待收款</p></div>':
+        ${pending.length===0?'<div class="empty" style="padding:18px;"><p>本月無待收款</p></div>':
           pending.slice(0,5).map(s=>`
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr);">
-            <div><div style="font-size:13px;">${s.studentName}</div><div class="tm">${s.courseName}</div></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);">
+            <div><div style="font-size:15px;">${s.studentName}</div><div class="tm">${s.courseName}</div></div>
             <div style="text-align:right;"><div class="an">$${fmt(s.amount)}</div>
-              <button style="font-size:10px;margin-top:2px;" class="btn btn-g btn-sm" onclick="markPaid('${s.id}')">收款</button>
+              <button style="margin-top:4px;" class="btn btn-g btn-sm" onclick="markPaid('${s.id}')">收款</button>
             </div>
           </div>`).join('')}
-        ${pending.length>5?`<div class="tm" style="text-align:center;margin-top:8px;">還有 ${pending.length-5} 筆...</div>`:''}
+        ${pending.length>5?`<div class="tm" style="text-align:center;margin-top:10px;">還有 ${pending.length-5} 筆…</div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── 獲利分析（季度＋月度深度分析）────────────────────
+function pgProfit(){
+  const curQ=Math.ceil(S.month/3);
+  // 季度資料
+  const quarters=[1,2,3,4].map(q=>{
+    const months=[(q-1)*3+1,(q-1)*3+2,(q-1)*3+3];
+    const qRev=months.reduce((s,m)=>s+getRevTotal(m),0);
+    const qExp=months.reduce((s,m)=>s+getExpTotal(m),0);
+    const qSvc=months.reduce((s,m)=>s+getSvcTotal(m),0);
+    const qPrd=months.reduce((s,m)=>s+getPrdTotal(m),0);
+    const qCrs=months.reduce((s,m)=>s+getCrsTotal(m),0);
+    return{q,months,rev:qRev,exp:qExp,profit:qRev-qExp,svc:qSvc,prd:qPrd,crs:qCrs};
+  });
+  // 當月深度分析
+  const sales=getSales();
+  const rev=getRevTotal();
+  const profit=rev-getExpTotal();
+  const svc=getSvcTotal();
+  // 服務項目 ranking（按收入＋次數）
+  const itemMap={};
+  sales.filter(s=>s.type==='service').forEach(s=>{
+    const item=s.item||'未分類';
+    if(!itemMap[item])itemMap[item]={total:0,cnt:0,custs:new Set()};
+    itemMap[item].total+=toN(s.amount);
+    itemMap[item].cnt++;
+    if(s.customer)itemMap[item].custs.add(s.customer);
+  });
+  const itemList=Object.entries(itemMap).map(([k,v])=>({
+    name:k,total:v.total,cnt:v.cnt,
+    avg:Math.round(v.total/v.cnt),
+    custCount:v.custs.size,
+    pct:svc>0?Math.round(v.total/svc*100):0
+  })).sort((a,b)=>b.total-a.total);
+  // 客戶分析
+  const customers={};
+  sales.forEach(s=>{
+    const c=(s.customer||'').trim();
+    if(c){
+      if(!customers[c])customers[c]={total:0,cnt:0};
+      customers[c].total+=toN(s.amount);
+      customers[c].cnt++;
+    }
+  });
+  const customerList=Object.entries(customers).map(([k,v])=>({name:k,total:v.total,cnt:v.cnt})).sort((a,b)=>b.total-a.total);
+  const totalCustomers=customerList.length;
+  const repeatCustomers=customerList.filter(c=>c.cnt>1).length;
+  const repeatRate=totalCustomers>0?Math.round(repeatCustomers/totalCustomers*100):0;
+  const orderCount=sales.length;
+  const avgOrder=orderCount>0?Math.round(rev/orderCount):0;
+
+  return`
+  <div class="pg-ttl">💎 獲利分析</div>
+  <div class="pg-sub">${yr()}年 — 月度與季度獲利全貌</div>
+  ${moSel()}
+
+  <!-- 當月關鍵指標 -->
+  <div class="sg sg4">
+    <div class="sc rose">
+      <div class="sl">💵 平均客單價</div>
+      <div class="sv sm rose">$${fmt(avgOrder)}</div>
+      <div class="ss">${orderCount} 筆訂單</div>
+    </div>
+    <div class="sc gold">
+      <div class="sl">🔁 回客率</div>
+      <div class="sv sm gold">${repeatRate}%</div>
+      <div class="ss">${repeatCustomers} / ${totalCustomers}</div>
+    </div>
+    <div class="sc ${profit>=0?'grn':'red'}">
+      <div class="sl">📈 淨利潤</div>
+      <div class="sv sm ${profit>=0?'grn':'red'}">$${fmt(profit)}</div>
+      <div class="ss">利潤率 ${rev>0?Math.round(profit/rev*100):0}%</div>
+    </div>
+    <div class="sc pur">
+      <div class="sl">📅 當前季度</div>
+      <div class="sv sm" style="color:var(--pur);">第 ${curQ} 季</div>
+      <div class="ss">$${fmt(quarters[curQ-1].profit)} 淨利</div>
+    </div>
+  </div>
+
+  <!-- 季度獲利檢視 -->
+  <div class="card">
+    <div class="card-hd"><span class="card-ttl">📅 ${yr()}年 四季獲利對比</span></div>
+    <div class="card-bd">
+      <div class="sg sg4">
+        ${quarters.map(q=>{
+          const isCur=q.q===curQ;
+          return`<div style="border:2px solid ${isCur?'var(--rose)':'var(--bdr)'};border-radius:10px;padding:14px;background:${isCur?'var(--roseL)':'var(--card)'};">
+            <div class="sl">第 ${q.q} 季 (${q.months[0]}-${q.months[2]}月)${isCur?' <span class="bdg rose">當前</span>':''}</div>
+            <div style="margin-top:8px;">
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span class="tm">營收</span><span class="ap">$${fmt(q.rev)}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span class="tm">支出</span><span class="an">$${fmt(q.exp)}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-top:1px solid var(--bdr);margin-top:4px;"><b>淨利</b><b class="${q.profit>=0?'ap':'an'}">$${fmt(q.profit)}</b></div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;"><span class="tm">利潤率</span><span style="color:${q.profit>=0?'var(--grn)':'var(--red)'};">${q.rev>0?Math.round(q.profit/q.rev*100):0}%</span></div>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>
   </div>
 
+  <!-- 高毛利服務排行 -->
+  <div class="card">
+    <div class="card-hd"><span class="card-ttl">🏆 服務項目獲利排行（${MOS[S.month-1]}）</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>排名</th><th>服務項目</th><th>次數</th><th>平均客單</th><th>客戶數</th><th>總收入</th><th>佔服務比例</th></tr></thead>
+      <tbody>${itemList.length===0?`<tr><td colspan="7"><div class="empty"><p>本月尚無服務記錄</p></div></td></tr>`:
+        itemList.map((it,i)=>{
+          const medal=['🥇','🥈','🥉'][i]||`${i+1}`;
+          return`<tr ${i<3?'style="background:var(--goldL);"':''}>
+            <td><span style="font-size:18px;">${medal}</span></td>
+            <td><b>${it.name}</b></td>
+            <td>${it.cnt}</td>
+            <td class="ag">$${fmt(it.avg)}</td>
+            <td>${it.custCount}</td>
+            <td class="ap">$${fmt(it.total)}</td>
+            <td><div class="pb" style="height:8px;width:80px;display:inline-block;vertical-align:middle;"><div class="pf" style="width:${it.pct}%;height:8px;background:var(--rose);"></div></div> ${it.pct}%</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- 客戶 TOP 10 -->
+  <div class="card">
+    <div class="card-hd"><span class="card-ttl">👥 本月客戶消費 TOP 10</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>排名</th><th>客戶</th><th>消費次數</th><th>總消費</th><th>狀態</th></tr></thead>
+      <tbody>${customerList.length===0?`<tr><td colspan="5"><div class="empty"><p>本月尚無客戶記錄</p></div></td></tr>`:
+        customerList.slice(0,10).map((c,i)=>`<tr>
+          <td>${i+1}</td>
+          <td><b>${c.name}</b></td>
+          <td>${c.cnt}</td>
+          <td class="ap">$${fmt(c.total)}</td>
+          <td>${c.cnt>1?'<span class="pill grn">回客</span>':'<span class="pill gold">新客</span>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+// ─── 財務建議（情緒踩剎車＋買房目標＋季檢視）────────────────
+function pgAdvisor(){
+  const al=S.data.allocation||{risk:10,operation:25,salary:40,study:10,invest:15,bigPurchaseLimit:30000};
+  const houseFund=S.data.houseFund||[];
+  const totalHouseFund=houseFund.reduce((s,h)=>s+toN(h.amount),0);
+  const reviews=(S.data.quarterReviews||[]).sort((a,b)=>b.year-a.year||b.quarter-a.quarter);
+  const cooling=(S.data.coolingDecisions||[]).sort((a,b)=>(b.createDate||'').localeCompare(a.createDate||''));
+  const chats=(S.data.advisorChats||[]).sort((a,b)=>b._at-a._at);
+  const curQ=Math.ceil(S.month/3);
+  const thisQReviewed=reviews.find(r=>r.year===yr()&&r.quarter===curQ);
+
+  return`
+  <div class="pg-ttl">🧠 財務支出建議</div>
+  <div class="pg-sub">情緒煞車器、買房專款、季度檢視一站搞定</div>
+
+  <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);">
+    💡 <b>大額採購冷靜期規則：</b>單筆超過 $${fmt(al.bigPurchaseLimit)} 的設備採購，需經過 3 天冷靜期，並通過自我提問才能執行。
+  </div>
+
   <div class="sg sg2">
+    <!-- 大額採購冷靜期 -->
     <div class="card">
-      <div class="card-hd"><span class="card-ttl">💰 錢從哪裡來</span></div>
+      <div class="card-hd">
+        <span class="card-ttl">🧊 大額採購冷靜期</span>
+        <button class="btn btn-p btn-sm" onclick="openM('addCooling')">＋ 新增採購評估</button>
+      </div>
       <div class="card-bd">
-        <div class="sg sg2" style="margin-bottom:0;">
-          <div><div class="sl">服務收入</div><div class="sv sm rose">$${fmt(svc)}</div></div>
-          <div><div class="sl">產品銷售</div><div class="sv sm gold">$${fmt(prd)}</div></div>
-          <div><div class="sl">課程收入</div><div class="sv sm" style="color:var(--pur);">$${fmt(crs)}</div></div>
-          <div><div class="sl">總計</div><div class="sv sm rose">$${fmt(rev)}</div></div>
+        ${cooling.length===0?'<div class="empty" style="padding:18px;"><p>尚無大額採購評估記錄</p></div>':
+          cooling.slice(0,8).map(c=>{
+            const created=new Date(c.createDate);
+            const today_=new Date();
+            const days=Math.floor((today_-created)/86400000);
+            const ready=days>=3;
+            const status=c.decision==='buy'?'✅ 已購買':c.decision==='reject'?'❌ 放棄':ready?'⏰ 冷靜期已滿':`⏳ 冷靜中（剩 ${3-days} 天）`;
+            return`<div style="border:1.5px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:10px;background:${c.decision==='buy'?'var(--grnL)':c.decision==='reject'?'var(--bg2)':'var(--card)'};">
+              <div class="fbb">
+                <div><b>${c.item}</b><span class="bdg gold" style="margin-left:8px;">$${fmt(c.amount)}</span></div>
+                <button class="bdel" onclick="delCooling('${c.id}')">×</button>
+              </div>
+              <div class="tm" style="margin-top:6px;">📅 評估日 ${c.createDate}　${status}</div>
+              <div class="tm" style="margin-top:4px;">理由：${c.reason||'-'}</div>
+              ${c.decision?`<div class="tm" style="margin-top:4px;">決策：${c.decisionNote||''}</div>`:`
+              ${ready?`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-g btn-sm" onclick="decideCooling('${c.id}','buy')">✅ 確定購買</button>
+                <button class="btn btn-s btn-sm" onclick="decideCooling('${c.id}','reject')">❌ 放棄購買</button>
+              </div>`:''}`}
+            </div>`;
+          }).join('')}
+      </div>
+    </div>
+
+    <!-- 買房頭期專款 -->
+    <div class="card">
+      <div class="card-hd">
+        <span class="card-ttl">🏠 買房頭期專款</span>
+        <button class="btn btn-p btn-sm" onclick="openM('addHouseFund')">＋ 紀錄一筆</button>
+      </div>
+      <div class="card-bd">
+        <div style="background:linear-gradient(135deg,var(--purL),var(--bluL));padding:18px;border-radius:12px;margin-bottom:14px;text-align:center;">
+          <div class="sl">累積買房頭期專款</div>
+          <div style="font-family:'Noto Serif TC',serif;font-size:32px;font-weight:900;color:var(--pur);letter-spacing:0.06em;">$${fmt(totalHouseFund)}</div>
+          <div class="ss">每月從淨利撥 ${al.invest}% 轉投資 0050 / 半導體</div>
+        </div>
+        <div style="max-height:280px;overflow-y:auto;">
+        ${houseFund.length===0?'<div class="empty" style="padding:18px;"><p>尚無撥款記錄<br><span class="tm">在「總覽」可一鍵紀錄本月分流金額</span></p></div>':
+          houseFund.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(h=>`<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--bdr);">
+            <div><b>${h.date}</b><div class="tm">${h.note||'從淨利分流'}</div></div>
+            <div><span class="ap">+$${fmt(h.amount)}</span><button class="bdel" onclick="delHouseFund('${h.id}')">×</button></div>
+          </div>`).join('')}
         </div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">💸 錢從哪裡去</span></div>
-      <div class="card-bd">
-        ${(()=>{
-          const byCat={};getExp().forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+toN(e.amount);});
-          const entries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,4);
-          return entries.length===0?'<div class="empty" style="padding:8px;"><p>本月尚無支出</p></div>':
-            entries.map(([c,v])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);"><span class="tm">${c}</span><span class="an">$${fmt(v)}</span></div>`).join('');
-        })()}
-        <div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:4px;"><b>合計</b><b class="an">$${fmt(exp)}</b></div>
+  </div>
+
+  <!-- 情緒踩剎車 AI 對話 -->
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-ttl">💬 情緒踩剎車對話（自我提問）</span>
+      <button class="btn btn-p btn-sm" onclick="openM('newChat')">＋ 開始一段對話</button>
+    </div>
+    <div class="card-bd">
+      <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;">
+        💡 想衝動消費或不確定該不該花錢時，把它寫下來、回答 5 個問題，自己當自己的財務顧問。
       </div>
+      ${chats.length===0?'<div class="empty" style="padding:18px;"><p>尚無對話記錄</p></div>':
+        chats.slice(0,5).map(c=>{
+          const verdict=c.verdict==='go'?'✅ 可以花':c.verdict==='wait'?'⏰ 再等等':'❌ 別花';
+          const verdictColor=c.verdict==='go'?'var(--grn)':c.verdict==='wait'?'var(--gold)':'var(--red)';
+          return`<div style="border:1.5px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:10px;">
+            <div class="fbb">
+              <div><b>${c.title}</b><span class="bdg gold" style="margin-left:8px;">$${fmt(c.amount)}</span><span class="bdg" style="margin-left:6px;background:${verdictColor};color:#fff;">${verdict}</span></div>
+              <button class="bdel" onclick="delChat('${c.id}')">×</button>
+            </div>
+            <div class="tm" style="margin-top:6px;">📅 ${c.date}</div>
+            <details style="margin-top:8px;">
+              <summary style="cursor:pointer;font-size:13px;color:var(--mut);">查看自我問答</summary>
+              <div style="margin-top:8px;padding:10px;background:var(--bg2);border-radius:8px;font-size:13px;line-height:1.8;">
+                <div><b>1. 這項支出能直接提升客戶的「質感體驗」嗎？</b><br>${c.q1||'-'}</div>
+                <div style="margin-top:8px;"><b>2. 不買的話最壞會發生什麼？</b><br>${c.q2||'-'}</div>
+                <div style="margin-top:8px;"><b>3. 三個月後我還會記得需要它嗎？</b><br>${c.q3||'-'}</div>
+                <div style="margin-top:8px;"><b>4. 這筆錢若投入買房專款會是多少？</b><br>${c.q4||'-'}</div>
+                <div style="margin-top:8px;"><b>5. 我的判斷是？</b><br>${c.q5||'-'}</div>
+              </div>
+            </details>
+          </div>`;
+        }).join('')}
+    </div>
+  </div>
+
+  <!-- 季度檢視紀錄 -->
+  <div class="card">
+    <div class="card-hd">
+      <span class="card-ttl">📅 季度檢視紀錄（每季一次）</span>
+      ${!thisQReviewed?`<button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('addReview')">✓ 完成第 ${curQ} 季檢視</button>`:''}
+    </div>
+    <div class="card-bd">
+      <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+        💡 每季檢視一次分流比例。如果利潤增加，可以適度調高「投資買房」的比例。
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>檢視日期</th><th>年度／季度</th><th>當季淨利</th><th>調整後比例（風險／營運／薪資／進修／投資）</th><th>備註</th><th></th></tr></thead>
+        <tbody>${reviews.length===0?`<tr><td colspan="6"><div class="empty"><p>尚無檢視紀錄</p></div></td></tr>`:
+          reviews.map(r=>`<tr style="background:${r.year===yr()&&r.quarter===curQ?'var(--grnL)':''};">
+            <td><b>${r.date}</b></td>
+            <td>${r.year} 第 ${r.quarter} 季 ✅</td>
+            <td class="ap">$${fmt(r.profit||0)}</td>
+            <td class="tm">${r.alloc||'未調整'}</td>
+            <td class="tm">${r.note||''}</td>
+            <td><button class="bdel" onclick="delReview('${r.id}')">×</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
     </div>
   </div>`;
 }
@@ -518,68 +896,71 @@ function pgSales(){
       <button class="btn btn-p btn-sm" onclick="openM('addSale')">＋ 新增收入</button>
     </div>
     <div class="tw"><table>
-      <thead><tr><th>日期</th><th>類型</th><th>項目</th><th>金額</th><th>付款</th><th>員工</th><th>客戶</th><th>備註</th><th></th></tr></thead>
+      <thead><tr><th>日期</th><th>類型</th><th>項目</th><th>細項備註</th><th>金額</th><th>付款</th><th>老師</th><th>客戶</th><th></th></tr></thead>
       <tbody>${filtered.length===0?`<tr><td colspan="9"><div class="empty"><div class="empty-ico">💰</div><p>本月尚無記錄</p></div></td></tr>`:
         filtered.map(s=>`<tr>
           <td>${s.date||''}</td>
           <td><span class="bdg ${s.type==='service'?'rose':s.type==='product'?'gold':'pur'}">${s.type==='service'?'服務':s.type==='product'?'產品':'課程'}</span></td>
           <td><b>${s.item||''}</b></td>
+          <td class="tm">${s.subNote||''}</td>
           <td class="ap">$${fmt(s.amount)}</td>
           <td><span class="bdg">${s.payMethod||''}</span></td>
           <td>${s.staff||''}</td>
           <td class="tm">${s.customer||''}</td>
-          <td class="tm">${s.note||''}</td>
           <td style="white-space:nowrap;">
-            <button class="bdel" style="color:#aaa;font-size:13px;" onclick="openM('editSale','${s.id}')">✏️</button>
+            <button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')">✏️</button>
             <button class="bdel" onclick="delSale('${s.id}')">×</button>
           </td>
         </tr>`).join('')}
       </tbody>
     </table></div>
-    <div class="card-bd" style="padding:12px 18px;border-top:1px solid var(--bdr);">
-      <b>本月合計：</b><span class="ap">$${fmt(rev)}</span>
+    <div class="card-bd" style="padding:14px 20px;border-top:1px solid var(--bdr);">
+      <b>本月合計：</b><span class="ap" style="font-size:18px;">$${fmt(rev)}</span>
     </div>
   </div>`;
 }
 
-// ─── ORDER ─────────────────────────────────────────────────
+// ─── ORDER（銷售開單）──────────────────────────────────────
 function pgOrder(){
   const services=S.data.services||[];
   const products=S.data.products||[];
   return`
   <div class="pg-ttl">🧴 銷售開單</div>
-  <div class="pg-sub">選擇服務或產品，自動記入收入並扣減庫存</div>
+  <div class="pg-sub">填好後按「確認並繼續」可連續輸入多筆</div>
   <div class="sg sg2">
+    <!-- 服務開單 -->
     <div class="card">
-      <div class="card-hd"><span class="card-ttl">🌸 快速服務開單</span></div>
+      <div class="card-hd"><span class="card-ttl">🌸 服務開單</span></div>
       <div class="card-bd">
         <div class="fg">
           <div class="fgrp"><label>日期</label><input type="date" id="m_od0" value="${today()}"></div>
           <div class="fgrp"><label>服務項目</label>
             <select id="m_od1">
-              <option value="">-- 選擇服務 --</option>
-              ${services.map(s=>`<option value="${s.id}" data-price="${s.price}">${s.name}（$${fmt(s.price)}）</option>`).join('')}
-              <option value="custom">自訂項目</option>
+              ${SERVICE_PRESETS.map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
           </div>
-          <div class="fgrp"><label>服務名稱（自訂）</label><input type="text" id="m_od2" placeholder="若選自訂請填寫"></div>
+          <div class="fgrp"><label>自訂項目名稱（若選自訂）</label><input type="text" id="m_od2" placeholder="若選自訂請填寫"></div>
+          <div class="fgrp"><label>服務細項備註</label><input type="text" id="m_odNote" placeholder="如：第3次療程、加購精油等"></div>
           <div class="fgrp"><label>金額</label><input type="number" id="m_od3" placeholder="0"></div>
           <div class="fgrp"><label>客戶姓名</label><input type="text" id="m_od4" placeholder="選填"></div>
-          <div class="fgrp"><label>負責員工</label><select id="m_od5">${USERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+          <div class="fgrp"><label>服務老師</label><select id="m_od5">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
           <div class="fgrp"><label>付款方式</label><select id="m_od6">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
-          <div class="fgrp"><label>備註</label><input type="text" id="m_od7" placeholder="選填"></div>
         </div>
-        <div style="margin-top:14px;"><button class="btn btn-p" style="width:100%;" onclick="saveOrder('service')">✓ 確認服務收入</button></div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('service',false)">✓ 確認並關閉</button>
+          <button class="btn btn-y" style="flex:1;min-width:140px;" onclick="saveOrder('service',true)">＋ 確認並再輸入一筆</button>
+        </div>
       </div>
     </div>
 
+    <!-- 產品開單 -->
     <div class="card">
-      <div class="card-hd"><span class="card-ttl">🧴 快速產品銷售</span></div>
+      <div class="card-hd"><span class="card-ttl">🧴 產品銷售</span></div>
       <div class="card-bd">
         <div class="fg">
           <div class="fgrp"><label>日期</label><input type="date" id="m_pd0" value="${today()}"></div>
           <div class="fgrp"><label>產品</label>
-            <select id="m_pd1" onchange="fillPrice()">
+            <select id="m_pd1">
               <option value="">-- 選擇產品 --</option>
               ${products.map(p=>{const inv=getInv(p.id);return`<option value="${p.id}" data-price="${p.price}" data-qty="${inv.qty}">${p.name}（庫存:${inv.qty}）$${fmt(p.price)}</option>`;}).join('')}
             </select>
@@ -587,33 +968,40 @@ function pgOrder(){
           <div class="fgrp"><label>數量</label><input type="number" id="m_pd2" placeholder="1" value="1" min="1" onchange="calcPrdTotal()"></div>
           <div class="fgrp"><label>單價</label><input type="number" id="m_pd3" placeholder="0" onchange="calcPrdTotal()"></div>
           <div class="fgrp"><label>小計</label><input type="number" id="m_pd4" placeholder="0" readonly style="background:var(--bg2);"></div>
+          <div class="fgrp"><label>細項備註</label><input type="text" id="m_pdNote" placeholder="選填"></div>
           <div class="fgrp"><label>客戶</label><input type="text" id="m_pd5" placeholder="選填"></div>
-          <div class="fgrp"><label>員工</label><select id="m_pd6">${USERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+          <div class="fgrp"><label>服務老師</label><select id="m_pd6">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
           <div class="fgrp"><label>付款方式</label><select id="m_pd7">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
         </div>
-        <div style="margin-top:14px;"><button class="btn btn-p" style="width:100%;" onclick="saveOrder('product')">✓ 確認產品銷售</button></div>
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('product',false)">✓ 確認並關閉</button>
+          <button class="btn btn-y" style="flex:1;min-width:140px;" onclick="saveOrder('product',true)">＋ 確認並再輸入一筆</button>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- 今日銷售 -->
   <div class="card">
     <div class="card-hd"><span class="card-ttl">📋 今日銷售</span></div>
     <div class="tw"><table>
-      <thead><tr><th>時間</th><th>類型</th><th>項目</th><th>金額</th><th>客戶</th><th>員工</th><th>付款</th></tr></thead>
+      <thead><tr><th>時間</th><th>類型</th><th>項目</th><th>備註</th><th>金額</th><th>客戶</th><th>老師</th><th>付款</th></tr></thead>
       <tbody>${(()=>{
         const todays=S.data.sales.filter(s=>s.date===today()).sort((a,b)=>b._at-a._at);
-        if(!todays.length)return`<tr><td colspan="7"><div class="empty"><div class="empty-ico">🧴</div><p>今日尚無銷售</p></div></td></tr>`;
+        if(!todays.length)return`<tr><td colspan="8"><div class="empty"><div class="empty-ico">🧴</div><p>今日尚無銷售</p></div></td></tr>`;
         return todays.map(s=>`<tr>
           <td class="tm">${s._at?new Date(s._at).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}):''}</td>
           <td><span class="bdg ${s.type==='service'?'rose':s.type==='product'?'gold':'pur'}">${s.type==='service'?'服務':s.type==='product'?'產品':'課程'}</span></td>
-          <td><b>${s.item}</b></td><td class="ap">$${fmt(s.amount)}</td>
+          <td><b>${s.item}</b></td>
+          <td class="tm">${s.subNote||''}</td>
+          <td class="ap">$${fmt(s.amount)}</td>
           <td class="tm">${s.customer||'-'}</td><td>${s.staff||''}</td>
           <td><span class="bdg">${s.payMethod||''}</span></td>
         </tr>`).join('');
       })()}</tbody>
     </table></div>
-    <div class="card-bd" style="border-top:1px solid var(--bdr);padding:10px 18px;">
-      <b>今日合計：</b><span class="ap">$${fmt(S.data.sales.filter(s=>s.date===today()).reduce((s,r)=>s+toN(r.amount),0))}</span>
+    <div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;">
+      <b>今日合計：</b><span class="ap" style="font-size:18px;">$${fmt(S.data.sales.filter(s=>s.date===today()).reduce((s,r)=>s+toN(r.amount),0))}</span>
     </div>
   </div>`;
 }
@@ -636,7 +1024,7 @@ function pgExpenses(){
       <button class="btn btn-p btn-sm" onclick="openM('addExp')">＋ 新增支出</button>
     </div>
     <div class="tw"><table>
-      <thead><tr><th>日期</th><th>類別</th><th>金額</th><th>付款</th><th>供應商/備註</th><th></th></tr></thead>
+      <thead><tr><th>日期</th><th>類別</th><th>金額</th><th>付款</th><th>備註</th><th></th></tr></thead>
       <tbody>${exps.length===0?`<tr><td colspan="6"><div class="empty"><div class="empty-ico">💸</div><p>本月尚無支出</p></div></td></tr>`:
         exps.map(e=>`<tr>
           <td>${e.date||''}</td>
@@ -644,21 +1032,21 @@ function pgExpenses(){
           <td class="an">$${fmt(e.amount)}</td>
           <td><span class="bdg">${e.payMethod||''}</span></td>
           <td class="tm">${e.note||''}</td>
-          <td><button class="bdel" style="color:#aaa;font-size:13px;" onclick="openM('editExp','${e.id}')">✏️</button><button class="bdel" onclick="delExp('${e.id}')">×</button></td>
+          <td><button class="bdel" style="color:#aaa;" onclick="openM('editExp','${e.id}')">✏️</button><button class="bdel" onclick="delExp('${e.id}')">×</button></td>
         </tr>`).join('')}
       </tbody>
     </table></div>
-    <div class="card-bd" style="border-top:1px solid var(--bdr);padding:10px 18px;"><b>本月合計：</b><span class="an">$${fmt(total)}</span></div>
+    <div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;"><b>本月合計：</b><span class="an" style="font-size:18px;">$${fmt(total)}</span></div>
   </div>`;
 }
 
-// ─── PURCHASE ──────────────────────────────────────────────
+// ─── PURCHASE（進貨）─────────────────────────────────────
 function pgPurchase(){
   const purchases=S.data.purchases.filter(p=>p.month===S.month&&p.year===yr()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total=purchases.reduce((s,p)=>s+toN(p.totalCost),0);
   return`
   <div class="pg-ttl">📦 進貨管理</div>
-  <div class="pg-sub">輸入進貨單，自動增加庫存數量</div>
+  <div class="pg-sub">支援批次輸入，一次新增多筆進貨</div>
   ${moSel()}
   <div class="sg sg3">
     <div class="sc gold"><div class="sl">本月進貨筆數</div><div class="sv gold">${purchases.length}</div></div>
@@ -667,15 +1055,19 @@ function pgPurchase(){
   </div>
   <div class="sec-hd">
     <span class="sec-ttl">進貨記錄</span>
-    <button class="btn btn-p btn-sm" onclick="openM('addPurchase')">＋ 新增進貨</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-y btn-sm" onclick="openM('batchPurchase')">📦 批次輸入</button>
+      <button class="btn btn-p btn-sm" onclick="openM('addPurchase')">＋ 單筆新增</button>
+    </div>
   </div>
   <div class="card">
     <div class="tw"><table>
-      <thead><tr><th>日期</th><th>產品</th><th>數量</th><th>單價</th><th>總成本</th><th>供應商</th><th>備註</th><th></th></tr></thead>
-      <tbody>${purchases.length===0?`<tr><td colspan="8"><div class="empty"><div class="empty-ico">📦</div><p>本月尚無進貨記錄</p></div></td></tr>`:
+      <thead><tr><th>日期</th><th>產品</th><th>類別</th><th>數量</th><th>單價</th><th>總成本</th><th>供應商</th><th>備註</th><th></th></tr></thead>
+      <tbody>${purchases.length===0?`<tr><td colspan="9"><div class="empty"><div class="empty-ico">📦</div><p>本月尚無進貨記錄</p></div></td></tr>`:
         purchases.map(p=>`<tr>
           <td>${p.date||''}</td>
           <td><b>${p.productName||''}</b></td>
+          <td><span class="bdg gold">${p.category||''}</span></td>
           <td>${p.qty}</td>
           <td class="tm">$${fmt(p.unitCost)}</td>
           <td class="an">$${fmt(p.totalCost)}</td>
@@ -714,7 +1106,7 @@ function pgInventory(){
           return`<tr style="${qty<minQty?'background:var(--redL);':''}">
             <td><b>${p.name}</b></td>
             <td><span class="bdg">${p.category||''}</span></td>
-            <td style="font-size:16px;font-weight:700;color:${qty<minQty?'var(--red)':'var(--grn)'};">${qty}</td>
+            <td style="font-size:18px;font-weight:700;color:${qty<minQty?'var(--red)':'var(--grn)'};">${qty}</td>
             <td class="tm">${minQty}</td>
             <td>${status}</td>
             <td class="tm">$${fmt(p.cost||0)}</td>
@@ -722,7 +1114,7 @@ function pgInventory(){
             <td>
               <div style="display:flex;align-items:center;gap:6px;">
                 <button class="btn btn-s btn-sm" onclick="adjInv('${p.id}',-1)">－</button>
-                <span style="font-weight:700;min-width:28px;text-align:center;">${qty}</span>
+                <span style="font-weight:700;min-width:32px;text-align:center;">${qty}</span>
                 <button class="btn btn-p btn-sm" onclick="adjInv('${p.id}',1)">＋</button>
                 <button class="btn btn-s btn-sm" onclick="openM('setInv','${p.id}')">設定</button>
               </div>
@@ -755,15 +1147,15 @@ function pgCourses(){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">📚 課程場次</span><button class="btn btn-p btn-sm" onclick="openM('addCourse')">＋ 新增課程</button></div>
       <div class="card-bd">
-        ${moCourses.length===0?'<div class="empty" style="padding:16px;"><p>本月尚無課程</p></div>':
+        ${moCourses.length===0?'<div class="empty" style="padding:18px;"><p>本月尚無課程</p></div>':
           moCourses.map(c=>`
-          <div style="border:1.5px solid var(--bdr);border-radius:10px;padding:12px;margin-bottom:8px;">
+          <div style="border:1.5px solid var(--bdr);border-radius:10px;padding:14px;margin-bottom:10px;">
             <div class="fbb">
               <div><b>${c.name}</b><span class="bdg pur" style="margin-left:8px;">${c.category||''}</span></div>
               <button class="bdel" onclick="delCourse('${c.id}')">×</button>
             </div>
-            <div class="tm" style="margin-top:4px;">📅 ${c.date} ｜ 👩‍🏫 ${c.instructor||''} ｜ 💰 $${fmt(c.price)}/人</div>
-            <button class="btn btn-s btn-sm" style="margin-top:8px;" onclick="openM('addStudent','${c.id}')">＋ 新增學員</button>
+            <div class="tm" style="margin-top:6px;">📅 ${c.date} ｜ 👩‍🏫 ${c.instructor||''} ｜ 💰 $${fmt(c.price)}/人</div>
+            <button class="btn btn-s btn-sm" style="margin-top:10px;" onclick="openM('addStudent','${c.id}')">＋ 新增學員</button>
           </div>`).join('')}
       </div>
     </div>
@@ -800,10 +1192,10 @@ function pgStaff(){
     if(s.type==='product')byStaff[u].prd+=toN(s.amount);
   });
   return`
-  <div class="pg-ttl">👩‍💼 員工業績</div>
-  <div class="pg-sub">本月各員工服務筆數、金額、抽成計算</div>
+  <div class="pg-ttl">👩‍💼 老師業績</div>
+  <div class="pg-sub">本月各老師服務筆數、金額、抽成計算</div>
   ${moSel()}
-  <div class="sg ${staff.length>0?'sg'+Math.min(4,staff.length+1):'sg2'}">
+  <div class="sg ${Object.keys(byStaff).length>0?'sg4':'sg2'}">
     ${Object.entries(byStaff).sort((a,b)=>b[1].total-a[1].total).map(([name,d])=>`
     <div class="sc rose">
       <div class="sl">${name}</div>
@@ -812,10 +1204,10 @@ function pgStaff(){
     </div>`).join('')}
   </div>
   <div class="card">
-    <div class="card-hd"><span class="card-ttl">👥 員工管理</span><button class="btn btn-p btn-sm" onclick="openM('addStaff')">＋ 新增員工</button></div>
+    <div class="card-hd"><span class="card-ttl">👥 老師資料</span><button class="btn btn-p btn-sm" onclick="openM('addStaff')">＋ 新增老師</button></div>
     <div class="tw"><table>
       <thead><tr><th>姓名</th><th>職稱</th><th>抽成比例</th><th>本月業績</th><th>本月抽成</th><th></th></tr></thead>
-      <tbody>${staff.length===0?`<tr><td colspan="6"><div class="empty"><p>尚未建立員工資料</p></div></td></tr>`:
+      <tbody>${staff.length===0?`<tr><td colspan="6"><div class="empty"><p>尚未建立老師資料</p></div></td></tr>`:
         staff.map(u=>{
           const d=byStaff[u.name]||{total:0,cnt:0};
           const comm=Math.round(d.total*(toN(u.commRate||0)/100));
@@ -830,20 +1222,6 @@ function pgStaff(){
         }).join('')}
       </tbody>
     </table></div>
-  </div>
-  <div class="card">
-    <div class="card-hd"><span class="card-ttl">📋 本月銷售明細（依員工）</span></div>
-    <div class="tw"><table>
-      <thead><tr><th>日期</th><th>員工</th><th>項目</th><th>類型</th><th>金額</th><th>客戶</th></tr></thead>
-      <tbody>${sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(s=>`<tr>
-        <td>${s.date||''}</td>
-        <td><b>${s.staff||'未分配'}</b></td>
-        <td>${s.item||''}</td>
-        <td><span class="bdg ${s.type==='service'?'rose':s.type==='product'?'gold':'pur'}">${s.type==='service'?'服務':s.type==='product'?'產品':'課程'}</span></td>
-        <td class="ap">$${fmt(s.amount)}</td>
-        <td class="tm">${s.customer||''}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
   </div>`;
 }
 
@@ -856,10 +1234,8 @@ function pgCashflow(){
   let running=prevBal;
   const rows=entries.map(e=>{running+=toN(e.amount);return{...e,run:running};});
   const moBal=running;
-  const cumTotal=allEntries.reduce((s,e)=>s+toN(e.amount),0);
   const mIn=entries.filter(e=>toN(e.amount)>0).reduce((s,e)=>s+toN(e.amount),0);
   const mOut=entries.filter(e=>toN(e.amount)<0).reduce((s,e)=>s+Math.abs(toN(e.amount)),0);
-  const CF_CATS=['存入','服務收入','產品收入','課程收入','現金提款','費用支出','進貨','薪資發放','其他'];
   return`
   <div class="pg-ttl">🏦 現金流水帳</div>
   <div class="pg-sub">工作室現金帳，隨時核對實際餘額</div>
@@ -882,7 +1258,7 @@ function pgCashflow(){
       <thead><tr><th>日期</th><th>金額</th><th>類別</th><th>說明</th><th>累計餘額</th><th></th></tr></thead>
       <tbody>
         <tr style="background:var(--bg2);font-weight:700;">
-          <td colspan="2" style="font-size:12px;color:var(--mut);">📅 上月結餘</td>
+          <td colspan="2" class="tm">📅 上月結餘</td>
           <td colspan="2"></td>
           <td style="font-weight:700;color:${prevBal>=0?'var(--grn)':'var(--red)'};">$${fmt(prevBal)}</td>
           <td></td>
@@ -897,10 +1273,10 @@ function pgCashflow(){
             <td><button class="bdel" onclick="delCF('${r.id}')">×</button></td>
           </tr>`).join('')}
         <tr style="background:${moBal>=0?'var(--grnL)':'var(--redL)'};font-weight:700;border-top:2px solid var(--bdr);">
-          <td colspan="2" style="font-size:12px;color:var(--mut);">💰 本月結餘</td>
-          <td style="font-size:11px;color:var(--mut);">存入$${fmt(mIn)} / 支出$${fmt(mOut)}</td>
+          <td colspan="2" class="tm">💰 本月結餘</td>
+          <td class="tm">存入$${fmt(mIn)} / 支出$${fmt(mOut)}</td>
           <td></td>
-          <td style="font-size:16px;font-weight:700;color:${moBal>=0?'var(--grn)':'var(--red)'};">$${fmt(moBal)}</td>
+          <td style="font-size:18px;font-weight:700;color:${moBal>=0?'var(--grn)':'var(--red)'};">$${fmt(moBal)}</td>
           <td></td>
         </tr>
       </tbody>
@@ -933,20 +1309,20 @@ function pgReports(){
   <div class="card">
     <div class="card-hd"><span class="card-ttl">📊 月度營收走勢</span></div>
     <div class="card-bd" style="overflow-x:auto;">
-      <div style="min-width:560px;">
+      <div style="min-width:600px;">
         ${moData.map(m=>{
           const rp=Math.round(m.rev/maxV*100),ep=Math.round(m.exp/maxV*100);
-          return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-            <div style="width:28px;font-size:11px;color:var(--mut);text-align:right;">${m.m}月</div>
-            <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
-              <div class="pb" style="height:11px;"><div class="pf" style="width:${rp}%;height:11px;background:var(--rose);"></div></div>
-              <div class="pb" style="height:11px;"><div class="pf" style="width:${ep}%;height:11px;background:var(--red);"></div></div>
+          return`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <div style="width:36px;font-size:14px;color:var(--mut);text-align:right;">${m.m}月</div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+              <div class="pb" style="height:13px;"><div class="pf" style="width:${rp}%;height:13px;background:var(--rose);"></div></div>
+              <div class="pb" style="height:13px;"><div class="pf" style="width:${ep}%;height:13px;background:var(--red);"></div></div>
             </div>
-            <div style="width:100px;font-size:11px;"><div class="ap">$${fmt(m.rev)}</div><div class="an">$${fmt(m.exp)}</div></div>
-            <div style="width:80px;font-size:11px;font-weight:700;${m.rev-m.exp>=0?'color:var(--grn)':'color:var(--red)'};">$${fmt(m.rev-m.exp)}</div>
+            <div style="width:120px;font-size:13px;"><div class="ap">$${fmt(m.rev)}</div><div class="an">$${fmt(m.exp)}</div></div>
+            <div style="width:90px;font-size:13px;font-weight:700;${m.rev-m.exp>=0?'color:var(--grn)':'color:var(--red)'};">$${fmt(m.rev-m.exp)}</div>
           </div>`;
         }).join('')}
-        <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--mut);"><span>🌸 營收</span><span>🔴 支出</span><span>右側＝淨利</span></div>
+        <div style="display:flex;gap:18px;margin-top:10px;font-size:13px;color:var(--mut);"><span>🌸 營收</span><span>🔴 支出</span><span>右側＝淨利</span></div>
       </div>
     </div>
   </div>
@@ -959,9 +1335,9 @@ function pgReports(){
           {lbl:'🧴 產品銷售',val:tPrd,color:'var(--gold)'},
           {lbl:'📚 課程收入',val:tCrs,color:'var(--pur)'},
         ].map(({lbl,val,color})=>`
-          <div style="margin-bottom:14px;">
+          <div style="margin-bottom:16px;">
             <div class="plbl"><span>${lbl}</span><span style="font-weight:700;color:${color};">$${fmt(val)}（${tRev>0?Math.round(val/tRev*100):0}%）</span></div>
-            <div class="pb" style="height:12px;"><div class="pf" style="width:${tRev>0?Math.round(val/tRev*100):0}%;height:12px;background:${color};"></div></div>
+            <div class="pb" style="height:14px;"><div class="pf" style="width:${tRev>0?Math.round(val/tRev*100):0}%;height:14px;background:${color};"></div></div>
           </div>`).join('')}
       </div>
     </div>
@@ -981,21 +1357,21 @@ function pgReports(){
   </div>`;
 }
 
-// ─── SETTINGS ──────────────────────────────────────────────
+// ─── SETTINGS（基本設定）────────────────────────────────────
 function pgSettings(){
   const svcs=S.data.services||[];
   const prods=S.data.products||[];
   const sups=S.data.suppliers||[];
   return`
   <div class="pg-ttl">⚙️ 基本設定</div>
-  <div class="pg-sub">服務項目、產品清單、供應商管理</div>
+  <div class="pg-sub">服務項目、產品清單、供應商管理（已預設常用項目）</div>
   <div class="sg sg3">
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🌸 服務項目</span><button class="btn btn-p btn-sm" onclick="openM('addService')">＋ 新增</button></div>
       <div class="card-bd" style="padding:0;">
-        ${svcs.length===0?'<div class="empty" style="padding:20px;"><p>尚未建立服務項目</p></div>':
-          svcs.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--bdr);">
-            <div><b>${s.name}</b><span class="bdg rose" style="margin-left:6px;">${s.category||''}</span></div>
+        ${svcs.length===0?'<div class="empty" style="padding:24px;"><p>尚未建立服務項目</p></div>':
+          svcs.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--bdr);">
+            <div><b>${s.name}</b><span class="bdg rose" style="margin-left:8px;">${s.category||''}</span></div>
             <div class="fb g8"><span class="ap">$${fmt(s.price)}</span><button class="bdel" onclick="delService('${s.id}')">×</button></div>
           </div>`).join('')}
       </div>
@@ -1003,8 +1379,8 @@ function pgSettings(){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🧴 產品清單</span><button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增</button></div>
       <div class="card-bd" style="padding:0;">
-        ${prods.length===0?'<div class="empty" style="padding:20px;"><p>尚未建立產品</p></div>':
-          prods.map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--bdr);">
+        ${prods.length===0?'<div class="empty" style="padding:24px;"><p>尚未建立產品<br><span class="tm">產品由「進貨管理」自動建立</span></p></div>':
+          prods.map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--bdr);">
             <div><b>${p.name}</b><span class="bdg gold" style="margin-left:6px;">${p.category||''}</span></div>
             <div class="fb g8 tm">售$${fmt(p.price)} / 成$${fmt(p.cost||0)}<button class="bdel" onclick="delProduct('${p.id}')">×</button></div>
           </div>`).join('')}
@@ -1013,8 +1389,8 @@ function pgSettings(){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🏭 供應商</span><button class="btn btn-p btn-sm" onclick="openM('addSupplier')">＋ 新增</button></div>
       <div class="card-bd" style="padding:0;">
-        ${sups.length===0?'<div class="empty" style="padding:20px;"><p>尚未建立供應商</p></div>':
-          sups.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--bdr);">
+        ${sups.length===0?'<div class="empty" style="padding:24px;"><p>尚未建立供應商</p></div>':
+          sups.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--bdr);">
             <div><b>${s.name}</b><div class="tm">${s.contact||''} ${s.phone||''}</div></div>
             <button class="bdel" onclick="delSupplier('${s.id}')">×</button>
           </div>`).join('')}
@@ -1027,18 +1403,17 @@ function pgSettings(){
 function renderModal(){
   if(!S.modal)return'';
   const m=S.modal;let c='';
-  const cats=c=>c.map(v=>`<option>${v}</option>`).join('');
 
   if(m.t==='addSale'){c=`<div class="mttl">💰 新增收入</div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_s0" value="${today()}"></div>
       <div class="fgrp"><label>類型</label><select id="m_s1"><option value="service">🌸 服務</option><option value="product">🧴 產品</option><option value="course">📚 課程</option></select></div>
       <div class="fgrp"><label>項目名稱</label><input type="text" id="m_s2" placeholder="服務/產品名稱"></div>
+      <div class="fgrp"><label>細項備註</label><input type="text" id="m_sNote" placeholder="選填"></div>
       <div class="fgrp"><label>金額</label><input type="number" id="m_s3" placeholder="0"></div>
       <div class="fgrp"><label>付款方式</label><select id="m_s4">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
-      <div class="fgrp"><label>員工</label><select id="m_s5">${USERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>服務老師</label><select id="m_s5">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>客戶</label><input type="text" id="m_s6" placeholder="選填"></div>
-      <div class="fgrp"><label>備註</label><input type="text" id="m_s7" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveSale()">✓ 確認</button></div>`;}
 
@@ -1047,11 +1422,11 @@ function renderModal(){
       <div class="fgrp"><label>日期</label><input type="date" id="m_s0" value="${s.date||today()}"></div>
       <div class="fgrp"><label>類型</label><select id="m_s1"><option value="service"${s.type==='service'?' selected':''}>🌸 服務</option><option value="product"${s.type==='product'?' selected':''}>🧴 產品</option><option value="course"${s.type==='course'?' selected':''}>📚 課程</option></select></div>
       <div class="fgrp"><label>項目名稱</label><input type="text" id="m_s2" value="${s.item||''}"></div>
+      <div class="fgrp"><label>細項備註</label><input type="text" id="m_sNote" value="${s.subNote||''}"></div>
       <div class="fgrp"><label>金額</label><input type="number" id="m_s3" value="${s.amount||0}"></div>
       <div class="fgrp"><label>付款方式</label><select id="m_s4">${PAY.map(p=>`<option${p===s.payMethod?' selected':''}>${p}</option>`).join('')}</select></div>
-      <div class="fgrp"><label>員工</label><select id="m_s5">${USERS.map(u=>`<option${u===s.staff?' selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>服務老師</label><select id="m_s5">${TEACHERS.map(u=>`<option${u===s.staff?' selected':''}>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>客戶</label><input type="text" id="m_s6" value="${s.customer||''}"></div>
-      <div class="fgrp"><label>備註</label><input type="text" id="m_s7" value="${s.note||''}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updSale('${s.id}')">✓ 更新</button></div>`;}
 
@@ -1075,24 +1450,47 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updExp('${e.id}')">✓ 更新</button></div>`;}
 
-  if(m.t==='addPurchase'){c=`<div class="mttl">📦 新增進貨</div>
+  if(m.t==='addPurchase'){c=`<div class="mttl">📦 新增進貨（單筆）</div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${today()}"></div>
-      <div class="fgrp"><label>產品</label><select id="m_p1">
-        ${(S.data.products||[]).map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
-        <option value="custom">其他（手動輸入）</option>
-      </select></div>
-      <div class="fgrp"><label>產品名稱（手動）</label><input type="text" id="m_p2" placeholder="若選其他請填寫"></div>
-      <div class="fgrp"><label>進貨數量</label><input type="number" id="m_p3" placeholder="0" min="1"></div>
+      <div class="fgrp"><label>產品類別</label><select id="m_pCat">${PRODUCT_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>產品名稱</label><input type="text" id="m_p2" placeholder="如：玻尿酸精華液"></div>
+      <div class="fgrp"><label>進貨數量</label><input type="number" id="m_p3" placeholder="0" min="1" onchange="calcPTotal()"></div>
       <div class="fgrp"><label>進貨單價</label><input type="number" id="m_p4" placeholder="0" onchange="calcPTotal()"></div>
-      <div class="fgrp"><label>進貨總成本</label><input type="number" id="m_p5" placeholder="0"></div>
-      <div class="fgrp"><label>供應商</label><select id="m_p6">
-        <option value="">無</option>
-        ${(S.data.suppliers||[]).map(s=>`<option>${s.name}</option>`).join('')}
-      </select></div>
-      <div class="fgrp"><label>備註</label><input type="text" id="m_p7" placeholder="選填"></div>
+      <div class="fgrp"><label>總成本</label><input type="number" id="m_p5" placeholder="0"></div>
+      <div class="fgrp"><label>售價（建檔用）</label><input type="number" id="m_pPrice" placeholder="0"></div>
+      <div class="fgrp"><label>供應商</label>
+        <select id="m_p6" onchange="toggleCustomSupplier()">
+          ${SUPPLIER_PRESETS.map(s=>`<option>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp" id="m_p6c_wrap" style="display:none;"><label>自訂廠商名稱</label><input type="text" id="m_p6c" placeholder="輸入廠商名稱"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_p7" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="savePurchase()">✓ 確認進貨</button></div>`;}
+
+  if(m.t==='batchPurchase'){
+    const rows=S.modal.rows||[{}];
+    c=`<div class="mttl">📦 批次進貨輸入</div>
+    <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div class="fgrp" style="flex:1;min-width:140px;"><label>進貨日期</label><input type="date" id="m_bpDate" value="${today()}"></div>
+      <div class="fgrp" style="flex:1;min-width:140px;"><label>供應商</label>
+        <select id="m_bpSup" onchange="toggleBatchCustomSupplier()">
+          ${SUPPLIER_PRESETS.map(s=>`<option>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp" id="m_bpSupC_wrap" style="flex:1;min-width:140px;display:none;"><label>自訂廠商</label><input type="text" id="m_bpSupC" placeholder="廠商名稱"></div>
+    </div>
+    <div style="background:var(--bg2);padding:10px;border-radius:8px;margin-bottom:10px;font-size:13px;color:var(--mut);">
+      💡 一次輸入多筆進貨，每一列為一筆。完成後一併送出。
+    </div>
+    <div id="batch_rows">
+      ${rows.map((r,i)=>batchRowHTML(r,i)).join('')}
+    </div>
+    <button class="btn btn-s" style="width:100%;margin-top:8px;" onclick="addBatchRow()">＋ 新增一列</button>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveBatchPurchase()">✓ 全部送出</button></div>`;
+    S.modal.lg=true;
+  }
 
   if(m.t==='setInv'){const p=(S.data.products||[]).find(x=>x.id===m.x)||{};const inv=getInv(m.x);c=`<div class="mttl">🗂️ 設定庫存：${p.name}</div>
     <div class="fg">
@@ -1102,11 +1500,11 @@ function renderModal(){
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveInv('${m.x}')">✓ 儲存</button></div>`;}
 
   if(m.t==='stockCheck'){c=`<div class="mttl">📋 手動盤點</div>
-    <div style="max-height:400px;overflow-y:auto;">
+    <div style="max-height:440px;overflow-y:auto;">
     ${(S.data.products||[]).map(p=>{const inv=getInv(p.id);return`
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bdr);">
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bdr);">
         <div style="flex:1;"><b>${p.name}</b><div class="tm">系統庫存：${inv.qty}</div></div>
-        <div style="width:100px;"><input type="number" id="ck_${p.id}" placeholder="${inv.qty}" style="width:100%;padding:6px 8px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;"></div>
+        <div style="width:120px;"><input type="number" id="ck_${p.id}" placeholder="${inv.qty}" style="width:100%;padding:9px 10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:15px;"></div>
       </div>`}).join('')}
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveStockCheck()">✓ 確認盤點</button></div>`;}
@@ -1116,7 +1514,7 @@ function renderModal(){
       <div class="fgrp"><label>課程名稱</label><input type="text" id="m_c0" placeholder="課程名稱"></div>
       <div class="fgrp"><label>類別</label><select id="m_c1">${COURSE_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="fgrp"><label>日期</label><input type="date" id="m_c2" value="${today()}"></div>
-      <div class="fgrp"><label>講師</label><select id="m_c3">${USERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>講師</label><select id="m_c3">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>學費/人</label><input type="number" id="m_c4" placeholder="0"></div>
       <div class="fgrp"><label>備註</label><input type="text" id="m_c5" placeholder="選填"></div>
     </div>
@@ -1142,10 +1540,9 @@ function renderModal(){
 
   if(m.t==='addService'){c=`<div class="mttl">🌸 新增服務項目</div>
     <div class="fg fg2">
-      <div class="fgrp"><label>服務名稱</label><input type="text" id="m_sv0" placeholder="如：基礎做臉"></div>
-      <div class="fgrp"><label>類別</label><select id="m_sv1">${SERVICE_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
-      <div class="fgrp"><label>售價</label><input type="number" id="m_sv2" placeholder="0"></div>
-      <div class="fgrp"><label>時長（分鐘）</label><input type="number" id="m_sv3" placeholder="60"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>服務名稱</label><input type="text" id="m_sv0" placeholder="如：基礎做臉"></div>
+      <div class="fgrp"><label>類別</label><input type="text" id="m_sv1" placeholder="美容服務" value="美容服務"></div>
+      <div class="fgrp"><label>售價（參考）</label><input type="number" id="m_sv2" placeholder="0"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveService()">✓ 新增</button></div>`;}
 
@@ -1156,7 +1553,7 @@ function renderModal(){
       <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" placeholder="0"></div>
       <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" placeholder="0"></div>
       <div class="fgrp"><label>初始庫存</label><input type="number" id="m_pr4" placeholder="0"></div>
-      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="5"></div>
+      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="5" value="5"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveProduct()">✓ 新增</button></div>`;}
 
@@ -1169,7 +1566,7 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveSupplier()">✓ 新增</button></div>`;}
 
-  if(m.t==='addStaff'){c=`<div class="mttl">👩‍💼 新增員工</div>
+  if(m.t==='addStaff'){c=`<div class="mttl">👩‍💼 新增老師</div>
     <div class="fg fg2">
       <div class="fgrp"><label>姓名</label><input type="text" id="m_sf0" placeholder="姓名"></div>
       <div class="fgrp"><label>職稱</label><input type="text" id="m_sf1" placeholder="如：美容師"></div>
@@ -1178,15 +1575,117 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveStaff()">✓ 新增</button></div>`;}
 
-  const bg=document.getElementById('modal-bg');
-  if(bg)bg.className='modal-bg open';
+  // ─── 新增分流比例編輯 ───
+  if(m.t==='editAlloc'){
+    const al=S.data.allocation||{risk:10,operation:25,salary:40,study:10,invest:15,bigPurchaseLimit:30000};
+    c=`<div class="mttl">⚖️ 調整淨利分流比例</div>
+    <div style="background:var(--goldL);padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;color:var(--goldDk);">
+      💡 五項比例加總建議為 100%，可依實際狀況微調
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>⚠️ 風險儲備金 (%)</label><input type="number" id="m_al_risk" value="${al.risk}" min="0" max="100"></div>
+      <div class="fgrp"><label>🏪 營運成本 (%)</label><input type="number" id="m_al_op" value="${al.operation}" min="0" max="100"></div>
+      <div class="fgrp"><label>👩‍💼 人事薪資 (%)</label><input type="number" id="m_al_sal" value="${al.salary}" min="0" max="100"></div>
+      <div class="fgrp"><label>📚 品牌進修 (%)</label><input type="number" id="m_al_st" value="${al.study}" min="0" max="100"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>🏠 投資買房 (%)</label><input type="number" id="m_al_inv" value="${al.invest}" min="0" max="100"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>🧊 大額採購冷靜期門檻金額（元）</label><input type="number" id="m_al_lim" value="${al.bigPurchaseLimit}" placeholder="30000"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveAlloc()">✓ 儲存</button></div>`;
+  }
+
+  // ─── 新增買房頭期專款 ───
+  if(m.t==='addHouseFund'){c=`<div class="mttl">🏠 紀錄買房頭期專款</div>
+    <div class="fg">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_hf0" value="${today()}"></div>
+      <div class="fgrp"><label>金額</label><input type="number" id="m_hf1" placeholder="0"></div>
+      <div class="fgrp"><label>備註（選填）</label><input type="text" id="m_hf2" placeholder="如：本月淨利 15% 分流"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveHouseFund()">✓ 儲存</button></div>`;}
+
+  // ─── 新增冷靜期採購評估 ───
+  if(m.t==='addCooling'){c=`<div class="mttl">🧊 大額採購評估</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      📌 寫下來、放 3 天，3 天後再回來決定。
+    </div>
+    <div class="fg">
+      <div class="fgrp"><label>想買的東西</label><input type="text" id="m_cl0" placeholder="如：新美容床"></div>
+      <div class="fgrp"><label>金額</label><input type="number" id="m_cl1" placeholder="0"></div>
+      <div class="fgrp"><label>當下想買的理由</label><textarea id="m_cl2" rows="3" placeholder="老實寫下來，3 天後回頭看"></textarea></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCooling()">✓ 進入冷靜期</button></div>`;}
+
+  // ─── 季度檢視 ───
+  if(m.t==='addReview'){
+    const curQ=Math.ceil(S.month/3);
+    const months=[(curQ-1)*3+1,(curQ-1)*3+2,(curQ-1)*3+3];
+    const qProfit=months.reduce((s,mm)=>s+(getRevTotal(mm)-getExpTotal(mm)),0);
+    const al=S.data.allocation||{risk:10,operation:25,salary:40,study:10,invest:15};
+    c=`<div class="mttl">📅 第 ${curQ} 季度檢視</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      💡 利潤增加時，可以調高「投資買房」比例。
+    </div>
+    <div style="background:var(--bg2);padding:14px;border-radius:10px;margin-bottom:14px;">
+      <div class="sl">本季淨利</div>
+      <div class="sv ${qProfit>=0?'grn':'red'}">$${fmt(qProfit)}</div>
+    </div>
+    <div class="fg">
+      <div class="fgrp"><label>檢視日期</label><input type="date" id="m_rv0" value="${today()}"></div>
+      <div class="fgrp"><label>本次調整後比例（風險／營運／薪資／進修／投資）</label>
+        <input type="text" id="m_rv1" value="${al.risk}/${al.operation}/${al.salary}/${al.study}/${al.invest}" placeholder="10/25/40/10/15">
+      </div>
+      <div class="fgrp"><label>本季心得 / 下季目標</label><textarea id="m_rv2" rows="3" placeholder="本季發現了什麼？下季要做什麼？"></textarea></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveReview(${curQ},${qProfit})">✓ 完成檢視</button></div>`;
+  }
+
+  // ─── AI 情緒踩剎車對話 ───
+  if(m.t==='newChat'){c=`<div class="mttl">💬 情緒踩剎車對話</div>
+    <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;">
+      💡 老實回答這 5 個問題，自己當自己的財務顧問。
+    </div>
+    <div class="fg">
+      <div class="fgrp"><label>想花錢的項目</label><input type="text" id="m_ch0" placeholder="如：新進口精油組"></div>
+      <div class="fgrp"><label>金額</label><input type="number" id="m_ch1" placeholder="0"></div>
+      <div class="fgrp"><label>1. 這項支出能直接提升客戶的「質感體驗」嗎？怎麼提升？</label><textarea id="m_ch_q1" rows="2"></textarea></div>
+      <div class="fgrp"><label>2. 不買的話，最壞會發生什麼？</label><textarea id="m_ch_q2" rows="2"></textarea></div>
+      <div class="fgrp"><label>3. 三個月後，我還會記得需要它嗎？</label><textarea id="m_ch_q3" rows="2"></textarea></div>
+      <div class="fgrp"><label>4. 這筆錢若投入買房專款會是多少？我捨得嗎？</label><textarea id="m_ch_q4" rows="2"></textarea></div>
+      <div class="fgrp"><label>5. 我的最終判斷</label><textarea id="m_ch_q5" rows="2" placeholder="寫下你看完前 4 題後的真實感受"></textarea></div>
+      <div class="fgrp"><label>結論</label>
+        <select id="m_ch_v">
+          <option value="go">✅ 可以花（能提升質感體驗）</option>
+          <option value="wait">⏰ 再等等（給自己 3 天思考）</option>
+          <option value="reject">❌ 別花（情緒消費）</option>
+        </select>
+      </div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveChat()">✓ 儲存對話</button></div>`;}
+
   return c;
+}
+
+// 批次進貨單列 HTML
+function batchRowHTML(r,i){
+  return`<div class="batch-row" data-idx="${i}">
+    <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
+    <div class="fgrp"><label>類別</label>
+      <select class="bp_cat">
+        ${PRODUCT_CATS.map(c=>`<option${c===(r.cat||PRODUCT_CATS[0])?' selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fgrp"><label>數量</label><input type="number" class="bp_qty" placeholder="0" value="${r.qty||''}" min="1"></div>
+    <div class="fgrp"><label>單價</label><input type="number" class="bp_unit" placeholder="0" value="${r.unit||''}"></div>
+    <div class="fgrp"><label>售價</label><input type="number" class="bp_price" placeholder="0" value="${r.price||''}"></div>
+    <button class="bdel-row" onclick="rmBatchRow(${i})">×</button>
+  </div>`;
 }
 
 // ─── ACTIONS ───────────────────────────────────────────────
 function bindEvents(){
   const mbg=$('modal-bg');
-  if(mbg)mbg.onclick=e=>{if(e.target===mbg)closeMod();};
+  if(mbg){
+    mbg.onclick=e=>{if(e.target===mbg)closeMod();};
+  }
   const pd1=$('m_pd1');
   if(pd1)pd1.onchange=()=>{
     const opt=pd1.options[pd1.selectedIndex];
@@ -1194,15 +1693,18 @@ function bindEvents(){
     if($('m_pd3'))$('m_pd3').value=price;
     calcPrdTotal();
   };
-  const od1=$('m_od1');
-  if(od1)od1.onchange=()=>{
-    const opt=od1.options[od1.selectedIndex];
-    const price=opt.dataset.price||0;
-    if($('m_od3'))$('m_od3').value=price;
-  };
 }
 
-window.openM=(t,x)=>{S.modal={t,x};const bg=$('modal-bg');const inn=$('modal-inner');if(bg&&inn){inn.innerHTML=renderModal();bg.className='modal-bg open';bindEvents();}};
+window.openM=(t,x)=>{
+  S.modal={t,x,rows:t==='batchPurchase'?[{},{},{}]:undefined};
+  const bg=$('modal-bg');const inn=$('modal-inner');
+  if(bg&&inn){
+    inn.innerHTML=renderModal();
+    bg.className='modal-bg open';
+    if(S.modal.lg)inn.className='modal lg';else inn.className='modal';
+    bindEvents();
+  }
+};
 window.closeMod=()=>{S.modal=null;const bg=$('modal-bg');if(bg)bg.className='modal-bg';};
 window.setP=p=>{S.page=p;S.subTab=0;render();};
 window.setT=i=>{S.subTab=i;const c=$('pg-content');if(c)c.innerHTML=renderPage();};
@@ -1211,88 +1713,201 @@ window.setMo=m=>{S.month=m;const c=$('pg-content');if(c)c.innerHTML=renderPage()
 window.calcPrdTotal=()=>{const q=parseFloat($('m_pd2')?.value||1)||1,p=parseFloat($('m_pd3')?.value||0)||0;if($('m_pd4'))$('m_pd4').value=q*p;};
 window.calcPTotal=()=>{const q=parseFloat($('m_p3')?.value||1)||1,p=parseFloat($('m_p4')?.value||0)||0;if($('m_p5'))$('m_p5').value=q*p;};
 
-// Sales
+window.toggleCustomSupplier=()=>{
+  const sel=$('m_p6');const wrap=$('m_p6c_wrap');
+  if(sel&&wrap)wrap.style.display=sel.value==='其他手動輸入廠商'?'flex':'none';
+};
+window.toggleBatchCustomSupplier=()=>{
+  const sel=$('m_bpSup');const wrap=$('m_bpSupC_wrap');
+  if(sel&&wrap)wrap.style.display=sel.value==='其他手動輸入廠商'?'flex':'none';
+};
+
+// ── Sales ──
 window.saveSale=async()=>{
   const date=$('m_s0')?.value,amount=parseFloat($('m_s3')?.value)||0;
   if(!date||!amount){alert('請填日期和金額');return;}
   const d=new Date(date);
-  await addSub('sales',{date,type:$('m_s1')?.value,item:$('m_s2')?.value,amount,payMethod:$('m_s4')?.value,staff:$('m_s5')?.value,customer:$('m_s6')?.value,note:$('m_s7')?.value,month:d.getMonth()+1,year:d.getFullYear()});
+  await addSub('sales',{date,type:$('m_s1')?.value,item:$('m_s2')?.value||'',subNote:$('m_sNote')?.value||'',amount,payMethod:$('m_s4')?.value,staff:$('m_s5')?.value,customer:$('m_s6')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 收入已記帳');closeMod();
 };
 window.updSale=async(id)=>{
   const date=$('m_s0')?.value,amount=parseFloat($('m_s3')?.value)||0;
   if(!date||!amount){alert('請填日期和金額');return;}
   const d=new Date(date);
-  await setSub('sales',id,{date,type:$('m_s1')?.value,item:$('m_s2')?.value,amount,payMethod:$('m_s4')?.value,staff:$('m_s5')?.value,customer:$('m_s6')?.value,note:$('m_s7')?.value,month:d.getMonth()+1,year:d.getFullYear()});
+  await setSub('sales',id,{date,type:$('m_s1')?.value,item:$('m_s2')?.value||'',subNote:$('m_sNote')?.value||'',amount,payMethod:$('m_s4')?.value,staff:$('m_s5')?.value,customer:$('m_s6')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 已更新');closeMod();
 };
 window.delSale=async id=>{if(!confirm('確認刪除？'))return;await delSub('sales',id);toast('已刪除');};
 
-// Order
-window.saveOrder=async(type)=>{
+// ── Order ──（連續輸入版）
+window.saveOrder=async(type,continueInput)=>{
   if(type==='service'){
     const date=$('m_od0')?.value,amount=parseFloat($('m_od3')?.value)||0;
     if(!date||!amount){alert('請填日期和金額');return;}
-    const svcSel=$('m_od1'),isCustom=svcSel?.value==='custom';
-    const item=isCustom?$('m_od2')?.value:(svcSel?.options[svcSel.selectedIndex]?.text.split('（')[0]||'');
+    const sel=$('m_od1')?.value;
+    const item=sel==='自訂項目'?($('m_od2')?.value||'自訂服務'):sel;
     const d=new Date(date);
-    await addSub('sales',{date,type:'service',item,amount,payMethod:$('m_od6')?.value,staff:$('m_od5')?.value,customer:$('m_od4')?.value,note:$('m_od7')?.value,month:d.getMonth()+1,year:d.getFullYear()});
-    toast(`✅ 服務收入 $${fmt(amount)} 已記帳`);
+    await addSub('sales',{
+      date,type:'service',item,
+      subNote:$('m_odNote')?.value||'',
+      amount,
+      payMethod:$('m_od6')?.value,
+      staff:$('m_od5')?.value,
+      customer:$('m_od4')?.value||'',
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    toast(`✅ 已記帳 $${fmt(amount)}`);
+    if(continueInput){
+      // 清空可變欄位，保留日期、付款、老師
+      ['m_od2','m_odNote','m_od3','m_od4'].forEach(id=>{if($(id))$(id).value='';});
+      $('m_od2')?.focus();
+    }
   }else{
     const date=$('m_pd0')?.value,qty=parseFloat($('m_pd2')?.value)||1,price=parseFloat($('m_pd3')?.value)||0,total=qty*price;
     if(!date||!total){alert('請填日期和金額');return;}
     const prdSel=$('m_pd1'),pid=prdSel?.value;
     const item=prdSel?.options[prdSel.selectedIndex]?.text.split('（')[0]||'';
     const d=new Date(date);
-    await addSub('sales',{date,type:'product',item,amount:total,qty,unitPrice:price,payMethod:$('m_pd7')?.value,staff:$('m_pd6')?.value,customer:$('m_pd5')?.value,month:d.getMonth()+1,year:d.getFullYear()});
-    if(pid&&pid!=='custom'){
+    await addSub('sales',{
+      date,type:'product',item,
+      subNote:$('m_pdNote')?.value||'',
+      amount:total,qty,unitPrice:price,
+      payMethod:$('m_pd7')?.value,
+      staff:$('m_pd6')?.value,
+      customer:$('m_pd5')?.value||'',
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    if(pid&&pid!==''){
       const inv=getInv(pid);
       const newQty=Math.max(0,toN(inv.qty)-qty);
       const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
       await saveMain({inventory:newInv});
     }
-    toast(`✅ 產品銷售 $${fmt(total)} 已記帳，庫存已扣減`);
+    toast(`✅ 已記帳 $${fmt(total)}，庫存已扣減`);
+    if(continueInput){
+      ['m_pd2','m_pd3','m_pd4','m_pdNote','m_pd5'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
+      if($('m_pd1'))$('m_pd1').value='';
+      $('m_pd1')?.focus();
+    }
   }
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  if(!continueInput){
+    const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  }
 };
 
-// Expenses
+// ── Expenses ──
 window.saveExp=async()=>{
   const date=$('m_e0')?.value,amount=parseFloat($('m_e2')?.value)||0;
   if(!date||!amount){alert('請填日期和金額');return;}
   const d=new Date(date);
-  await addSub('expenses',{date,category:$('m_e1')?.value,amount,payMethod:$('m_e3')?.value,note:$('m_e4')?.value,month:d.getMonth()+1,year:d.getFullYear()});
+  await addSub('expenses',{date,category:$('m_e1')?.value,amount,payMethod:$('m_e3')?.value,note:$('m_e4')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 支出已記帳');closeMod();
 };
 window.updExp=async(id)=>{
   const date=$('m_e0')?.value,amount=parseFloat($('m_e2')?.value)||0;
   const d=new Date(date);
-  await setSub('expenses',id,{date,category:$('m_e1')?.value,amount,payMethod:$('m_e3')?.value,note:$('m_e4')?.value,month:d.getMonth()+1,year:d.getFullYear()});
+  await setSub('expenses',id,{date,category:$('m_e1')?.value,amount,payMethod:$('m_e3')?.value,note:$('m_e4')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 已更新');closeMod();
 };
 window.delExp=async id=>{if(!confirm('確認刪除？'))return;await delSub('expenses',id);toast('已刪除');};
 
-// Purchase
+// ── Purchase 單筆 ──
 window.savePurchase=async()=>{
-  const date=$('m_p0')?.value,qty=parseFloat($('m_p3')?.value)||0,unitCost=parseFloat($('m_p4')?.value)||0;
+  const date=$('m_p0')?.value;
+  const productName=$('m_p2')?.value?.trim();
+  const category=$('m_pCat')?.value;
+  const qty=parseFloat($('m_p3')?.value)||0;
+  const unitCost=parseFloat($('m_p4')?.value)||0;
   let totalCost=parseFloat($('m_p5')?.value)||qty*unitCost;
-  if(!date||!qty){alert('請填日期和數量');return;}
-  const prdSel=$('m_p1'),pid=prdSel?.value;
-  const isCustom=pid==='custom';
-  const productName=isCustom?$('m_p2')?.value:(S.data.products||[]).find(p=>p.id===pid)?.name||'';
-  const d=new Date(date);
-  await addSub('purchases',{date,productId:isCustom?'':pid,productName,qty,unitCost,totalCost,supplier:$('m_p6')?.value,note:$('m_p7')?.value,month:d.getMonth()+1,year:d.getFullYear()});
-  if(!isCustom&&pid){
+  const sellPrice=parseFloat($('m_pPrice')?.value)||0;
+  if(!date||!qty||!productName){alert('請填日期、產品名稱和數量');return;}
+  const supSel=$('m_p6')?.value;
+  const supplier=supSel==='其他手動輸入廠商'?($('m_p6c')?.value||'').trim():supSel;
+  // 自動建立或找到產品
+  let prod=(S.data.products||[]).find(p=>p.name===productName&&p.category===category);
+  let pid;
+  if(!prod){
+    pid=uid();
+    const newProd={id:pid,name:productName,category,price:sellPrice,cost:unitCost};
+    const prods=[...(S.data.products||[]),newProd];
+    const newInv=[...S.data.inventory,{productId:pid,qty,minQty:5}];
+    await saveMain({products:prods,inventory:newInv});
+  }else{
+    pid=prod.id;
     const inv=getInv(pid);
-    const newQty=toN(inv.qty)+qty;
-    const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
+    const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:toN(inv.qty)+qty,minQty:inv.minQty||5}];
     await saveMain({inventory:newInv});
   }
+  const d=new Date(date);
+  await addSub('purchases',{date,productId:pid,productName,category,qty,unitCost,totalCost,supplier,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast(`✅ 進貨完成，庫存已增加 ${qty} 個`);closeMod();
 };
 window.delPurchase=async id=>{if(!confirm('確認刪除？'))return;await delSub('purchases',id);toast('已刪除');};
 
-// Inventory
+// ── Purchase 批次 ──
+window.addBatchRow=()=>{
+  if(!S.modal||S.modal.t!=='batchPurchase')return;
+  collectBatchRows(); // 保存目前輸入
+  S.modal.rows.push({});
+  refreshBatchRows();
+};
+window.rmBatchRow=(idx)=>{
+  if(!S.modal||S.modal.t!=='batchPurchase')return;
+  collectBatchRows();
+  S.modal.rows.splice(idx,1);
+  if(S.modal.rows.length===0)S.modal.rows.push({});
+  refreshBatchRows();
+};
+function collectBatchRows(){
+  if(!S.modal||S.modal.t!=='batchPurchase')return;
+  const rowEls=document.querySelectorAll('.batch-row');
+  S.modal.rows=Array.from(rowEls).map(el=>({
+    name:el.querySelector('.bp_name')?.value||'',
+    cat:el.querySelector('.bp_cat')?.value||PRODUCT_CATS[0],
+    qty:el.querySelector('.bp_qty')?.value||'',
+    unit:el.querySelector('.bp_unit')?.value||'',
+    price:el.querySelector('.bp_price')?.value||''
+  }));
+}
+function refreshBatchRows(){
+  const wrap=$('batch_rows');
+  if(wrap)wrap.innerHTML=S.modal.rows.map((r,i)=>batchRowHTML(r,i)).join('');
+}
+window.saveBatchPurchase=async()=>{
+  const date=$('m_bpDate')?.value||today();
+  const supSel=$('m_bpSup')?.value;
+  const supplier=supSel==='其他手動輸入廠商'?($('m_bpSupC')?.value||'').trim():supSel;
+  collectBatchRows();
+  const validRows=S.modal.rows.filter(r=>r.name&&toN(r.qty)>0);
+  if(validRows.length===0){alert('請至少填寫一筆有效資料（產品名稱與數量）');return;}
+  const d=new Date(date);
+  let count=0;
+  for(const r of validRows){
+    const qty=toN(r.qty);
+    const unitCost=toN(r.unit);
+    const sellPrice=toN(r.price);
+    // 找或建立產品
+    let prod=(S.data.products||[]).find(p=>p.name===r.name&&p.category===r.cat);
+    let pid;
+    if(!prod){
+      pid=uid();
+      const newProd={id:pid,name:r.name,category:r.cat,price:sellPrice,cost:unitCost};
+      S.data.products=[...(S.data.products||[]),newProd];
+      S.data.inventory=[...S.data.inventory,{productId:pid,qty,minQty:5}];
+    }else{
+      pid=prod.id;
+      const inv=getInv(pid);
+      S.data.inventory=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:toN(inv.qty)+qty,minQty:inv.minQty||5}];
+    }
+    await addSub('purchases',{date,productId:pid,productName:r.name,category:r.cat,qty,unitCost,totalCost:qty*unitCost,supplier,note:'',month:d.getMonth()+1,year:d.getFullYear()});
+    count++;
+  }
+  // 統一存產品和庫存
+  await saveMain({products:S.data.products,inventory:S.data.inventory});
+  toast(`✅ 已批次新增 ${count} 筆進貨`);closeMod();
+};
+
+// ── Inventory ──
 window.adjInv=async(pid,delta)=>{
   const inv=getInv(pid);
   const newQty=Math.max(0,toN(inv.qty)+delta);
@@ -1315,11 +1930,11 @@ window.saveStockCheck=async()=>{
   await saveMain({inventory:newInv});toast('✅ 盤點完成');closeMod();
 };
 
-// Courses
+// ── Courses ──
 window.saveCourse=async()=>{
   const name=$('m_c0')?.value;if(!name){alert('請填課程名稱');return;}
   const d=new Date($('m_c2')?.value||today());
-  await addSub('courses',{name,category:$('m_c1')?.value,date:$('m_c2')?.value,instructor:$('m_c3')?.value,price:parseFloat($('m_c4')?.value)||0,note:$('m_c5')?.value,month:d.getMonth()+1,year:d.getFullYear()});
+  await addSub('courses',{name,category:$('m_c1')?.value,date:$('m_c2')?.value,instructor:$('m_c3')?.value,price:parseFloat($('m_c4')?.value)||0,note:$('m_c5')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 課程已新增');closeMod();
 };
 window.delCourse=async id=>{if(!confirm('確認刪除？'))return;await delSub('courses',id);toast('已刪除');};
@@ -1328,37 +1943,37 @@ window.saveStudent=async(courseId,courseName)=>{
   const paid=$('m_st2')?.value==='1';
   const amount=parseFloat($('m_st1')?.value)||0;
   await addSub('courseStudents',{studentName:name,courseId,courseName,amount,paid,payMethod:paid?$('m_st3')?.value:'',month:S.month,year:yr()});
-  if(paid){const d=new Date();await addSub('sales',{date:today(),type:'course',item:courseName,amount,payMethod:$('m_st3')?.value,staff:'',customer:name,month:d.getMonth()+1,year:d.getFullYear()});}
+  if(paid){const d=new Date();await addSub('sales',{date:today(),type:'course',item:courseName,subNote:'',amount,payMethod:$('m_st3')?.value,staff:'',customer:name,month:d.getMonth()+1,year:d.getFullYear()});}
   toast('✅ 學員已新增');closeMod();
 };
 window.markPaid=async(id)=>{
   const s=(S.data.courseStudents||[]).find(x=>x.id===id);if(!s)return;
   await setSub('courseStudents',id,{...s,paid:true,payMethod:'現金'});
-  await addSub('sales',{date:today(),type:'course',item:s.courseName,amount:s.amount,payMethod:'現金',staff:'',customer:s.studentName,month:s.month,year:s.year});
+  await addSub('sales',{date:today(),type:'course',item:s.courseName,subNote:'',amount:s.amount,payMethod:'現金',staff:'',customer:s.studentName,month:s.month,year:s.year});
   toast('✅ 已收款並記入收入');
 };
 window.delStudent=async id=>{if(!confirm('確認刪除？'))return;await delSub('courseStudents',id);toast('已刪除');};
 
-// CashFlow
+// ── CashFlow ──
 window.saveCF=async()=>{
   const date=$('m_cf0')?.value,amount=parseFloat($('m_cf1')?.value)||0;
   if(!date||!amount){alert('請填日期和金額');return;}
   const d=new Date(date);
-  await addSub('cashFlow',{date,amount,cat:$('m_cf2')?.value,note:$('m_cf3')?.value,month:d.getMonth()+1,year:d.getFullYear()});
+  await addSub('cashFlow',{date,amount,cat:$('m_cf2')?.value,note:$('m_cf3')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 已新增');closeMod();
 };
 window.delCF=async id=>{if(!confirm('確認刪除？'))return;await delSub('cashFlow',id);toast('已刪除');};
 
-// Settings
+// ── Settings ──
 window.saveService=async()=>{
-  const name=$('m_sv0')?.value;if(!name){alert('請填服務名稱');return;}
-  const svcs=[...(S.data.services||[]),{id:uid(),name,category:$('m_sv1')?.value,price:parseFloat($('m_sv2')?.value)||0,duration:parseFloat($('m_sv3')?.value)||60}];
+  const name=$('m_sv0')?.value?.trim();if(!name){alert('請填服務名稱');return;}
+  const svcs=[...(S.data.services||[]),{id:uid(),name,category:$('m_sv1')?.value||'美容服務',price:parseFloat($('m_sv2')?.value)||0,duration:60}];
   await saveMain({services:svcs});toast('✅ 已新增');closeMod();
 };
 window.delService=async id=>{if(!confirm('確認刪除？'))return;await saveMain({services:(S.data.services||[]).filter(s=>s.id!==id)});toast('已刪除');};
 
 window.saveProduct=async()=>{
-  const name=$('m_pr0')?.value;if(!name){alert('請填產品名稱');return;}
+  const name=$('m_pr0')?.value?.trim();if(!name){alert('請填產品名稱');return;}
   const pid=uid();
   const qty=parseFloat($('m_pr4')?.value)||0;
   const minQty=parseFloat($('m_pr5')?.value)||5;
@@ -1372,20 +1987,103 @@ window.delProduct=async id=>{
 };
 
 window.saveSupplier=async()=>{
-  const name=$('m_su0')?.value;if(!name){alert('請填供應商名稱');return;}
-  const sups=[...(S.data.suppliers||[]),{id:uid(),name,contact:$('m_su1')?.value,phone:$('m_su2')?.value,note:$('m_su3')?.value}];
+  const name=$('m_su0')?.value?.trim();if(!name){alert('請填供應商名稱');return;}
+  const sups=[...(S.data.suppliers||[]),{id:uid(),name,contact:$('m_su1')?.value||'',phone:$('m_su2')?.value||'',note:$('m_su3')?.value||''}];
   await saveMain({suppliers:sups});toast('✅ 供應商已新增');closeMod();
 };
 window.delSupplier=async id=>{if(!confirm('確認刪除？'))return;await saveMain({suppliers:(S.data.suppliers||[]).filter(s=>s.id!==id)});toast('已刪除');};
 
 window.saveStaff=async()=>{
-  const name=$('m_sf0')?.value;if(!name){alert('請填姓名');return;}
-  const staff=[...(S.data.staff||[]),{id:uid(),name,title:$('m_sf1')?.value,commRate:parseFloat($('m_sf2')?.value)||0,note:$('m_sf3')?.value}];
-  await saveMain({staff});toast('✅ 員工已新增');closeMod();
+  const name=$('m_sf0')?.value?.trim();if(!name){alert('請填姓名');return;}
+  const staff=[...(S.data.staff||[]),{id:uid(),name,title:$('m_sf1')?.value||'',commRate:parseFloat($('m_sf2')?.value)||0,note:$('m_sf3')?.value||''}];
+  await saveMain({staff});toast('✅ 已新增');closeMod();
 };
 window.delStaff=async id=>{if(!confirm('確認刪除？'))return;await saveMain({staff:(S.data.staff||[]).filter(s=>s.id!==id)});toast('已刪除');};
 
-// ── AUTH（密碼登入）─────────────────────────────────────
+// ── 分流比例 ──
+window.saveAlloc=async()=>{
+  const al={
+    risk:parseFloat($('m_al_risk')?.value)||0,
+    operation:parseFloat($('m_al_op')?.value)||0,
+    salary:parseFloat($('m_al_sal')?.value)||0,
+    study:parseFloat($('m_al_st')?.value)||0,
+    invest:parseFloat($('m_al_inv')?.value)||0,
+    bigPurchaseLimit:parseFloat($('m_al_lim')?.value)||30000,
+    monthlyHouseFund:S.data.allocation?.monthlyHouseFund||0
+  };
+  await saveMain({allocation:al});
+  toast('✅ 分流比例已更新');
+  closeMod();
+};
+
+// ── 買房頭期專款 ──
+window.saveHouseFund=async()=>{
+  const date=$('m_hf0')?.value;
+  const amount=parseFloat($('m_hf1')?.value)||0;
+  if(!date||!amount){alert('請填日期和金額');return;}
+  await addSub('houseFund',{date,amount,note:$('m_hf2')?.value||''});
+  toast('✅ 買房專款已紀錄');
+  closeMod();
+};
+window.delHouseFund=async id=>{if(!confirm('確認刪除？'))return;await delSub('houseFund',id);toast('已刪除');};
+window.recordHouseFund=async(amount)=>{
+  if(amount<=0){toast('本月無可分流金額');return;}
+  if(!confirm(`確定要紀錄本月買房專款 $${fmt(amount)} ？`))return;
+  await addSub('houseFund',{date:today(),amount,note:`${MOS[S.month-1]}淨利分流（${S.data.allocation?.invest||15}%）`});
+  toast(`✅ 已紀錄買房專款 $${fmt(amount)}`);
+};
+
+// ── 冷靜期採購 ──
+window.saveCooling=async()=>{
+  const item=$('m_cl0')?.value?.trim();
+  const amount=parseFloat($('m_cl1')?.value)||0;
+  const reason=$('m_cl2')?.value?.trim();
+  if(!item||!amount){alert('請填項目和金額');return;}
+  await addSub('coolingDecisions',{item,amount,reason,createDate:today(),decision:null,decisionNote:''});
+  toast('✅ 已進入 3 天冷靜期');
+  closeMod();
+};
+window.decideCooling=async(id,decision)=>{
+  const c=(S.data.coolingDecisions||[]).find(x=>x.id===id);
+  if(!c)return;
+  const note=prompt(decision==='buy'?'記下決定購買的理由（這項東西能提升客戶質感體驗嗎？）':'記下放棄的理由（為什麼三天後改變想法？）','');
+  if(note===null)return;
+  await setSub('coolingDecisions',id,{...c,decision,decisionNote:note,decisionDate:today()});
+  toast(decision==='buy'?'✅ 已標記為購買':'✅ 已標記為放棄');
+};
+window.delCooling=async id=>{if(!confirm('確認刪除？'))return;await delSub('coolingDecisions',id);toast('已刪除');};
+
+// ── 季度檢視 ──
+window.saveReview=async(quarter,profit)=>{
+  const date=$('m_rv0')?.value||today();
+  const alloc=$('m_rv1')?.value||'';
+  const note=$('m_rv2')?.value||'';
+  await addSub('quarterReviews',{date,year:yr(),quarter,profit,alloc,note});
+  toast('✅ 季度檢視已紀錄');
+  closeMod();
+};
+window.delReview=async id=>{if(!confirm('確認刪除？'))return;await delSub('quarterReviews',id);toast('已刪除');};
+
+// ── AI 對話踩剎車 ──
+window.saveChat=async()=>{
+  const title=$('m_ch0')?.value?.trim();
+  const amount=parseFloat($('m_ch1')?.value)||0;
+  if(!title){alert('請填項目');return;}
+  await addSub('advisorChats',{
+    title,amount,date:today(),
+    q1:$('m_ch_q1')?.value||'',
+    q2:$('m_ch_q2')?.value||'',
+    q3:$('m_ch_q3')?.value||'',
+    q4:$('m_ch_q4')?.value||'',
+    q5:$('m_ch_q5')?.value||'',
+    verdict:$('m_ch_v')?.value||'wait'
+  });
+  toast('✅ 對話已儲存');
+  closeMod();
+};
+window.delChat=async id=>{if(!confirm('確認刪除？'))return;await delSub('advisorChats',id);toast('已刪除');};
+
+// ── AUTH ──
 window.doLogin=async()=>{
   const pw=$('m_pw')?.value||'';
   const errEl=$('pw_err');
@@ -1394,23 +2092,17 @@ window.doLogin=async()=>{
     if($('m_pw')){$('m_pw').value='';$('m_pw').focus();}
     return;
   }
-  // 密碼正確 → 標記已解鎖
   sessionStorage.setItem('mumei_unlock','1');
   S.auth=true;
-  // 確保 Firebase 後端已連線
   if(!auth.currentUser){
     try{
       await signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD);
-    }catch(e){
-      console.error('後端連線失敗',e);
-    }
+    }catch(e){console.error('後端連線失敗',e);}
   }
-  // 啟動同步並重新渲染
   if(S.sync==='idle')startSync();
   render();
   toast('✅ 歡迎進入沐蜜系統');
 };
-
 window.doOut=async()=>{
   sessionStorage.removeItem('mumei_unlock');
   S.auth=false;
@@ -1418,18 +2110,18 @@ window.doOut=async()=>{
   render();
 };
 
-// Export
+// ── Export ──
 window.exportXLSX=()=>{
   if(typeof XLSX==='undefined'){toast('⏳ 載入中請稍候');return;}
   const wb=XLSX.utils.book_new();
   const ds=new Date().toISOString().slice(0,10);
-  const salesRows=[['日期','類型','項目','金額','付款','員工','客戶','備註'],...S.data.sales.map(s=>[s.date,s.type==='service'?'服務':s.type==='product'?'產品':'課程',s.item,s.amount,s.payMethod,s.staff,s.customer,s.note])];
+  const salesRows=[['日期','類型','項目','細項備註','金額','付款','老師','客戶'],...S.data.sales.map(s=>[s.date,s.type==='service'?'服務':s.type==='product'?'產品':'課程',s.item,s.subNote||'',s.amount,s.payMethod,s.staff,s.customer])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(salesRows),'銷售記錄');
   const expRows=[['日期','類別','金額','付款','備註'],...S.data.expenses.map(e=>[e.date,e.category,e.amount,e.payMethod,e.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(expRows),'支出記錄');
   const invRows=[['產品名稱','類別','現有庫存','最低庫存','售價','成本','庫存價值'],...(S.data.products||[]).map(p=>{const i=getInv(p.id);return[p.name,p.category,i.qty,i.minQty||5,p.price,p.cost||0,toN(i.qty)*toN(p.cost||0)];})];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(invRows),'庫存清單');
-  const purRows=[['日期','產品','數量','單價','總成本','供應商'],...S.data.purchases.map(p=>[p.date,p.productName,p.qty,p.unitCost,p.totalCost,p.supplier])];
+  const purRows=[['日期','產品','類別','數量','單價','總成本','供應商'],...S.data.purchases.map(p=>[p.date,p.productName,p.category,p.qty,p.unitCost,p.totalCost,p.supplier])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(purRows),'進貨記錄');
   const cfRows=[['日期','金額','類別','說明'],...S.data.cashFlow.map(c=>[c.date,c.amount,c.cat,c.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cfRows),'現金流水帳');
