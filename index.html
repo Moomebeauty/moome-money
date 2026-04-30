@@ -1080,8 +1080,10 @@ function pgCustomersList(customerStats,totalLiability,totalCustomers){
           <td class="tm">${c.lastVisit||'-'}</td>
           <td onclick="event.stopPropagation()" style="white-space:nowrap;">
             ${c.ghost?
-              `<button class="btn btn-p btn-sm" onclick="openM('addCustomer','${c.name}')">＋ 建檔</button>`
-              :`<button class="bdel" style="color:#aaa;" onclick="openM('editCustomer','${c.id}')" title="編輯">✏️</button><button class="bdel" onclick="delCustomer('${c.id}')" title="刪除">×</button>`}
+              `<button class="btn btn-p btn-sm" onclick="openM('addCustomer','${c.name}')" title="建檔">✏️ 建檔</button>
+               <button class="bdel" onclick="delGhostCustomer('${c.name}')" title="從紀錄中清除此客戶名稱">×</button>`
+              :`<button class="btn btn-s btn-sm" onclick="openM('editCustomer','${c.id}')" title="編輯">✏️ 編輯</button>
+                <button class="bdel" onclick="delCustomer('${c.id}')" title="刪除">×</button>`}
           </td>
         </tr>`;}).join('')}
       </tbody>
@@ -2744,61 +2746,91 @@ function syncSharedTwoWay(customers, myName, mySharedWith){
 }
 
 window.saveCustomer=async()=>{
-  const name=$('m_cu0')?.value?.trim();
-  if(!name){alert('請填客戶姓名');return;}
-  // 檢查是否已存在
-  if((S.data.customers||[]).find(c=>c.name===name)){
-    alert('此客戶姓名已存在');return;
-  }
-  const sharedWith=collectSharedWith();
-  let customers=[...(S.data.customers||[]),{
-    id:uid(),name,
-    phone:$('m_cu1')?.value||'',
-    birthday:$('m_cu2')?.value||'',
-    source:$('m_cu3')?.value||'',
-    note:$('m_cu4')?.value||'',
-    sharedWith,
-    createdAt:today()
-  }];
-  // 雙向同步共用關係
-  customers=syncSharedTwoWay(customers,name,sharedWith);
-  await saveMain({customers});
-  toast(sharedWith.length>0?`✅ 客戶已建檔（與 ${sharedWith.length} 位共用儲值）`:'✅ 客戶已建檔');
-  closeMod();
-};
-
-window.updCustomer=async(id)=>{
-  const old=(S.data.customers||[]).find(c=>c.id===id);
-  if(!old)return;
-  const newName=$('m_cu0')?.value?.trim()||old.name;
-  const sharedWith=collectSharedWith();
-  // 如果改名了，要把所有別人 sharedWith 中的舊名換成新名
-  let customers=(S.data.customers||[]).map(c=>{
-    if(c.id===id)return{
-      ...c,
-      name:newName,
+  try{
+    const name=$('m_cu0')?.value?.trim();
+    if(!name){alert('請填客戶姓名');return;}
+    // 檢查是否已存在（正式建檔）
+    if((S.data.customers||[]).find(c=>c.name===name)){
+      alert(`「${name}」已經建檔過了，請改用編輯功能`);return;
+    }
+    const sharedWith=collectSharedWith();
+    let customers=[...(S.data.customers||[]),{
+      id:uid(),name,
       phone:$('m_cu1')?.value||'',
       birthday:$('m_cu2')?.value||'',
       source:$('m_cu3')?.value||'',
       note:$('m_cu4')?.value||'',
-      sharedWith
-    };
-    if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(old.name)&&old.name!==newName){
-      return{...c,sharedWith:c.sharedWith.map(n=>n===old.name?newName:n)};
-    }
-    return c;
-  });
-  // 雙向同步
-  customers=syncSharedTwoWay(customers,newName,sharedWith);
-  await saveMain({customers});
-  toast('✅ 已更新');
-  closeMod();
+      sharedWith,
+      createdAt:today()
+    }];
+    // 雙向同步共用關係
+    customers=syncSharedTwoWay(customers,name,sharedWith);
+    await saveMain({customers});
+    toast(sharedWith.length>0?`✅ ${name} 已建檔（與 ${sharedWith.length} 位共用儲值）`:`✅ ${name} 已建檔`);
+    closeMod();
+  }catch(err){
+    console.error('saveCustomer 失敗:',err);
+    alert('建檔失敗：'+(err.message||err));
+  }
+};
+
+window.updCustomer=async(id)=>{
+  try{
+    const old=(S.data.customers||[]).find(c=>c.id===id);
+    if(!old){alert('找不到客戶');return;}
+    const newName=$('m_cu0')?.value?.trim()||old.name;
+    if(!newName){alert('客戶姓名不可空白');return;}
+    const sharedWith=collectSharedWith();
+    // 如果改名了，要把所有別人 sharedWith 中的舊名換成新名
+    let customers=(S.data.customers||[]).map(c=>{
+      if(c.id===id)return{
+        ...c,
+        name:newName,
+        phone:$('m_cu1')?.value||'',
+        birthday:$('m_cu2')?.value||'',
+        source:$('m_cu3')?.value||'',
+        note:$('m_cu4')?.value||'',
+        sharedWith
+      };
+      if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(old.name)&&old.name!==newName){
+        return{...c,sharedWith:c.sharedWith.map(n=>n===old.name?newName:n)};
+      }
+      return c;
+    });
+    // 雙向同步
+    customers=syncSharedTwoWay(customers,newName,sharedWith);
+    await saveMain({customers});
+    toast('✅ 已更新');
+    closeMod();
+  }catch(err){
+    console.error('updCustomer 失敗:',err);
+    alert('更新失敗：'+(err.message||err));
+  }
 };
 
 window.delCustomer=async(id)=>{
   if(!confirm('確認刪除這位客戶？\n（消費紀錄與儲值紀錄不會被刪除）'))return;
   await saveMain({customers:(S.data.customers||[]).filter(c=>c.id!==id)});
   toast('已刪除');
+};
+
+// 刪除「未建檔」客戶（同時刪除所有相關銷售與儲值紀錄）
+window.delGhostCustomer=async(name)=>{
+  if(!name)return;
+  const sales=(S.data.sales||[]).filter(s=>s.customer===name);
+  const deposits=(S.data.deposits||[]).filter(d=>d.customer===name);
+  const totalRecords=sales.length+deposits.length;
+  if(totalRecords===0){toast('沒有要刪除的紀錄');return;}
+  if(!confirm(`⚠️ 確認從紀錄中清除「${name}」？\n\n會一併刪除：\n• ${sales.length} 筆銷售紀錄\n• ${deposits.length} 筆儲值紀錄\n\n此操作無法復原`))return;
+  // 刪除所有相關銷售
+  for(const s of sales){
+    try{await delSub('sales',s.id);}catch(e){console.warn('刪除銷售失敗',e);}
+  }
+  // 刪除所有相關儲值
+  for(const d of deposits){
+    try{await delSub('deposits',d.id);}catch(e){console.warn('刪除儲值失敗',e);}
+  }
+  toast(`✅ 已清除「${name}」的 ${totalRecords} 筆紀錄`);
 };
 
 // ── 儲值入帳 ──
