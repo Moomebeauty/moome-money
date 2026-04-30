@@ -416,6 +416,15 @@ function getRevTotal(mo){return getSales(mo).reduce((s,r)=>s+toN(r.amount),0);}
 // ── 客戶儲值相關計算 ──
 // 客戶當前儲值餘額 = 累計儲值 - 累計儲值扣款消費
 // ─── 客戶儲值與共用 ────────────────────────────────────
+// 取得所有客戶名稱（含正式建檔 + 從銷售/儲值紀錄推出的 ghost 客戶）
+function getAllCustomerNames(){
+  const names=new Set();
+  (S.data.customers||[]).forEach(c=>{if(c.name)names.add(c.name);});
+  (S.data.sales||[]).forEach(s=>{if(s.customer)names.add(s.customer);});
+  (S.data.deposits||[]).forEach(d=>{if(d.customer)names.add(d.customer);});
+  return Array.from(names).sort();
+}
+
 // 取得某客戶的儲值餘額（深度計算）
 // 入帳：deposits.customer === custName
 // 扣款：sales.payMethod==='儲值扣款' 且 (depositOwner || customer) === custName
@@ -1069,7 +1078,11 @@ function pgCustomersList(customerStats,totalLiability,totalCustomers){
           <td>${c.balance>0?`<span class="ag" style="font-weight:700;">$${fmt(c.balance)}</span>`:'<span class="tm">-</span>'}</td>
           <td>${group.length>0?`<span class="bdg pur">🔗 ${group.join('、')}</span>`:'<span class="tm">-</span>'}</td>
           <td class="tm">${c.lastVisit||'-'}</td>
-          <td onclick="event.stopPropagation()">${c.ghost?`<button class="btn btn-s btn-sm" onclick="openM('addCustomer','${c.name}')">建檔</button>`:`<button class="bdel" onclick="delCustomer('${c.id}')">×</button>`}</td>
+          <td onclick="event.stopPropagation()" style="white-space:nowrap;">
+            ${c.ghost?
+              `<button class="btn btn-p btn-sm" onclick="openM('addCustomer','${c.name}')">＋ 建檔</button>`
+              :`<button class="bdel" style="color:#aaa;" onclick="openM('editCustomer','${c.id}')" title="編輯">✏️</button><button class="bdel" onclick="delCustomer('${c.id}')" title="刪除">×</button>`}
+          </td>
         </tr>`;}).join('')}
       </tbody>
     </table></div>
@@ -1251,7 +1264,7 @@ function pgOrder(){
           <div class="fgrp"><label>客戶姓名</label>
             <select id="m_od4" onchange="updateBalanceHint('od')">
               <option value="">-- 選擇客戶 --</option>
-              ${(S.data.customers||[]).map(c=>`<option value="${c.name}">${c.name}（餘額 $${fmt(getCustomerBalance(c.name))}）</option>`).join('')}
+              ${getAllCustomerNames().map(name=>`<option value="${name}">${name}（餘額 $${fmt(getCustomerBalance(name))}）</option>`).join('')}
               <option value="__new__">+ 新客戶（直接輸入）</option>
             </select>
             <input type="text" id="m_od4_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
@@ -1293,7 +1306,7 @@ function pgOrder(){
           <div class="fgrp"><label>客戶</label>
             <select id="m_pd5" onchange="updateBalanceHint('pd')">
               <option value="">-- 選擇客戶 --</option>
-              ${(S.data.customers||[]).map(c=>`<option value="${c.name}">${c.name}（餘額 $${fmt(getCustomerBalance(c.name))}）</option>`).join('')}
+              ${getAllCustomerNames().map(name=>`<option value="${name}">${name}（餘額 $${fmt(getCustomerBalance(name))}）</option>`).join('')}
               <option value="__new__">+ 新客戶（直接輸入）</option>
             </select>
             <input type="text" id="m_pd5_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
@@ -2038,7 +2051,7 @@ function renderModal(){
   // ─── 新增客戶 ───
   if(m.t==='addCustomer'){
     const presetName=m.x||'';
-    const otherCustomers=(S.data.customers||[]).filter(c=>c.name!==presetName);
+    const otherCustomers=getAllCustomerNames().filter(n=>n!==presetName);
     c=`<div class="mttl">👤 新增客戶</div>
     <div class="fg fg2">
       <div class="fgrp"><label>客戶姓名 *</label><input type="text" id="m_cu0" placeholder="姓名" value="${presetName}"></div>
@@ -2049,9 +2062,9 @@ function renderModal(){
       <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
         <label style="color:var(--pur);">🔗 共用儲值金成員（選填）</label>
         <div class="tm" style="font-size:11px;margin-bottom:6px;">勾選的客戶可以彼此共用儲值金（家人、伴侶、閨蜜）</div>
-        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:120px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
+        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:140px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
           ${otherCustomers.length===0?'<span class="tm">目前沒有其他客戶可選</span>':
-            otherCustomers.map(c=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:var(--bg2);border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${c.name}"> ${c.name}</label>`).join('')}
+            otherCustomers.map(n=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:var(--bg2);border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${n}"> ${n}（餘額 $${fmt(getCustomerBalance(n))}）</label>`).join('')}
         </div>
       </div>
     </div>
@@ -2061,7 +2074,7 @@ function renderModal(){
   // ─── 編輯客戶 ───
   if(m.t==='editCustomer'){
     const cu=(S.data.customers||[]).find(x=>x.id===m.x)||{};
-    const otherCustomers=(S.data.customers||[]).filter(c=>c.name!==cu.name);
+    const otherCustomers=getAllCustomerNames().filter(n=>n!==cu.name);
     const sharedSet=new Set(Array.isArray(cu.sharedWith)?cu.sharedWith:[]);
     c=`<div class="mttl">✏️ 編輯客戶資料</div>
     <div class="fg fg2">
@@ -2073,9 +2086,9 @@ function renderModal(){
       <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
         <label style="color:var(--pur);">🔗 共用儲值金成員（家人/伴侶/閨蜜）</label>
         <div class="tm" style="font-size:11px;margin-bottom:6px;">勾選後，雙方都可以使用對方的儲值金扣款</div>
-        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:140px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
+        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
           ${otherCustomers.length===0?'<span class="tm">目前沒有其他客戶可選</span>':
-            otherCustomers.map(c=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:${sharedSet.has(c.name)?'var(--purL)':'var(--bg2)'};border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${c.name}"${sharedSet.has(c.name)?' checked':''}> ${c.name}（餘額 $${fmt(getCustomerBalance(c.name))}）</label>`).join('')}
+            otherCustomers.map(n=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:${sharedSet.has(n)?'var(--purL)':'var(--bg2)'};border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${n}"${sharedSet.has(n)?' checked':''}> ${n}（餘額 $${fmt(getCustomerBalance(n))}）</label>`).join('')}
         </div>
       </div>
     </div>
@@ -2092,7 +2105,7 @@ function renderModal(){
       <div class="fgrp"><label>客戶</label>
         <select id="m_dp1">
           <option value="">-- 選擇客戶 --</option>
-          ${(S.data.customers||[]).map(cu=>`<option value="${cu.name}">${cu.name}（目前餘額 $${fmt(getCustomerBalance(cu.name))}）</option>`).join('')}
+          ${getAllCustomerNames().map(name=>`<option value="${name}">${name}（目前餘額 $${fmt(getCustomerBalance(name))}）</option>`).join('')}
           <option value="__new__">+ 新客戶（直接輸入）</option>
         </select>
         <input type="text" id="m_dp1_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
