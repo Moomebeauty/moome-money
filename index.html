@@ -415,13 +415,63 @@ function getRevTotal(mo){return getSales(mo).reduce((s,r)=>s+toN(r.amount),0);}
 
 // ── 客戶儲值相關計算 ──
 // 客戶當前儲值餘額 = 累計儲值 - 累計儲值扣款消費
+// ─── 客戶儲值與共用 ────────────────────────────────────
+// 取得某客戶的儲值餘額（深度計算）
+// 入帳：deposits.customer === custName
+// 扣款：sales.payMethod==='儲值扣款' 且 (depositOwner || customer) === custName
 function getCustomerBalance(custName){
   if(!custName)return 0;
   const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).reduce((s,d)=>s+toN(d.amount),0);
-  // 用儲值扣款的銷售
-  const usedDeposits=(S.data.sales||[]).filter(s=>s.customer===custName&&s.payMethod==='儲值扣款').reduce((s,r)=>s+toN(r.amount),0);
+  // 用儲值扣款的銷售：優先看 depositOwner（誰的儲值被扣），沒有的話 fallback 用 customer
+  const usedDeposits=(S.data.sales||[]).filter(s=>{
+    if(s.payMethod!=='儲值扣款')return false;
+    const owner=s.depositOwner||s.customer;
+    return owner===custName;
+  }).reduce((s,r)=>s+toN(r.amount),0);
   return deposits-usedDeposits;
 }
+
+// 取得共用儲值群組（傳入任一成員，回傳整個群組的所有成員姓名陣列）
+// 規則：A 設定 sharedWith=[B,C]，則 A B C 互為共用
+function getSharedGroup(custName){
+  if(!custName)return[custName];
+  const customers=S.data.customers||[];
+  const visited=new Set();
+  const queue=[custName];
+  while(queue.length){
+    const cur=queue.shift();
+    if(visited.has(cur))continue;
+    visited.add(cur);
+    // 我的 sharedWith
+    const me=customers.find(c=>c.name===cur);
+    if(me&&Array.isArray(me.sharedWith)){
+      me.sharedWith.forEach(n=>{if(n&&!visited.has(n))queue.push(n);});
+    }
+    // 別人 sharedWith 中包含我
+    customers.forEach(c=>{
+      if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(cur)&&!visited.has(c.name)){
+        queue.push(c.name);
+      }
+    });
+  }
+  return Array.from(visited);
+}
+
+// 取得「可動用儲值池」— 自己 + 所有共用成員的個別餘額
+// 回傳: [{name, balance, isSelf}, ...]
+function getAvailableDepositPool(custName){
+  const group=getSharedGroup(custName);
+  return group.map(name=>({
+    name,
+    balance:getCustomerBalance(name),
+    isSelf:name===custName
+  })).filter(x=>x.balance>0||x.isSelf).sort((a,b)=>{
+    if(a.isSelf)return -1;
+    if(b.isSelf)return 1;
+    return b.balance-a.balance;
+  });
+}
+
 // 公司總儲值負債（所有客戶未消費的儲值總和）
 function getTotalDepositLiability(){
   const allCustomers=new Set();
@@ -435,11 +485,14 @@ function getTotalDepositLiability(){
 // deposits 紀錄是預收款（未提供服務），不計入 sales
 function getCustomerHistory(custName){
   if(!custName)return{services:[],deposits:[],totalSpent:0,visitCount:0};
+  // 包含「別人用這個客戶的儲值扣款」的紀錄（顯示在儲值歷史上）
   const services=(S.data.sales||[]).filter(s=>s.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  // 「別人扣到我的儲值」的紀錄
+  const usedByOthers=(S.data.sales||[]).filter(s=>s.payMethod==='儲值扣款'&&s.depositOwner===custName&&s.customer!==custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const totalSpent=services.reduce((s,r)=>s+toN(r.amount),0);
   const dates=new Set(services.map(s=>s.date));
-  return{services,deposits,totalSpent,visitCount:dates.size};
+  return{services,deposits,usedByOthers,totalSpent,visitCount:dates.size};
 }
 
 // ─── OVERVIEW ──────────────────────────────────────────────
@@ -1004,24 +1057,30 @@ function pgCustomersList(customerStats,totalLiability,totalCustomers){
 
   <div class="card">
     <div class="tw"><table>
-      <thead><tr><th>客戶姓名</th><th>電話</th><th>消費次數</th><th>累計消費</th><th>儲值餘額</th><th>最後造訪</th><th>備註</th><th></th></tr></thead>
+      <thead><tr><th>客戶姓名</th><th>電話</th><th>消費次數</th><th>累計消費</th><th>儲值餘額</th><th>共用群組</th><th>最後造訪</th><th></th></tr></thead>
       <tbody>${customerStats.length===0?`<tr><td colspan="8"><div class="empty"><div class="empty-ico">👤</div><p>尚無客戶資料</p></div></td></tr>`:
-        customerStats.map(c=>`<tr style="cursor:pointer;" onclick="viewCustomer('${c.name}')">
-          <td><b>${c.name}</b>${c.ghost?' <span class="bdg" style="background:var(--redL);color:var(--red);">未建檔</span>':''}</td>
+        customerStats.map(c=>{
+          const group=getSharedGroup(c.name).filter(n=>n!==c.name);
+          return`<tr style="cursor:pointer;" onclick="viewCustomer('${c.name}')">
+          <td><b>${c.name}</b>${c.ghost?' <span class="bdg" style="background:var(--redL);color:var(--red);">未建檔</span>':''}${c.note?`<div class="tm">${c.note}</div>`:''}</td>
           <td class="tm">${c.phone||'-'}</td>
           <td>${c.visitCount}</td>
           <td class="ap">$${fmt(c.totalSpent)}</td>
           <td>${c.balance>0?`<span class="ag" style="font-weight:700;">$${fmt(c.balance)}</span>`:'<span class="tm">-</span>'}</td>
+          <td>${group.length>0?`<span class="bdg pur">🔗 ${group.join('、')}</span>`:'<span class="tm">-</span>'}</td>
           <td class="tm">${c.lastVisit||'-'}</td>
-          <td class="tm">${c.note||''}</td>
           <td onclick="event.stopPropagation()">${c.ghost?`<button class="btn btn-s btn-sm" onclick="openM('addCustomer','${c.name}')">建檔</button>`:`<button class="bdel" onclick="delCustomer('${c.id}')">×</button>`}</td>
-        </tr>`).join('')}
+        </tr>`;}).join('')}
       </tbody>
     </table></div>
   </div>`;
 }
 
 function pgCustomerDetail(c){
+  // 取得共用群組資訊
+  const group=getSharedGroup(c.name).filter(n=>n!==c.name);
+  const sharedMembersInfo=group.map(n=>({name:n,balance:getCustomerBalance(n)}));
+  const groupTotalBalance=c.balance+sharedMembersInfo.reduce((s,m)=>s+m.balance,0);
   return`
   <div style="margin-bottom:12px;">
     <button class="btn btn-s btn-sm" onclick="backToCustomers()">← 返回客戶清單</button>
@@ -1039,7 +1098,7 @@ function pgCustomerDetail(c){
       <div class="sv grn sm">$${fmt(c.totalSpent)}</div>
     </div>
     <div class="sc gold">
-      <div class="sl">💳 儲值餘額</div>
+      <div class="sl">💳 個人儲值餘額</div>
       <div class="sv gold">$${fmt(c.balance)}</div>
       <div class="ss">累計儲值 - 已用</div>
     </div>
@@ -1049,9 +1108,25 @@ function pgCustomerDetail(c){
     </div>
   </div>
 
+  ${group.length>0?`<div class="card" style="background:linear-gradient(135deg,var(--purL),var(--bluL));border:2px solid var(--pur);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--pur);">🔗 儲值共用群組</span>
+      <span class="bdg pur">群組總餘額 $${fmt(groupTotalBalance)}</span>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">${c.name} 與下列成員共用儲值金，可互相扣款：</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        ${sharedMembersInfo.map(m=>`<div style="background:var(--card);padding:10px 14px;border-radius:10px;border-left:3px solid var(--pur);min-width:160px;">
+          <div style="font-weight:700;">👤 ${m.name}</div>
+          <div class="tm">餘額 <b style="color:var(--gold);">$${fmt(m.balance)}</b></div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`:''}
+
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
     <button class="btn btn-y" onclick="openM('addDepositFor','${c.name}')">💳 為此客戶儲值</button>
-    ${!c.ghost?`<button class="btn btn-s" onclick="openM('editCustomer','${c.id}')">✏️ 編輯資料</button>`:''}
+    ${!c.ghost?`<button class="btn btn-s" onclick="openM('editCustomer','${c.id}')">✏️ 編輯資料 / 共用設定</button>`:''}
   </div>
 
   <div class="sg sg2">
@@ -1080,7 +1155,7 @@ function pgCustomerDetail(c){
         <tbody>${c.services.length===0?`<tr><td colspan="5"><div class="empty"><p>尚無服務紀錄</p></div></td></tr>`:
           c.services.map(s=>`<tr>
             <td>${s.date}</td>
-            <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
+            <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}${s.payMethod==='儲值扣款'&&s.depositOwner&&s.depositOwner!==c.name?`<div class="tm" style="color:var(--pur);">🔗 從 ${s.depositOwner} 共用儲值扣款</div>`:''}</td>
             <td class="ap">$${fmt(s.amount)}</td>
             <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
             <td class="tm">${s.staff||''}</td>
@@ -1088,7 +1163,21 @@ function pgCustomerDetail(c){
         </tbody>
       </table></div>
     </div>
-  </div>`;
+  </div>
+
+  ${c.usedByOthers&&c.usedByOthers.length>0?`<div class="card">
+    <div class="card-hd"><span class="card-ttl">🔗 他人使用 ${c.name} 儲值的紀錄</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>日期</th><th>使用人</th><th>項目</th><th>金額</th><th>老師</th></tr></thead>
+      <tbody>${c.usedByOthers.map(s=>`<tr>
+        <td>${s.date}</td>
+        <td><b>${s.customer||''}</b></td>
+        <td>${s.item||''}${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
+        <td class="an">-$${fmt(s.amount)}</td>
+        <td class="tm">${s.staff||''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </div>`:''}`;
 }
 
 
@@ -1172,6 +1261,11 @@ function pgOrder(){
           <div class="fgrp"><label>付款方式</label>
             <select id="m_od6" onchange="updateBalanceHint('od')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
           </div>
+          <div class="fgrp" id="m_od_owner_wrap" style="display:none;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
+            <label style="color:var(--pur);">💳 從誰的儲值金扣款？</label>
+            <select id="m_od_owner"></select>
+            <div class="tm" style="margin-top:4px;font-size:11px;color:var(--pur);">💡 共用儲值金可以從家人/伴侶的餘額扣</div>
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('service',false)">✓ 確認並關閉</button>
@@ -1208,6 +1302,11 @@ function pgOrder(){
           <div class="fgrp"><label>服務老師</label><select id="m_pd6">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
           <div class="fgrp"><label>付款方式</label>
             <select id="m_pd7" onchange="updateBalanceHint('pd')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
+          </div>
+          <div class="fgrp" id="m_pd_owner_wrap" style="display:none;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
+            <label style="color:var(--pur);">💳 從誰的儲值金扣款？</label>
+            <select id="m_pd_owner"></select>
+            <div class="tm" style="margin-top:4px;font-size:11px;color:var(--pur);">💡 共用儲值金可以從家人/伴侶的餘額扣</div>
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -1939,6 +2038,7 @@ function renderModal(){
   // ─── 新增客戶 ───
   if(m.t==='addCustomer'){
     const presetName=m.x||'';
+    const otherCustomers=(S.data.customers||[]).filter(c=>c.name!==presetName);
     c=`<div class="mttl">👤 新增客戶</div>
     <div class="fg fg2">
       <div class="fgrp"><label>客戶姓名 *</label><input type="text" id="m_cu0" placeholder="姓名" value="${presetName}"></div>
@@ -1946,6 +2046,14 @@ function renderModal(){
       <div class="fgrp"><label>生日</label><input type="date" id="m_cu2"></div>
       <div class="fgrp"><label>來源</label><select id="m_cu3"><option>朋友介紹</option><option>IG</option><option>FB</option><option>Google</option><option>路過</option><option>其他</option></select></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註（喜好、肌膚狀況、注意事項）</label><textarea id="m_cu4" rows="3" placeholder="選填"></textarea></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
+        <label style="color:var(--pur);">🔗 共用儲值金成員（選填）</label>
+        <div class="tm" style="font-size:11px;margin-bottom:6px;">勾選的客戶可以彼此共用儲值金（家人、伴侶、閨蜜）</div>
+        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:120px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
+          ${otherCustomers.length===0?'<span class="tm">目前沒有其他客戶可選</span>':
+            otherCustomers.map(c=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:var(--bg2);border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${c.name}"> ${c.name}</label>`).join('')}
+        </div>
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCustomer()">✓ 新增</button></div>`;
   }
@@ -1953,6 +2061,8 @@ function renderModal(){
   // ─── 編輯客戶 ───
   if(m.t==='editCustomer'){
     const cu=(S.data.customers||[]).find(x=>x.id===m.x)||{};
+    const otherCustomers=(S.data.customers||[]).filter(c=>c.name!==cu.name);
+    const sharedSet=new Set(Array.isArray(cu.sharedWith)?cu.sharedWith:[]);
     c=`<div class="mttl">✏️ 編輯客戶資料</div>
     <div class="fg fg2">
       <div class="fgrp"><label>姓名</label><input type="text" id="m_cu0" value="${cu.name||''}"></div>
@@ -1960,6 +2070,14 @@ function renderModal(){
       <div class="fgrp"><label>生日</label><input type="date" id="m_cu2" value="${cu.birthday||''}"></div>
       <div class="fgrp"><label>來源</label><select id="m_cu3">${['朋友介紹','IG','FB','Google','路過','其他'].map(s=>`<option${s===cu.source?' selected':''}>${s}</option>`).join('')}</select></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><textarea id="m_cu4" rows="3">${cu.note||''}</textarea></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
+        <label style="color:var(--pur);">🔗 共用儲值金成員（家人/伴侶/閨蜜）</label>
+        <div class="tm" style="font-size:11px;margin-bottom:6px;">勾選後，雙方都可以使用對方的儲值金扣款</div>
+        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:140px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
+          ${otherCustomers.length===0?'<span class="tm">目前沒有其他客戶可選</span>':
+            otherCustomers.map(c=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:${sharedSet.has(c.name)?'var(--purL)':'var(--bg2)'};border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${c.name}"${sharedSet.has(c.name)?' checked':''}> ${c.name}（餘額 $${fmt(getCustomerBalance(c.name))}）</label>`).join('')}
+        </div>
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updCustomer('${cu.id}')">✓ 更新</button></div>`;
   }
@@ -2182,15 +2300,19 @@ window.saveOrder=async(type,continueInput)=>{
       if(customer==='__new__')customer=$('m_od4_new')?.value?.trim()||'';
       const payMethod=$('m_od6')?.value||'';
       // 儲值扣款檢核
+      let depositOwner='';
       if(payMethod==='儲值扣款'){
         if(!customer){alert('儲值扣款必須選擇客戶');return;}
-        const bal=getCustomerBalance(customer);
+        // 取 owner（如果有共用，就讀取選擇器；否則用 customer 自己）
+        depositOwner=$('m_od_owner')?.value||customer;
+        const bal=getCustomerBalance(depositOwner);
         if(bal<amount){
-          if(!confirm(`⚠️ 客戶儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(amount)}\n\n是否仍要記錄？（餘額會變負數）`))return;
+          const ownerLabel=depositOwner===customer?'此客戶':`${depositOwner}（共用儲值）`;
+          if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(amount)}\n\n是否仍要記錄？（餘額會變負數）`))return;
         }
       }
       const d=new Date(date);
-      await addSub('sales',{
+      const saleData={
         date,type:'service',item,
         subNote:$('m_odNote')?.value||'',
         amount,
@@ -2198,18 +2320,25 @@ window.saveOrder=async(type,continueInput)=>{
         staff:$('m_od5')?.value||'',
         customer,
         month:d.getMonth()+1,year:d.getFullYear()
-      });
+      };
+      // 只有儲值扣款才存 depositOwner，且不同於 customer 才有意義
+      if(payMethod==='儲值扣款'&&depositOwner){
+        saleData.depositOwner=depositOwner;
+      }
+      await addSub('sales',saleData);
       // 新客戶自動建檔
       if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
         const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
         await saveMain({customers});
       }
-      toast(`✅ 已記帳 $${fmt(amount)}`);
+      const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值扣款）`:'';
+      toast(`✅ 已記帳 $${fmt(amount)}${ownerHint}`);
       if(continueInput){
         ['m_od2','m_odNote','m_od3'].forEach(id=>{if($(id))$(id).value='';});
         if($('m_od4'))$('m_od4').value='';
         if($('m_od4_new')){$('m_od4_new').value='';$('m_od4_new').style.display='none';}
         if($('m_od_hint'))$('m_od_hint').innerHTML='';
+        if($('m_od_owner_wrap'))$('m_od_owner_wrap').style.display='none';
         $('m_od2')?.focus();
       }else{
         const c=$('pg-content');if(c)c.innerHTML=renderPage();
@@ -2227,15 +2356,18 @@ window.saveOrder=async(type,continueInput)=>{
       let customer=$('m_pd5')?.value||'';
       if(customer==='__new__')customer=$('m_pd5_new')?.value?.trim()||'';
       const payMethod=$('m_pd7')?.value||'';
+      let depositOwner='';
       if(payMethod==='儲值扣款'){
         if(!customer){alert('儲值扣款必須選擇客戶');return;}
-        const bal=getCustomerBalance(customer);
+        depositOwner=$('m_pd_owner')?.value||customer;
+        const bal=getCustomerBalance(depositOwner);
         if(bal<total){
-          if(!confirm(`⚠️ 客戶儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(total)}\n\n是否仍要記錄？`))return;
+          const ownerLabel=depositOwner===customer?'此客戶':`${depositOwner}（共用儲值）`;
+          if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(total)}\n\n是否仍要記錄？`))return;
         }
       }
       const d=new Date(date);
-      await addSub('sales',{
+      const saleData={
         date,type:'product',item,
         subNote:$('m_pdNote')?.value||'',
         amount:total,qty,unitPrice:price,
@@ -2243,7 +2375,11 @@ window.saveOrder=async(type,continueInput)=>{
         staff:$('m_pd6')?.value||'',
         customer,
         month:d.getMonth()+1,year:d.getFullYear()
-      });
+      };
+      if(payMethod==='儲值扣款'&&depositOwner){
+        saleData.depositOwner=depositOwner;
+      }
+      await addSub('sales',saleData);
       if(pid&&pid!==''){
         const inv=getInv(pid);
         const newQty=Math.max(0,toN(inv.qty)-qty);
@@ -2255,13 +2391,15 @@ window.saveOrder=async(type,continueInput)=>{
         const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
         await saveMain({customers});
       }
-      toast(`✅ 已記帳 $${fmt(total)}`);
+      const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值扣款）`:'';
+      toast(`✅ 已記帳 $${fmt(total)}${ownerHint}`);
       if(continueInput){
         ['m_pd2','m_pd3','m_pd4','m_pdNote'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
         if($('m_pd1'))$('m_pd1').value='';
         if($('m_pd5'))$('m_pd5').value='';
         if($('m_pd5_new')){$('m_pd5_new').value='';$('m_pd5_new').style.display='none';}
         if($('m_pd_hint'))$('m_pd_hint').innerHTML='';
+        if($('m_pd_owner_wrap'))$('m_pd_owner_wrap').style.display='none';
         $('m_pd1')?.focus();
       }else{
         const c=$('pg-content');if(c)c.innerHTML=renderPage();
@@ -2567,6 +2705,31 @@ window.delStaff=async id=>{if(!confirm('確認刪除？'))return;await saveMain(
 window.viewCustomer=(name)=>{S.selectedCustomer=name;render();};
 window.backToCustomers=()=>{S.selectedCustomer=null;render();};
 
+// 收集 sharedWith 勾選結果
+function collectSharedWith(){
+  const checks=document.querySelectorAll('input[name="cu_share"]:checked');
+  return Array.from(checks).map(c=>c.value);
+}
+
+// 雙向同步共用關係：A 把 B 加進來時，B 那邊也要把 A 加進來
+function syncSharedTwoWay(customers, myName, mySharedWith){
+  const myShared=new Set(mySharedWith);
+  return customers.map(c=>{
+    if(c.name===myName)return c;
+    const cShared=Array.isArray(c.sharedWith)?[...c.sharedWith]:[];
+    const has=cShared.includes(myName);
+    if(myShared.has(c.name)&&!has){
+      // 我有勾他，但他沒有我 → 加上去
+      cShared.push(myName);
+      return{...c,sharedWith:cShared};
+    }else if(!myShared.has(c.name)&&has){
+      // 我沒勾他，但他有我 → 移除
+      return{...c,sharedWith:cShared.filter(n=>n!==myName)};
+    }
+    return c;
+  });
+}
+
 window.saveCustomer=async()=>{
   const name=$('m_cu0')?.value?.trim();
   if(!name){alert('請填客戶姓名');return;}
@@ -2574,28 +2737,46 @@ window.saveCustomer=async()=>{
   if((S.data.customers||[]).find(c=>c.name===name)){
     alert('此客戶姓名已存在');return;
   }
-  const customers=[...(S.data.customers||[]),{
+  const sharedWith=collectSharedWith();
+  let customers=[...(S.data.customers||[]),{
     id:uid(),name,
     phone:$('m_cu1')?.value||'',
     birthday:$('m_cu2')?.value||'',
     source:$('m_cu3')?.value||'',
     note:$('m_cu4')?.value||'',
+    sharedWith,
     createdAt:today()
   }];
+  // 雙向同步共用關係
+  customers=syncSharedTwoWay(customers,name,sharedWith);
   await saveMain({customers});
-  toast('✅ 客戶已建檔');
+  toast(sharedWith.length>0?`✅ 客戶已建檔（與 ${sharedWith.length} 位共用儲值）`:'✅ 客戶已建檔');
   closeMod();
 };
 
 window.updCustomer=async(id)=>{
-  const customers=(S.data.customers||[]).map(c=>c.id===id?{
-    ...c,
-    name:$('m_cu0')?.value?.trim()||c.name,
-    phone:$('m_cu1')?.value||'',
-    birthday:$('m_cu2')?.value||'',
-    source:$('m_cu3')?.value||'',
-    note:$('m_cu4')?.value||''
-  }:c);
+  const old=(S.data.customers||[]).find(c=>c.id===id);
+  if(!old)return;
+  const newName=$('m_cu0')?.value?.trim()||old.name;
+  const sharedWith=collectSharedWith();
+  // 如果改名了，要把所有別人 sharedWith 中的舊名換成新名
+  let customers=(S.data.customers||[]).map(c=>{
+    if(c.id===id)return{
+      ...c,
+      name:newName,
+      phone:$('m_cu1')?.value||'',
+      birthday:$('m_cu2')?.value||'',
+      source:$('m_cu3')?.value||'',
+      note:$('m_cu4')?.value||'',
+      sharedWith
+    };
+    if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(old.name)&&old.name!==newName){
+      return{...c,sharedWith:c.sharedWith.map(n=>n===old.name?newName:n)};
+    }
+    return c;
+  });
+  // 雙向同步
+  customers=syncSharedTwoWay(customers,newName,sharedWith);
   await saveMain({customers});
   toast('✅ 已更新');
   closeMod();
@@ -2666,22 +2847,64 @@ window.updateBalanceHint=(prefix)=>{
   const newInput=$('m_'+prefix+'4_new')||$('m_'+prefix+'5_new');
   const hint=$('m_'+prefix+'_hint');
   const paySel=$('m_'+prefix+'6')||$('m_'+prefix+'7');
+  const ownerWrap=$('m_'+prefix+'_owner_wrap');
+  const ownerSel=$('m_'+prefix+'_owner');
   if(sel&&newInput){
     newInput.style.display=sel.value==='__new__'?'block':'none';
   }
+  // 預設隱藏 owner 選擇器
+  if(ownerWrap)ownerWrap.style.display='none';
+
   if(hint&&sel){
     const name=sel.value;
     if(name&&name!=='__new__'&&name!==''){
       const bal=getCustomerBalance(name);
       const payMethod=paySel?.value||'';
+      const amount=parseFloat($('m_'+prefix+'3')?.value)||parseFloat($('m_'+prefix+'4')?.value)||0;
       if(payMethod==='儲值扣款'){
-        if(bal>0){
-          hint.innerHTML=`💳 儲值餘額 <b style="color:var(--gold);">$${fmt(bal)}</b>　(扣款後將剩餘 $${fmt(bal-(parseFloat($('m_'+prefix+'3')?.value)||parseFloat($('m_'+prefix+'4')?.value)||0))})`;
+        // 取得整個儲值池（自己＋共用成員）
+        const pool=getAvailableDepositPool(name);
+        const totalPool=pool.reduce((s,p)=>s+p.balance,0);
+        const sharedMembers=pool.filter(p=>!p.isSelf&&p.balance>0);
+        // 顯示儲值池總覽
+        if(totalPool>0){
+          let html=`💳 自己餘額 <b style="color:${bal>0?'var(--gold)':'var(--red)'};">$${fmt(bal)}</b>`;
+          if(sharedMembers.length>0){
+            html+=`　｜共用成員可扣：${sharedMembers.map(p=>`<b>${p.name}</b> $${fmt(p.balance)}`).join('、')}`;
+            html+=`<br>📊 群組總可動用：<b style="color:var(--pur);">$${fmt(totalPool)}</b>`;
+          }
+          if(amount>totalPool){
+            html+=`<br><span style="color:var(--red);">⚠️ 群組總餘額不足以扣款 $${fmt(amount)}</span>`;
+          }
+          hint.innerHTML=html;
         }else{
-          hint.innerHTML=`<span style="color:var(--red);">⚠️ 此客戶儲值餘額為 0，無法用儲值扣款</span>`;
+          hint.innerHTML=`<span style="color:var(--red);">⚠️ 此客戶與共用群組都沒有儲值餘額</span>`;
+        }
+        // 顯示 owner 選擇器（即使只有一個選項也顯示，方便日後查看）
+        if(ownerWrap&&ownerSel&&pool.length>0){
+          ownerWrap.style.display='flex';
+          // 預設挑：先用自己（如果有餘額），否則用共用成員中餘額最大的
+          let defaultOwner=name;
+          if(bal<=0&&sharedMembers.length>0){
+            defaultOwner=sharedMembers[0].name;
+          }
+          ownerSel.innerHTML=pool.map(p=>{
+            const lbl=p.isSelf?`${p.name}（自己）餘額 $${fmt(p.balance)}`:`${p.name}（共用）餘額 $${fmt(p.balance)}`;
+            const sel=p.name===defaultOwner?' selected':'';
+            const dis=p.balance<=0?' disabled':'';
+            return`<option value="${p.name}"${sel}${dis}>${lbl}</option>`;
+          }).join('');
         }
       }else{
-        hint.innerHTML=bal>0?`💳 此客戶儲值餘額：<b>$${fmt(bal)}</b>`:'';
+        // 非儲值扣款，只顯示餘額提示
+        const pool=getAvailableDepositPool(name);
+        const sharedMembers=pool.filter(p=>!p.isSelf&&p.balance>0);
+        let html=bal>0?`💳 此客戶儲值餘額：<b>$${fmt(bal)}</b>`:'';
+        if(sharedMembers.length>0){
+          html+=html?'　':'';
+          html+=`<span style="color:var(--pur);">🔗 共用：${sharedMembers.map(p=>`${p.name} $${fmt(p.balance)}`).join('、')}</span>`;
+        }
+        hint.innerHTML=html;
       }
     }else{
       hint.innerHTML='';
