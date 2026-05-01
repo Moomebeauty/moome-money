@@ -265,6 +265,11 @@ function startSync(){
     S.data.settings=d.settings||{};
     S.data.assets=d.assets||[];
     S.data.allocation=d.allocation||{risk:10,operation:25,salary:40,study:10,invest:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
+    // 客戶資料：合併主文件和子集合（向下相容）
+    if(Array.isArray(d.customers)&&d.customers.length>0){
+      // 主文件有 customers → 以主文件為主
+      S.data.customers=d.customers;
+    }
     // 首次登入時，自動建立預設資料
     if(!d.initialized){
       await initDefaults();
@@ -272,7 +277,7 @@ function startSync(){
     setSyncing('synced');render();
   },()=>setSyncing('error'));
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','customers','deposits'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits'].forEach(col=>{
     onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -430,11 +435,12 @@ function getAllCustomerNames(){
 // 扣款：sales 的 depositFaceAmount（儲值池實際扣的面額），fallback 用 amount（舊資料相容）
 function getCustomerBalance(custName){
   if(!custName)return 0;
-  const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).reduce((s,d)=>s+toN(d.amount),0);
+  const target=(custName||'').trim();
+  const deposits=(S.data.deposits||[]).filter(d=>(d.customer||'').trim()===target).reduce((s,d)=>s+toN(d.amount),0);
   const usedDeposits=(S.data.sales||[]).filter(s=>{
     if(s.payMethod!=='儲值扣款')return false;
-    const owner=s.depositOwner||s.customer;
-    return owner===custName;
+    const owner=((s.depositOwner||s.customer)||'').trim();
+    return owner===target;
   }).reduce((s,r)=>s+toN(r.depositFaceAmount||r.amount),0);
   return deposits-usedDeposits;
 }
@@ -445,9 +451,9 @@ function getCustomerBalance(custName){
 function getCustomerDiscountRate(custName){
   if(!custName)return 1;
   // 取該客戶+共用群組所有 deposits，按日期排序取最後一筆有 actualReceived 的
-  const group=getSharedGroup(custName);
+  const group=getSharedGroup(custName).map(n=>(n||'').trim());
   const deposits=(S.data.deposits||[])
-    .filter(d=>group.includes(d.customer))
+    .filter(d=>group.includes((d.customer||'').trim()))
     .filter(d=>toN(d.actualReceived)>0&&toN(d.amount)>0)
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   if(deposits.length===0)return 1;
@@ -459,20 +465,27 @@ function getCustomerDiscountRate(custName){
 // 取得共用儲值群組
 function getSharedGroup(custName){
   if(!custName)return[custName];
+  const target=(custName||'').trim();
   const customers=S.data.customers||[];
   const visited=new Set();
-  const queue=[custName];
+  const queue=[target];
   while(queue.length){
     const cur=queue.shift();
     if(visited.has(cur))continue;
     visited.add(cur);
-    const me=customers.find(c=>c.name===cur);
+    // 找到 cur 在 customers 裡的記錄（用 trim 比對）
+    const me=customers.find(c=>(c.name||'').trim()===cur);
     if(me&&Array.isArray(me.sharedWith)){
-      me.sharedWith.forEach(n=>{if(n&&!visited.has(n))queue.push(n);});
+      me.sharedWith.forEach(n=>{
+        const tn=(n||'').trim();
+        if(tn&&!visited.has(tn))queue.push(tn);
+      });
     }
+    // 別人 sharedWith 中包含 cur
     customers.forEach(c=>{
-      if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(cur)&&!visited.has(c.name)){
-        queue.push(c.name);
+      if(Array.isArray(c.sharedWith)&&c.sharedWith.some(n=>(n||'').trim()===cur)){
+        const cn=(c.name||'').trim();
+        if(cn&&!visited.has(cn))queue.push(cn);
       }
     });
   }
@@ -516,9 +529,10 @@ function getTotalDepositDiscount(){
 
 function getCustomerHistory(custName){
   if(!custName)return{services:[],deposits:[],totalSpent:0,visitCount:0};
-  const services=(S.data.sales||[]).filter(s=>s.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const usedByOthers=(S.data.sales||[]).filter(s=>s.payMethod==='儲值扣款'&&s.depositOwner===custName&&s.customer!==custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const target=(custName||'').trim();
+  const services=(S.data.sales||[]).filter(s=>(s.customer||'').trim()===target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const deposits=(S.data.deposits||[]).filter(d=>(d.customer||'').trim()===target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const usedByOthers=(S.data.sales||[]).filter(s=>s.payMethod==='儲值扣款'&&(s.depositOwner||'').trim()===target&&(s.customer||'').trim()!==target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const totalSpent=services.reduce((s,r)=>s+toN(r.amount),0);
   const dates=new Set(services.map(s=>s.date));
   return{services,deposits,usedByOthers,totalSpent,visitCount:dates.size};
@@ -1016,14 +1030,17 @@ function pgAdvisor(){
 
 // ─── SALES ─────────────────────────────────────────────────
 // ─── 客戶管理 ──────────────────────────────────────────────
+// 標準化姓名（去除前後空白、半形/全形空白）
+function normalizeName(s){return(s||'').toString().trim().replace(/[\u3000\s]+/g,'');}
+
 function pgCustomers(){
   const customers=S.data.customers||[];
-  // 從銷售紀錄自動補齊客戶（防止漏建）
-  const allNames=new Set(customers.map(c=>c.name));
+  // 從銷售紀錄自動補齊客戶（防止漏建）— 用 normalize 後的名稱比對
+  const allNames=new Set(customers.map(c=>normalizeName(c.name)));
   const salesNames=new Set();
-  (S.data.sales||[]).forEach(s=>{if(s.customer)salesNames.add(s.customer);});
-  (S.data.deposits||[]).forEach(d=>{if(d.customer)salesNames.add(d.customer);});
-  const ghostCustomers=Array.from(salesNames).filter(n=>!allNames.has(n)).map(n=>({id:'ghost_'+n,name:n,phone:'',note:'(未建檔)',ghost:true}));
+  (S.data.sales||[]).forEach(s=>{if(s.customer)salesNames.add((s.customer||'').trim());});
+  (S.data.deposits||[]).forEach(d=>{if(d.customer)salesNames.add((d.customer||'').trim());});
+  const ghostCustomers=Array.from(salesNames).filter(n=>n&&!allNames.has(normalizeName(n))).map(n=>({id:'ghost_'+n,name:n,phone:'',note:'',ghost:true}));
   const allCustomers=[...customers,...ghostCustomers];
 
   // 為每個客戶計算統計
@@ -1793,6 +1810,16 @@ function pgSettings(){
   return`
   <div class="pg-ttl">⚙️ 基本設定</div>
   <div class="pg-sub">服務項目、產品清單、供應商管理（已預設常用項目）</div>
+
+  <div class="card" style="background:var(--bluL);border:1px solid var(--blu);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--blu);">🔧 資料修復工具</span>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">如果客戶建檔後仍顯示「未建檔」，或共用儲值勾選沒效果，多半是名稱有隱形空白導致比對失敗。點下方按鈕可一鍵清理：</div>
+      <button class="btn btn-y" onclick="repairCustomerNames()">🔧 清理客戶/銷售/儲值的名稱空白</button>
+    </div>
+  </div>
   <div class="sg sg3">
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🌸 服務項目</span><button class="btn btn-p btn-sm" onclick="openM('addService')">＋ 新增</button></div>
@@ -2797,19 +2824,21 @@ function collectSharedWith(){
 }
 
 // 雙向同步共用關係：A 把 B 加進來時，B 那邊也要把 A 加進來
+// 名稱比對都用 trim 後的值
 function syncSharedTwoWay(customers, myName, mySharedWith){
-  const myShared=new Set(mySharedWith);
+  const myNameT=(myName||'').trim();
+  const mySharedT=new Set((mySharedWith||[]).map(n=>(n||'').trim()).filter(Boolean));
   return customers.map(c=>{
-    if(c.name===myName)return c;
+    const cNameT=(c.name||'').trim();
+    if(cNameT===myNameT)return c;
     const cShared=Array.isArray(c.sharedWith)?[...c.sharedWith]:[];
-    const has=cShared.includes(myName);
-    if(myShared.has(c.name)&&!has){
-      // 我有勾他，但他沒有我 → 加上去
-      cShared.push(myName);
+    const cSharedT=cShared.map(n=>(n||'').trim());
+    const has=cSharedT.includes(myNameT);
+    if(mySharedT.has(cNameT)&&!has){
+      cShared.push(myNameT);
       return{...c,sharedWith:cShared};
-    }else if(!myShared.has(c.name)&&has){
-      // 我沒勾他，但他有我 → 移除
-      return{...c,sharedWith:cShared.filter(n=>n!==myName)};
+    }else if(!mySharedT.has(cNameT)&&has){
+      return{...c,sharedWith:cShared.filter(n=>(n||'').trim()!==myNameT)};
     }
     return c;
   });
@@ -2819,12 +2848,16 @@ window.saveCustomer=async()=>{
   try{
     const name=$('m_cu0')?.value?.trim();
     if(!name){alert('請填客戶姓名');return;}
-    // 檢查是否已存在（正式建檔）
-    if((S.data.customers||[]).find(c=>c.name===name)){
+    // 用 trim 後的名稱比對，避免空白問題
+    const dup=(S.data.customers||[]).find(c=>(c.name||'').trim()===name);
+    if(dup){
       alert(`「${name}」已經建檔過了，請改用編輯功能`);return;
     }
-    const sharedWith=collectSharedWith();
-    let customers=[...(S.data.customers||[]),{
+    const sharedWithRaw=collectSharedWith();
+    const sharedWith=Array.from(new Set(sharedWithRaw.map(n=>(n||'').trim()).filter(Boolean)));
+    let customers=[...(S.data.customers||[])];
+    // 主客戶
+    customers.push({
       id:uid(),name,
       phone:$('m_cu1')?.value||'',
       birthday:$('m_cu2')?.value||'',
@@ -2832,11 +2865,27 @@ window.saveCustomer=async()=>{
       note:$('m_cu4')?.value||'',
       sharedWith,
       createdAt:today()
-    }];
-    // 雙向同步共用關係
+    });
+    // 自動為勾選的 ghost 共用成員建檔（用 trim 後比對）
+    let autoCreated=0;
+    for(const sName of sharedWith){
+      if(!customers.find(c=>(c.name||'').trim()===sName)){
+        customers.push({
+          id:uid(),name:sName,
+          phone:'',birthday:'',source:'',note:'(由共用儲值自動建檔)',
+          sharedWith:[name],
+          createdAt:today()
+        });
+        autoCreated++;
+      }
+    }
+    // 雙向同步
     customers=syncSharedTwoWay(customers,name,sharedWith);
     await saveMain({customers});
-    toast(sharedWith.length>0?`✅ ${name} 已建檔（與 ${sharedWith.length} 位共用儲值）`:`✅ ${name} 已建檔`);
+    let msg=`✅ ${name} 已建檔`;
+    if(sharedWith.length>0)msg+=`（與 ${sharedWith.length} 位共用儲值）`;
+    if(autoCreated>0)msg+=`，自動建檔 ${autoCreated} 位共用成員`;
+    toast(msg);
     closeMod();
   }catch(err){
     console.error('saveCustomer 失敗:',err);
@@ -2848,9 +2897,11 @@ window.updCustomer=async(id)=>{
   try{
     const old=(S.data.customers||[]).find(c=>c.id===id);
     if(!old){alert('找不到客戶');return;}
-    const newName=$('m_cu0')?.value?.trim()||old.name;
+    const newName=$('m_cu0')?.value?.trim()||(old.name||'').trim();
     if(!newName){alert('客戶姓名不可空白');return;}
-    const sharedWith=collectSharedWith();
+    const oldNameT=(old.name||'').trim();
+    const sharedWithRaw=collectSharedWith();
+    const sharedWith=Array.from(new Set(sharedWithRaw.map(n=>(n||'').trim()).filter(Boolean)));
     // 如果改名了，要把所有別人 sharedWith 中的舊名換成新名
     let customers=(S.data.customers||[]).map(c=>{
       if(c.id===id)return{
@@ -2862,15 +2913,33 @@ window.updCustomer=async(id)=>{
         note:$('m_cu4')?.value||'',
         sharedWith
       };
-      if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(old.name)&&old.name!==newName){
-        return{...c,sharedWith:c.sharedWith.map(n=>n===old.name?newName:n)};
+      if(Array.isArray(c.sharedWith)&&oldNameT!==newName){
+        const hasOld=c.sharedWith.some(n=>(n||'').trim()===oldNameT);
+        if(hasOld){
+          return{...c,sharedWith:c.sharedWith.map(n=>(n||'').trim()===oldNameT?newName:n)};
+        }
       }
       return c;
     });
+    // 自動為勾選的 ghost 共用成員建檔
+    let autoCreated=0;
+    for(const sName of sharedWith){
+      if(!customers.find(c=>(c.name||'').trim()===sName)){
+        customers.push({
+          id:uid(),name:sName,
+          phone:'',birthday:'',source:'',note:'(由共用儲值自動建檔)',
+          sharedWith:[newName],
+          createdAt:today()
+        });
+        autoCreated++;
+      }
+    }
     // 雙向同步
     customers=syncSharedTwoWay(customers,newName,sharedWith);
     await saveMain({customers});
-    toast('✅ 已更新');
+    let msg='✅ 已更新';
+    if(autoCreated>0)msg+=`，自動建檔 ${autoCreated} 位共用成員`;
+    toast(msg);
     closeMod();
   }catch(err){
     console.error('updCustomer 失敗:',err);
@@ -2882,6 +2951,63 @@ window.delCustomer=async(id)=>{
   if(!confirm('確認刪除這位客戶？\n（消費紀錄與儲值紀錄不會被刪除）'))return;
   await saveMain({customers:(S.data.customers||[]).filter(c=>c.id!==id)});
   toast('已刪除');
+};
+
+// ── 資料修復：清理所有客戶/銷售/儲值的名稱空白 ──
+window.repairCustomerNames=async()=>{
+  if(!confirm('確認執行資料修復？\n\n會把所有客戶、銷售紀錄、儲值紀錄中的姓名空白清除，並合併重複的客戶。\n\n此操作不會刪除任何資料。'))return;
+  let fixedCustomers=0,fixedSales=0,fixedDeposits=0,mergedDup=0;
+  // 1. 清理 customers 名稱、合併重複（用 trim 後的名字當 key）
+  const customerMap=new Map();  // trim名 -> 客戶記錄
+  (S.data.customers||[]).forEach(c=>{
+    const newName=(c.name||'').trim().replace(/[\u3000\s]+/g,'');
+    if(!newName)return;
+    if((c.name||'')!==newName)fixedCustomers++;
+    if(customerMap.has(newName)){
+      // 合併：把 sharedWith 合併
+      const existed=customerMap.get(newName);
+      const merged=new Set([...(existed.sharedWith||[]),...(c.sharedWith||[])]);
+      existed.sharedWith=Array.from(merged).map(n=>(n||'').trim().replace(/[\u3000\s]+/g,'')).filter(Boolean);
+      mergedDup++;
+    }else{
+      customerMap.set(newName,{
+        ...c,
+        name:newName,
+        sharedWith:Array.isArray(c.sharedWith)
+          ?Array.from(new Set(c.sharedWith.map(n=>(n||'').trim().replace(/[\u3000\s]+/g,'')).filter(Boolean)))
+          :[]
+      });
+    }
+  });
+  const newCustomers=Array.from(customerMap.values());
+  // 2. 清理 sales 中的 customer 欄位 + depositOwner
+  const cleanedSales=(S.data.sales||[]).map(s=>{
+    const newCustomer=(s.customer||'').trim().replace(/[\u3000\s]+/g,'');
+    const newOwner=(s.depositOwner||'').trim().replace(/[\u3000\s]+/g,'');
+    if(s.customer!==newCustomer||s.depositOwner!==newOwner)fixedSales++;
+    return{...s,customer:newCustomer,depositOwner:newOwner||undefined};
+  });
+  // 3. 清理 deposits
+  const cleanedDeposits=(S.data.deposits||[]).map(d=>{
+    const newCustomer=(d.customer||'').trim().replace(/[\u3000\s]+/g,'');
+    if(d.customer!==newCustomer)fixedDeposits++;
+    return{...d,customer:newCustomer};
+  });
+  // 寫回
+  try{
+    await saveMain({customers:newCustomers});
+    // 寫回 sales
+    for(const s of cleanedSales){
+      await setSub('sales',s.id,s);
+    }
+    for(const d of cleanedDeposits){
+      await setSub('deposits',d.id,d);
+    }
+    alert(`✅ 修復完成！\n\n• 客戶名稱清理：${fixedCustomers} 筆\n• 銷售紀錄清理：${fixedSales} 筆\n• 儲值紀錄清理：${fixedDeposits} 筆\n• 合併重複客戶：${mergedDup} 筆`);
+  }catch(err){
+    console.error('repair 失敗:',err);
+    alert('修復失敗：'+(err.message||err));
+  }
 };
 
 // 刪除「未建檔」客戶（同時刪除所有相關銷售與儲值紀錄）
