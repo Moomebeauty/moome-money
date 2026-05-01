@@ -425,23 +425,38 @@ function getAllCustomerNames(){
   return Array.from(names).sort();
 }
 
-// 取得某客戶的儲值餘額（深度計算）
-// 入帳：deposits.customer === custName
-// 扣款：sales.payMethod==='儲值扣款' 且 (depositOwner || customer) === custName
+// 取得某客戶的儲值池餘額（用「面額」計算）
+// 入帳：deposits 的 amount（=面額/可消費額度）
+// 扣款：sales 的 depositFaceAmount（儲值池實際扣的面額），fallback 用 amount（舊資料相容）
 function getCustomerBalance(custName){
   if(!custName)return 0;
   const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).reduce((s,d)=>s+toN(d.amount),0);
-  // 用儲值扣款的銷售：優先看 depositOwner（誰的儲值被扣），沒有的話 fallback 用 customer
   const usedDeposits=(S.data.sales||[]).filter(s=>{
     if(s.payMethod!=='儲值扣款')return false;
     const owner=s.depositOwner||s.customer;
     return owner===custName;
-  }).reduce((s,r)=>s+toN(r.amount),0);
+  }).reduce((s,r)=>s+toN(r.depositFaceAmount||r.amount),0);
   return deposits-usedDeposits;
 }
 
-// 取得共用儲值群組（傳入任一成員，回傳整個群組的所有成員姓名陣列）
-// 規則：A 設定 sharedWith=[B,C]，則 A B C 互為共用
+// 取得客戶最後一筆儲值的折扣率
+// 例如 deposits = {amount:22000, actualReceived:19800} → discountRate = 0.9
+// 若無儲值或未填 actualReceived，回傳 1.0（不打折）
+function getCustomerDiscountRate(custName){
+  if(!custName)return 1;
+  // 取該客戶+共用群組所有 deposits，按日期排序取最後一筆有 actualReceived 的
+  const group=getSharedGroup(custName);
+  const deposits=(S.data.deposits||[])
+    .filter(d=>group.includes(d.customer))
+    .filter(d=>toN(d.actualReceived)>0&&toN(d.amount)>0)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(deposits.length===0)return 1;
+  const latest=deposits[0];
+  const rate=toN(latest.actualReceived)/toN(latest.amount);
+  return rate>0&&rate<=1?rate:1;
+}
+
+// 取得共用儲值群組
 function getSharedGroup(custName){
   if(!custName)return[custName];
   const customers=S.data.customers||[];
@@ -451,12 +466,10 @@ function getSharedGroup(custName){
     const cur=queue.shift();
     if(visited.has(cur))continue;
     visited.add(cur);
-    // 我的 sharedWith
     const me=customers.find(c=>c.name===cur);
     if(me&&Array.isArray(me.sharedWith)){
       me.sharedWith.forEach(n=>{if(n&&!visited.has(n))queue.push(n);});
     }
-    // 別人 sharedWith 中包含我
     customers.forEach(c=>{
       if(Array.isArray(c.sharedWith)&&c.sharedWith.includes(cur)&&!visited.has(c.name)){
         queue.push(c.name);
@@ -466,13 +479,12 @@ function getSharedGroup(custName){
   return Array.from(visited);
 }
 
-// 取得「可動用儲值池」— 自己 + 所有共用成員的個別餘額
-// 回傳: [{name, balance, isSelf}, ...]
 function getAvailableDepositPool(custName){
   const group=getSharedGroup(custName);
   return group.map(name=>({
     name,
     balance:getCustomerBalance(name),
+    rate:getCustomerDiscountRate(name),
     isSelf:name===custName
   })).filter(x=>x.balance>0||x.isSelf).sort((a,b)=>{
     if(a.isSelf)return -1;
@@ -481,7 +493,7 @@ function getAvailableDepositPool(custName){
   });
 }
 
-// 公司總儲值負債（所有客戶未消費的儲值總和）
+// 公司總儲值負債（用面額計算 — 公司承諾要提供的服務金額）
 function getTotalDepositLiability(){
   const allCustomers=new Set();
   (S.data.deposits||[]).forEach(d=>{if(d.customer)allCustomers.add(d.customer);});
@@ -489,15 +501,23 @@ function getTotalDepositLiability(){
   allCustomers.forEach(c=>{total+=getCustomerBalance(c);});
   return total;
 }
-// 已實現營收（排除儲值入帳，只計入有實際服務的金額）
-// 注意：sales 紀錄的本來就是已實現營收（包含儲值扣款，因為儲值扣款代表服務已提供）
-// deposits 紀錄是預收款（未提供服務），不計入 sales
+
+// 公司實際收到的總儲值現金（actualReceived 加總）
+function getTotalDepositCash(){
+  return (S.data.deposits||[]).reduce((s,d)=>s+toN(d.actualReceived||d.amount),0);
+}
+
+// 累計贈送額度（負債面額 - 實收現金 = 折扣總額）
+function getTotalDepositDiscount(){
+  const facetotal=(S.data.deposits||[]).reduce((s,d)=>s+toN(d.amount),0);
+  const cashTotal=getTotalDepositCash();
+  return facetotal-cashTotal;
+}
+
 function getCustomerHistory(custName){
   if(!custName)return{services:[],deposits:[],totalSpent:0,visitCount:0};
-  // 包含「別人用這個客戶的儲值扣款」的紀錄（顯示在儲值歷史上）
   const services=(S.data.sales||[]).filter(s=>s.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const deposits=(S.data.deposits||[]).filter(d=>d.customer===custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  // 「別人扣到我的儲值」的紀錄
   const usedByOthers=(S.data.sales||[]).filter(s=>s.payMethod==='儲值扣款'&&s.depositOwner===custName&&s.customer!==custName).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const totalSpent=services.reduce((s,r)=>s+toN(r.amount),0);
   const dates=new Set(services.map(s=>s.date));
@@ -1027,12 +1047,14 @@ function pgCustomers(){
 }
 
 function pgCustomersList(customerStats,totalLiability,totalCustomers){
+  const totalCash=getTotalDepositCash();
+  const totalDiscount=getTotalDepositDiscount();
   return`
   <div class="pg-ttl">👤 客戶管理</div>
   <div class="pg-sub">客戶資料、消費歷史、儲值餘額一目了然</div>
 
   <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">
-    💡 <b>會計提醒：</b>客戶儲值金屬於公司「<b>預收款負債</b>」，<b>不</b>計入營收。實際提供服務時（用儲值扣款消費）才轉為營收。
+    💡 <b>會計提醒：</b>儲值金<b>面額</b>=公司負債，<b>實收現金</b>=真實入帳。消費時依折扣率認列實際營收（避免虛胖）。
   </div>
 
   <div class="sg sg4">
@@ -1041,20 +1063,25 @@ function pgCustomersList(customerStats,totalLiability,totalCustomers){
       <div class="sv rose">${totalCustomers}</div>
     </div>
     <div class="sc gold">
-      <div class="sl">💳 儲值負債（未消費）</div>
+      <div class="sl">💳 儲值負債（面額）</div>
       <div class="sv gold sm">$${fmt(totalLiability)}</div>
-      <div class="ss">公司欠客戶的服務</div>
+      <div class="ss">公司欠客戶的服務額度</div>
+    </div>
+    <div class="sc blu">
+      <div class="sl">💰 累計實收現金</div>
+      <div class="sv blu sm">$${fmt(totalCash)}</div>
+      <div class="ss">儲值入帳真實收到</div>
     </div>
     <div class="sc grn">
-      <div class="sl">💰 累計營收</div>
+      <div class="sl">📊 累計營收（已實現）</div>
       <div class="sv grn sm">$${fmt((S.data.sales||[]).reduce((s,r)=>s+toN(r.amount),0))}</div>
-      <div class="ss">已實現服務金額</div>
-    </div>
-    <div class="sc pur">
-      <div class="sl">⭐ 有儲值客戶</div>
-      <div class="sv" style="color:var(--pur);">${customerStats.filter(c=>c.balance>0).length}</div>
+      <div class="ss">折扣後認列營收</div>
     </div>
   </div>
+
+  ${totalDiscount>0?`<div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+    📦 累計贈送儲值額度：<b>$${fmt(totalDiscount)}</b>　（實收 $${fmt(totalCash)} → 客戶可消費 $${fmt(totalCash+totalDiscount)}）
+  </div>`:''}
 
   <div class="sec-hd">
     <span class="sec-ttl">客戶清單</span>
@@ -2100,7 +2127,8 @@ function renderModal(){
   // ─── 客戶儲值入帳 ───
   if(m.t==='addDeposit'){c=`<div class="mttl">💳 客戶儲值入帳</div>
     <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
-      💡 儲值金不計入營收，記為公司「預收款負債」。客人來消費時用「儲值扣款」付款方式才會轉為營收。
+      💡 儲值金「面額」=客戶可消費的額度，「實收」=沐蜜真實收到的現金。<br>
+      消費時系統會自動按比例認列營收（避免虛胖）。
     </div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_dp0" value="${today()}"></div>
@@ -2112,9 +2140,24 @@ function renderModal(){
         </select>
         <input type="text" id="m_dp1_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
       </div>
-      <div class="fgrp"><label>儲值金額 *</label><input type="number" id="m_dp2" placeholder="如：10000"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:12px;border-radius:8px;border-left:3px solid var(--gold);">
+        <label style="color:var(--goldDk);font-weight:700;">📦 儲值方案（一鍵套用）</label>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(19800,22000)">A 方案：實收 $19,800 / 面額 $22,000（9折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(36800,46000)">B 方案：實收 $36,800 / 面額 $46,000（8折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(0,0)">自訂</button>
+        </div>
+      </div>
+      <div class="fgrp"><label>💰 實收現金（沐蜜真實收到）*</label><input type="number" id="m_dp_actual" placeholder="如：19800" oninput="calcDiscountRate()"></div>
+      <div class="fgrp"><label>📦 儲值面額（客戶可消費額度）*</label><input type="number" id="m_dp2" placeholder="如：22000" oninput="calcDiscountRate()"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bg2);padding:10px;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="tm">折扣率：<b id="m_dp_rate" style="color:var(--rose);font-size:16px;">--</b></span>
+          <span class="tm">贈送額度：<b id="m_dp_bonus" style="color:var(--gold);">$0</b></span>
+        </div>
+      </div>
       <div class="fgrp"><label>實際收款方式</label><select id="m_dp3"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
-      <div class="fgrp" style="grid-column:1/-1"><label>備註（如：方案名稱、贈送金額）</label><input type="text" id="m_dp4" placeholder="如：儲一萬送兩千方案"></div>
+      <div class="fgrp"><label>備註</label><input type="text" id="m_dp4" placeholder="如：A方案、客戶生日折扣"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDeposit()">✓ 確認入帳</button></div>`;
     bindDepositCustomerToggle();
@@ -2129,9 +2172,24 @@ function renderModal(){
     </div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_dp0" value="${today()}"></div>
-      <div class="fgrp"><label>儲值金額 *</label><input type="number" id="m_dp2" placeholder="如：10000"></div>
       <div class="fgrp"><label>實際收款方式</label><select id="m_dp3"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
-      <div class="fgrp"><label>備註</label><input type="text" id="m_dp4" placeholder="選填"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:12px;border-radius:8px;border-left:3px solid var(--gold);">
+        <label style="color:var(--goldDk);font-weight:700;">📦 儲值方案（一鍵套用）</label>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(19800,22000)">A：$19,800 / $22,000（9折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(36800,46000)">B：$36,800 / $46,000（8折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(0,0)">自訂</button>
+        </div>
+      </div>
+      <div class="fgrp"><label>💰 實收現金 *</label><input type="number" id="m_dp_actual" placeholder="0" oninput="calcDiscountRate()"></div>
+      <div class="fgrp"><label>📦 儲值面額 *</label><input type="number" id="m_dp2" placeholder="0" oninput="calcDiscountRate()"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bg2);padding:10px;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="tm">折扣率：<b id="m_dp_rate" style="color:var(--rose);font-size:16px;">--</b></span>
+          <span class="tm">贈送額度：<b id="m_dp_bonus" style="color:var(--gold);">$0</b></span>
+        </div>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_dp4" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDepositFor('${custName}')">✓ 確認入帳</button></div>`;
   }
@@ -2305,49 +2363,52 @@ window.saveOrder=async(type,continueInput)=>{
   try{
     if(type==='service'){
       const date=$('m_od0')?.value;
-      const amount=parseFloat($('m_od3')?.value)||0;
+      const inputAmount=parseFloat($('m_od3')?.value)||0;  // 使用者輸入金額（=儲值池要扣的面額）
       if(!date){alert('請選擇日期');return;}
-      if(!amount||amount<=0){alert('請輸入金額（必須大於 0）');return;}
+      if(!inputAmount||inputAmount<=0){alert('請輸入金額（必須大於 0）');return;}
       const sel=$('m_od1')?.value||'';
       const item=sel==='自訂項目'?($('m_od2')?.value?.trim()||'自訂服務'):sel;
-      // 客戶處理
       let customer=$('m_od4')?.value||'';
       if(customer==='__new__')customer=$('m_od4_new')?.value?.trim()||'';
       const payMethod=$('m_od6')?.value||'';
-      // 儲值扣款檢核
       let depositOwner='';
+      let depositFaceAmount=0;
+      let realRevenue=inputAmount;
       if(payMethod==='儲值扣款'){
         if(!customer){alert('儲值扣款必須選擇客戶');return;}
-        // 取 owner（如果有共用，就讀取選擇器；否則用 customer 自己）
         depositOwner=$('m_od_owner')?.value||customer;
         const bal=getCustomerBalance(depositOwner);
-        if(bal<amount){
+        depositFaceAmount=inputAmount;
+        if(bal<depositFaceAmount){
           const ownerLabel=depositOwner===customer?'此客戶':`${depositOwner}（共用儲值）`;
-          if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(amount)}\n\n是否仍要記錄？（餘額會變負數）`))return;
+          if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(depositFaceAmount)}\n\n是否仍要記錄？（餘額會變負數）`))return;
         }
+        // 用 owner 的折扣率，按比例認列營收
+        const rate=getCustomerDiscountRate(depositOwner);
+        realRevenue=Math.round(depositFaceAmount*rate);
       }
       const d=new Date(date);
       const saleData={
         date,type:'service',item,
         subNote:$('m_odNote')?.value||'',
-        amount,
+        amount:realRevenue,
         payMethod,
         staff:$('m_od5')?.value||'',
         customer,
         month:d.getMonth()+1,year:d.getFullYear()
       };
-      // 只有儲值扣款才存 depositOwner，且不同於 customer 才有意義
       if(payMethod==='儲值扣款'&&depositOwner){
         saleData.depositOwner=depositOwner;
+        saleData.depositFaceAmount=depositFaceAmount;
       }
       await addSub('sales',saleData);
-      // 新客戶自動建檔
       if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
         const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
         await saveMain({customers});
       }
-      const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值扣款）`:'';
-      toast(`✅ 已記帳 $${fmt(amount)}${ownerHint}`);
+      const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值）`:'';
+      const discountHint=payMethod==='儲值扣款'&&depositFaceAmount!==realRevenue?`扣儲值 $${fmt(depositFaceAmount)} → 認列營收 $${fmt(realRevenue)}`:`$${fmt(realRevenue)}`;
+      toast(`✅ 已記帳 ${discountHint}${ownerHint}`);
       if(continueInput){
         ['m_od2','m_odNote','m_od3'].forEach(id=>{if($(id))$(id).value='';});
         if($('m_od4'))$('m_od4').value='';
@@ -2362,30 +2423,35 @@ window.saveOrder=async(type,continueInput)=>{
       const date=$('m_pd0')?.value;
       const qty=parseFloat($('m_pd2')?.value)||1;
       const price=parseFloat($('m_pd3')?.value)||0;
-      const total=qty*price;
+      const inputTotal=qty*price;
       if(!date){alert('請選擇日期');return;}
-      if(!total||total<=0){alert('請輸入單價（小計必須大於 0）');return;}
+      if(!inputTotal||inputTotal<=0){alert('請輸入單價（小計必須大於 0）');return;}
       const prdSel=$('m_pd1'),pid=prdSel?.value||'';
       const item=prdSel&&prdSel.selectedIndex>=0?(prdSel.options[prdSel.selectedIndex]?.text.split('（')[0]||'產品'):'產品';
-      // 客戶處理
       let customer=$('m_pd5')?.value||'';
       if(customer==='__new__')customer=$('m_pd5_new')?.value?.trim()||'';
       const payMethod=$('m_pd7')?.value||'';
       let depositOwner='';
+      let depositFaceAmount=0;
+      let realRevenue=inputTotal;
       if(payMethod==='儲值扣款'){
         if(!customer){alert('儲值扣款必須選擇客戶');return;}
         depositOwner=$('m_pd_owner')?.value||customer;
         const bal=getCustomerBalance(depositOwner);
-        if(bal<total){
+        depositFaceAmount=inputTotal;
+        if(bal<depositFaceAmount){
           const ownerLabel=depositOwner===customer?'此客戶':`${depositOwner}（共用儲值）`;
-          if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(total)}\n\n是否仍要記錄？`))return;
+          if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(depositFaceAmount)}\n\n是否仍要記錄？`))return;
         }
+        const rate=getCustomerDiscountRate(depositOwner);
+        realRevenue=Math.round(depositFaceAmount*rate);
       }
       const d=new Date(date);
       const saleData={
         date,type:'product',item,
         subNote:$('m_pdNote')?.value||'',
-        amount:total,qty,unitPrice:price,
+        amount:realRevenue,
+        qty,unitPrice:price,
         payMethod,
         staff:$('m_pd6')?.value||'',
         customer,
@@ -2393,6 +2459,7 @@ window.saveOrder=async(type,continueInput)=>{
       };
       if(payMethod==='儲值扣款'&&depositOwner){
         saleData.depositOwner=depositOwner;
+        saleData.depositFaceAmount=depositFaceAmount;
       }
       await addSub('sales',saleData);
       if(pid&&pid!==''){
@@ -2401,13 +2468,13 @@ window.saveOrder=async(type,continueInput)=>{
         const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
         await saveMain({inventory:newInv});
       }
-      // 新客戶自動建檔
       if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
         const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
         await saveMain({customers});
       }
-      const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值扣款）`:'';
-      toast(`✅ 已記帳 $${fmt(total)}${ownerHint}`);
+      const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值）`:'';
+      const discountHint=payMethod==='儲值扣款'&&depositFaceAmount!==realRevenue?`扣儲值 $${fmt(depositFaceAmount)} → 認列營收 $${fmt(realRevenue)}`:`$${fmt(realRevenue)}`;
+      toast(`✅ 已記帳 ${discountHint}${ownerHint}`);
       if(continueInput){
         ['m_pd2','m_pd3','m_pd4','m_pdNote'].forEach(id=>{if($(id))$(id).value=id==='m_pd2'?'1':'';});
         if($('m_pd1'))$('m_pd1').value='';
@@ -2844,40 +2911,111 @@ function bindDepositCustomerToggle(){
   },50);
 }
 
-window.saveDeposit=async()=>{
-  let customer=$('m_dp1')?.value||'';
-  if(customer==='__new__')customer=$('m_dp1_new')?.value?.trim()||'';
-  const date=$('m_dp0')?.value;
-  const amount=parseFloat($('m_dp2')?.value)||0;
-  if(!customer){alert('請選擇或輸入客戶');return;}
-  if(!date||!amount){alert('請填日期和金額');return;}
-  // 同步加入現金流（實際有收到錢）
-  const payMethod=$('m_dp3')?.value||'轉帳';
-  const note=$('m_dp4')?.value||'';
-  const d=new Date(date);
-  await addSub('deposits',{date,customer,amount,payMethod,note,month:d.getMonth()+1,year:d.getFullYear()});
-  // 同步現金流（這是實收金錢）
-  await addSub('cashFlow',{date,amount,cat:'儲值入帳',note:`${customer} 儲值 ${note?'('+note+')':''}`,month:d.getMonth()+1,year:d.getFullYear()});
-  // 若是新客戶，自動建檔
-  if(!(S.data.customers||[]).find(c=>c.name===customer)){
-    const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
-    await saveMain({customers});
+window.setDepositPlan=(actual,face)=>{
+  if($('m_dp_actual'))$('m_dp_actual').value=actual||'';
+  if($('m_dp2'))$('m_dp2').value=face||'';
+  // 對應方案備註
+  if($('m_dp4')&&actual&&face){
+    const r=Math.round(actual/face*100);
+    $('m_dp4').value=`儲值方案 (${r/10}折)`;
   }
-  toast(`✅ 儲值入帳成功，記入「預收款負債」`);
-  closeMod();
+  calcDiscountRate();
+};
+
+window.calcDiscountRate=()=>{
+  const actual=parseFloat($('m_dp_actual')?.value)||0;
+  const face=parseFloat($('m_dp2')?.value)||0;
+  const rateEl=$('m_dp_rate');
+  const bonusEl=$('m_dp_bonus');
+  if(!rateEl||!bonusEl)return;
+  if(actual>0&&face>0){
+    const rate=actual/face;
+    const bonus=face-actual;
+    const ratePercent=Math.round(rate*1000)/10;
+    rateEl.textContent=`${ratePercent}%（${(rate*10).toFixed(1)}折）`;
+    bonusEl.textContent=`$${fmt(bonus)}`;
+    if(rate>1){
+      rateEl.style.color='var(--red)';
+      rateEl.textContent+=' ⚠️ 實收>面額';
+    }else{
+      rateEl.style.color='var(--rose)';
+    }
+  }else{
+    rateEl.textContent='--';
+    bonusEl.textContent='$0';
+  }
+};
+
+window.saveDeposit=async()=>{
+  try{
+    let customer=$('m_dp1')?.value||'';
+    if(customer==='__new__')customer=$('m_dp1_new')?.value?.trim()||'';
+    const date=$('m_dp0')?.value;
+    const amount=parseFloat($('m_dp2')?.value)||0;
+    const actualReceived=parseFloat($('m_dp_actual')?.value)||amount;
+    if(!customer){alert('請選擇或輸入客戶');return;}
+    if(!date||!amount){alert('請填日期和儲值面額');return;}
+    if(actualReceived<=0){alert('請填實收金額');return;}
+    const payMethod=$('m_dp3')?.value||'轉帳';
+    const note=$('m_dp4')?.value||'';
+    const d=new Date(date);
+    const discountRate=actualReceived/amount;
+    // 儲值紀錄存「面額」+「實收」+「折扣率」
+    await addSub('deposits',{
+      date,customer,
+      amount,                  // 面額（公司負債）
+      actualReceived,          // 實收現金
+      discountRate,            // 折扣率
+      payMethod,note,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    // 現金流只記實收金額
+    await addSub('cashFlow',{
+      date,amount:actualReceived,
+      cat:'儲值入帳',
+      note:`${customer} 儲值面額$${fmt(amount)} 實收$${fmt(actualReceived)} ${note?'('+note+')':''}`,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    if(!(S.data.customers||[]).find(c=>c.name===customer)){
+      const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
+      await saveMain({customers});
+    }
+    const bonus=amount-actualReceived;
+    toast(`✅ 儲值入帳　實收 $${fmt(actualReceived)}　面額 $${fmt(amount)}${bonus>0?`（贈 $${fmt(bonus)}）`:''}`);
+    closeMod();
+  }catch(err){
+    console.error('saveDeposit 失敗:',err);
+    alert('儲值失敗：'+(err.message||err));
+  }
 };
 
 window.saveDepositFor=async(customer)=>{
-  const date=$('m_dp0')?.value;
-  const amount=parseFloat($('m_dp2')?.value)||0;
-  if(!date||!amount){alert('請填日期和金額');return;}
-  const payMethod=$('m_dp3')?.value||'轉帳';
-  const note=$('m_dp4')?.value||'';
-  const d=new Date(date);
-  await addSub('deposits',{date,customer,amount,payMethod,note,month:d.getMonth()+1,year:d.getFullYear()});
-  await addSub('cashFlow',{date,amount,cat:'儲值入帳',note:`${customer} 儲值 ${note?'('+note+')':''}`,month:d.getMonth()+1,year:d.getFullYear()});
-  toast(`✅ 已為 ${customer} 儲值 $${fmt(amount)}`);
-  closeMod();
+  try{
+    const date=$('m_dp0')?.value;
+    const amount=parseFloat($('m_dp2')?.value)||0;
+    const actualReceived=parseFloat($('m_dp_actual')?.value)||amount;
+    if(!date||!amount){alert('請填日期和儲值面額');return;}
+    if(actualReceived<=0){alert('請填實收金額');return;}
+    const payMethod=$('m_dp3')?.value||'轉帳';
+    const note=$('m_dp4')?.value||'';
+    const d=new Date(date);
+    const discountRate=actualReceived/amount;
+    await addSub('deposits',{
+      date,customer,amount,actualReceived,discountRate,payMethod,note,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    await addSub('cashFlow',{
+      date,amount:actualReceived,cat:'儲值入帳',
+      note:`${customer} 儲值面額$${fmt(amount)} 實收$${fmt(actualReceived)} ${note?'('+note+')':''}`,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    const bonus=amount-actualReceived;
+    toast(`✅ 已為 ${customer} 儲值面額 $${fmt(amount)}（實收 $${fmt(actualReceived)}）`);
+    closeMod();
+  }catch(err){
+    console.error('saveDepositFor 失敗:',err);
+    alert('儲值失敗：'+(err.message||err));
+  }
 };
 
 window.delDeposit=async id=>{
@@ -2911,12 +3049,23 @@ window.updateBalanceHint=(prefix)=>{
         const pool=getAvailableDepositPool(name);
         const totalPool=pool.reduce((s,p)=>s+p.balance,0);
         const sharedMembers=pool.filter(p=>!p.isSelf&&p.balance>0);
-        // 顯示儲值池總覽
         if(totalPool>0){
           let html=`💳 自己餘額 <b style="color:${bal>0?'var(--gold)':'var(--red)'};">$${fmt(bal)}</b>`;
           if(sharedMembers.length>0){
             html+=`　｜共用成員可扣：${sharedMembers.map(p=>`<b>${p.name}</b> $${fmt(p.balance)}`).join('、')}`;
             html+=`<br>📊 群組總可動用：<b style="color:var(--pur);">$${fmt(totalPool)}</b>`;
+          }
+          // 顯示折扣率（依預設 owner）
+          let defaultOwner=name;
+          if(bal<=0&&sharedMembers.length>0)defaultOwner=sharedMembers[0].name;
+          const rate=getCustomerDiscountRate(defaultOwner);
+          if(rate<1){
+            const ratePercent=Math.round(rate*1000)/10;
+            html+=`<br>💰 ${defaultOwner} 的儲值折扣 <b style="color:var(--rose);">${ratePercent}% (${(rate*10).toFixed(1)}折)</b>`;
+            if(amount>0){
+              const realRev=Math.round(amount*rate);
+              html+=`　扣 $${fmt(amount)} → 認列營收 <b style="color:var(--grn);">$${fmt(realRev)}</b>`;
+            }
           }
           if(amount>totalPool){
             html+=`<br><span style="color:var(--red);">⚠️ 群組總餘額不足以扣款 $${fmt(amount)}</span>`;
@@ -2925,20 +3074,23 @@ window.updateBalanceHint=(prefix)=>{
         }else{
           hint.innerHTML=`<span style="color:var(--red);">⚠️ 此客戶與共用群組都沒有儲值餘額</span>`;
         }
-        // 顯示 owner 選擇器（即使只有一個選項也顯示，方便日後查看）
+        // 顯示 owner 選擇器
         if(ownerWrap&&ownerSel&&pool.length>0){
           ownerWrap.style.display='flex';
-          // 預設挑：先用自己（如果有餘額），否則用共用成員中餘額最大的
           let defaultOwner=name;
           if(bal<=0&&sharedMembers.length>0){
             defaultOwner=sharedMembers[0].name;
           }
           ownerSel.innerHTML=pool.map(p=>{
-            const lbl=p.isSelf?`${p.name}（自己）餘額 $${fmt(p.balance)}`:`${p.name}（共用）餘額 $${fmt(p.balance)}`;
+            const r=getCustomerDiscountRate(p.name);
+            const rateText=r<1?`　${(r*10).toFixed(1)}折`:'';
+            const lbl=p.isSelf?`${p.name}（自己）餘額 $${fmt(p.balance)}${rateText}`:`${p.name}（共用）餘額 $${fmt(p.balance)}${rateText}`;
             const sel=p.name===defaultOwner?' selected':'';
             const dis=p.balance<=0?' disabled':'';
             return`<option value="${p.name}"${sel}${dis}>${lbl}</option>`;
           }).join('');
+          // 切換 owner 時也要重新計算
+          ownerSel.onchange=()=>updateBalanceHint(prefix);
         }
       }else{
         // 非儲值扣款，只顯示餘額提示
