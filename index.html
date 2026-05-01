@@ -1168,7 +1168,10 @@ function pgCustomerDetail(c){
 
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
     <button class="btn btn-y" onclick="openM('addDepositFor','${c.name}')">💳 為此客戶儲值</button>
-    ${!c.ghost?`<button class="btn btn-s" onclick="openM('editCustomer','${c.id}')">✏️ 編輯資料 / 共用設定</button>`:''}
+    ${c.ghost
+      ?`<button class="btn btn-p" onclick="openM('addCustomer','${c.name}')">✏️ 建檔此客戶</button>`
+      :`<button class="btn btn-s" onclick="openM('editCustomer','${c.id}')">✏️ 編輯資料 / 共用設定</button>
+        <button class="btn btn-s" onclick="delCustomer('${c.id}')" style="color:var(--red);">× 刪除客戶</button>`}
   </div>
 
   <div class="sg sg2">
@@ -2081,23 +2084,23 @@ function renderModal(){
   if(m.t==='addCustomer'){
     const presetName=m.x||'';
     const otherCustomers=getAllCustomerNames().filter(n=>n!==presetName);
-    c=`<div class="mttl">👤 新增客戶</div>
+    c=`<div class="mttl">👤 ${presetName?`建檔：${presetName}`:'新增客戶'}</div>
     <div class="fg fg2">
       <div class="fgrp"><label>客戶姓名 *</label><input type="text" id="m_cu0" placeholder="姓名" value="${presetName}"></div>
       <div class="fgrp"><label>電話</label><input type="text" id="m_cu1" placeholder="選填"></div>
       <div class="fgrp"><label>生日</label><input type="date" id="m_cu2"></div>
       <div class="fgrp"><label>來源</label><select id="m_cu3"><option>朋友介紹</option><option>IG</option><option>FB</option><option>Google</option><option>路過</option><option>其他</option></select></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註（喜好、肌膚狀況、注意事項）</label><textarea id="m_cu4" rows="3" placeholder="選填"></textarea></div>
-      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
-        <label style="color:var(--pur);">🔗 共用儲值金成員（選填）</label>
-        <div class="tm" style="font-size:11px;margin-bottom:6px;">勾選的客戶可以彼此共用儲值金（家人、伴侶、閨蜜）</div>
-        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:140px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
+      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:12px;border-radius:8px;border-left:3px solid var(--pur);">
+        <label style="color:var(--pur);font-weight:700;">🔗 共用儲值金成員（選填）</label>
+        <div class="tm" style="font-size:12px;margin-bottom:8px;">勾選的客戶可以彼此共用儲值金（家人、伴侶、閨蜜）</div>
+        <div id="m_cu5" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;padding:8px;background:var(--card);border-radius:6px;">
           ${otherCustomers.length===0?'<span class="tm">目前沒有其他客戶可選</span>':
-            otherCustomers.map(n=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:var(--bg2);border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${n}"> ${n}（餘額 $${fmt(getCustomerBalance(n))}）</label>`).join('')}
+            otherCustomers.map(n=>`<label style="display:flex;align-items:center;gap:10px;font-size:14px;padding:8px 12px;background:var(--bg2);border-radius:6px;cursor:pointer;border:1px solid transparent;"><input type="checkbox" name="cu_share" value="${n}" style="width:18px;height:18px;cursor:pointer;"><span style="flex:1;"><b>${n}</b><span class="tm" style="margin-left:8px;">餘額 $${fmt(getCustomerBalance(n))}</span></span></label>`).join('')}
         </div>
       </div>
     </div>
-    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCustomer()">✓ 新增</button></div>`;
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveCustomer()">✓ ${presetName?'建檔':'新增'}</button></div>`;
   }
 
   // ─── 編輯客戶 ───
@@ -2105,19 +2108,19 @@ function renderModal(){
     const cu=(S.data.customers||[]).find(x=>x.id===m.x)||{};
     const otherCustomers=getAllCustomerNames().filter(n=>n!==cu.name);
     const sharedSet=new Set(Array.isArray(cu.sharedWith)?cu.sharedWith:[]);
-    c=`<div class="mttl">✏️ 編輯客戶資料</div>
+    c=`<div class="mttl">✏️ 編輯：${cu.name||''}</div>
     <div class="fg fg2">
       <div class="fgrp"><label>姓名</label><input type="text" id="m_cu0" value="${cu.name||''}"></div>
       <div class="fgrp"><label>電話</label><input type="text" id="m_cu1" value="${cu.phone||''}"></div>
       <div class="fgrp"><label>生日</label><input type="date" id="m_cu2" value="${cu.birthday||''}"></div>
       <div class="fgrp"><label>來源</label><select id="m_cu3">${['朋友介紹','IG','FB','Google','路過','其他'].map(s=>`<option${s===cu.source?' selected':''}>${s}</option>`).join('')}</select></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><textarea id="m_cu4" rows="3">${cu.note||''}</textarea></div>
-      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
-        <label style="color:var(--pur);">🔗 共用儲值金成員（家人/伴侶/閨蜜）</label>
-        <div class="tm" style="font-size:11px;margin-bottom:6px;">勾選後，雙方都可以使用對方的儲值金扣款</div>
-        <div id="m_cu5" style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;padding:6px;background:var(--card);border-radius:6px;">
+      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:12px;border-radius:8px;border-left:3px solid var(--pur);">
+        <label style="color:var(--pur);font-weight:700;">🔗 共用儲值金成員（家人/伴侶/閨蜜）</label>
+        <div class="tm" style="font-size:12px;margin-bottom:8px;">勾選後，雙方都可以使用對方的儲值金扣款</div>
+        <div id="m_cu5" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;padding:8px;background:var(--card);border-radius:6px;">
           ${otherCustomers.length===0?'<span class="tm">目前沒有其他客戶可選</span>':
-            otherCustomers.map(n=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:4px 8px;background:${sharedSet.has(n)?'var(--purL)':'var(--bg2)'};border-radius:6px;cursor:pointer;"><input type="checkbox" name="cu_share" value="${n}"${sharedSet.has(n)?' checked':''}> ${n}（餘額 $${fmt(getCustomerBalance(n))}）</label>`).join('')}
+            otherCustomers.map(n=>`<label style="display:flex;align-items:center;gap:10px;font-size:14px;padding:8px 12px;background:${sharedSet.has(n)?'var(--purL)':'var(--bg2)'};border-radius:6px;cursor:pointer;border:1px solid ${sharedSet.has(n)?'var(--pur)':'transparent'};"><input type="checkbox" name="cu_share" value="${n}"${sharedSet.has(n)?' checked':''} style="width:18px;height:18px;cursor:pointer;"><span style="flex:1;"><b>${n}</b><span class="tm" style="margin-left:8px;">餘額 $${fmt(getCustomerBalance(n))}</span></span></label>`).join('')}
         </div>
       </div>
     </div>
