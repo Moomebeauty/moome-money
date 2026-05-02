@@ -2437,7 +2437,13 @@ function renderModal(){
 
   if(m.t==='batchPurchase'){
     const rows=S.modal.rows||[{}];
+    const isGroup=S.modal.groupMode||false;
+    const groupTotal=S.modal.groupTotal||0;
     c=`<div class="mttl">📦 批次進貨輸入</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="tab-p${!isGroup?' active':''}" onclick="setBatchMode(false)" style="flex:1;">📋 各品項分別計成本</button>
+      <button class="tab-p${isGroup?' active':''}" onclick="setBatchMode(true)" style="flex:1;">🎁 整組優惠價（自動拆分成本）</button>
+    </div>
     <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
       <div class="fgrp" style="flex:1;min-width:140px;"><label>進貨日期</label><input type="date" id="m_bpDate" value="${today()}"></div>
       <div class="fgrp" style="flex:1;min-width:140px;"><label>供應商</label>
@@ -2447,15 +2453,32 @@ function renderModal(){
       </div>
       <div class="fgrp" id="m_bpSupC_wrap" style="flex:1;min-width:140px;display:none;"><label>自訂廠商</label><input type="text" id="m_bpSupC" placeholder="廠商名稱"></div>
     </div>
-    <div style="background:var(--bg2);padding:10px;border-radius:8px;margin-bottom:10px;font-size:13px;color:var(--mut);">
+    ${isGroup?`<div style="background:var(--goldL);padding:14px;border-radius:10px;margin-bottom:12px;border-left:3px solid var(--gold);">
+      <div style="font-weight:700;color:var(--goldDk);margin-bottom:8px;">🎁 整組進貨：填總成本 + 各品項售價，系統自動按售價比例拆分成本</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="fgrp" style="flex:1;min-width:160px;">
+          <label>整組總成本（廠商收的錢）</label>
+          <input type="number" id="m_bpGroupTotal" value="${groupTotal}" placeholder="例：1500" oninput="recalcGroupCosts()">
+        </div>
+        <div class="fgrp" style="flex:1;min-width:160px;">
+          <label>拆分方式</label>
+          <select id="m_bpSplitMode" onchange="recalcGroupCosts()">
+            <option value="price">按售價比例（推薦）</option>
+            <option value="even">平均分攤</option>
+          </select>
+        </div>
+      </div>
+      <div id="m_bpGroupHint" class="tm" style="margin-top:8px;font-size:12px;color:var(--goldDk);"></div>
+    </div>`:`<div style="background:var(--bg2);padding:10px;border-radius:8px;margin-bottom:10px;font-size:13px;color:var(--mut);">
       💡 一次輸入多筆進貨，每一列為一筆。完成後一併送出。
-    </div>
+    </div>`}
     <div id="batch_rows">
-      ${rows.map((r,i)=>batchRowHTML(r,i)).join('')}
+      ${rows.map((r,i)=>batchRowHTML(r,i,isGroup)).join('')}
     </div>
     <button class="btn btn-s" style="width:100%;margin-top:8px;" onclick="addBatchRow()">＋ 新增一列</button>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveBatchPurchase()">✓ 全部送出</button></div>`;
     S.modal.lg=true;
+    if(isGroup)setTimeout(recalcGroupCosts,50);
   }
 
   if(m.t==='setInv'){const p=(S.data.products||[]).find(x=>x.id===m.x)||{};const inv=getInv(m.x);c=`<div class="mttl">🗂️ 設定庫存：${p.name}</div>
@@ -2909,7 +2932,21 @@ function renderModal(){
 }
 
 // 批次進貨單列 HTML
-function batchRowHTML(r,i){
+function batchRowHTML(r,i,isGroup){
+  if(isGroup){
+    return`<div class="batch-row" data-idx="${i}">
+      <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
+      <div class="fgrp"><label>類別</label>
+        <select class="bp_cat">
+          ${PRODUCT_CATS.map(c=>`<option${c===(r.cat||PRODUCT_CATS[0])?' selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp"><label>數量</label><input type="number" class="bp_qty" placeholder="0" value="${r.qty||''}" min="1" oninput="recalcGroupCosts()"></div>
+      <div class="fgrp"><label>建議售價</label><input type="number" class="bp_price" placeholder="0" value="${r.price||''}" oninput="recalcGroupCosts()"></div>
+      <div class="fgrp"><label>自動計算成本</label><input type="number" class="bp_unit" placeholder="自動" value="${r.unit||''}" readonly style="background:var(--bg2);color:var(--gold);font-weight:700;"></div>
+      <button class="bdel-row" onclick="rmBatchRow(${i})">×</button>
+    </div>`;
+  }
   return`<div class="batch-row" data-idx="${i}">
     <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
     <div class="fgrp"><label>類別</label>
@@ -2918,7 +2955,7 @@ function batchRowHTML(r,i){
       </select>
     </div>
     <div class="fgrp"><label>數量</label><input type="number" class="bp_qty" placeholder="0" value="${r.qty||''}" min="1"></div>
-    <div class="fgrp"><label>單價</label><input type="number" class="bp_unit" placeholder="0" value="${r.unit||''}"></div>
+    <div class="fgrp"><label>單價（成本）</label><input type="number" class="bp_unit" placeholder="0" value="${r.unit||''}"></div>
     <div class="fgrp"><label>售價</label><input type="number" class="bp_price" placeholder="0" value="${r.price||''}"></div>
     <button class="bdel-row" onclick="rmBatchRow(${i})">×</button>
   </div>`;
@@ -3641,8 +3678,75 @@ function collectBatchRows(){
 }
 function refreshBatchRows(){
   const wrap=$('batch_rows');
-  if(wrap)wrap.innerHTML=S.modal.rows.map((r,i)=>batchRowHTML(r,i)).join('');
+  if(wrap)wrap.innerHTML=S.modal.rows.map((r,i)=>batchRowHTML(r,i,S.modal.groupMode||false)).join('');
 }
+
+// 切換批次進貨模式：分別計成本 / 整組優惠
+window.setBatchMode=(group)=>{
+  if(!S.modal||S.modal.t!=='batchPurchase')return;
+  collectBatchRows();
+  S.modal.groupMode=group;
+  // 重新渲染整個 modal
+  render();
+  setTimeout(()=>{if(group)recalcGroupCosts();},50);
+};
+
+// 整組進貨：自動計算各品項成本
+window.recalcGroupCosts=()=>{
+  if(!S.modal||S.modal.t!=='batchPurchase'||!S.modal.groupMode)return;
+  const groupTotal=parseFloat($('m_bpGroupTotal')?.value)||0;
+  const splitMode=$('m_bpSplitMode')?.value||'price';
+  const rowEls=document.querySelectorAll('.batch-row');
+  // 收集每列的數量、售價
+  const items=Array.from(rowEls).map(el=>({
+    qty:parseFloat(el.querySelector('.bp_qty')?.value)||0,
+    price:parseFloat(el.querySelector('.bp_price')?.value)||0,
+    el
+  }));
+  let hint='';
+  if(groupTotal<=0){
+    items.forEach(it=>{if(it.el.querySelector('.bp_unit'))it.el.querySelector('.bp_unit').value='';});
+    hint='請先填整組總成本';
+  }else if(splitMode==='even'){
+    // 平均：總成本 / 總件數（含數量）
+    const totalQty=items.reduce((s,it)=>s+it.qty,0);
+    if(totalQty<=0){
+      items.forEach(it=>{if(it.el.querySelector('.bp_unit'))it.el.querySelector('.bp_unit').value='';});
+      hint='請先填數量';
+    }else{
+      const avgUnit=Math.round(groupTotal/totalQty*100)/100;
+      items.forEach(it=>{if(it.el.querySelector('.bp_unit'))it.el.querySelector('.bp_unit').value=avgUnit;});
+      const totalSale=items.reduce((s,it)=>s+it.qty*it.price,0);
+      const margin=totalSale>0?Math.round((totalSale-groupTotal)/totalSale*100):0;
+      hint=`平均單價 $${fmt(avgUnit)}/件 ｜ 預計售價總和 $${fmt(totalSale)} ｜ 整組毛利率 ${margin}%`;
+    }
+  }else{
+    // 按售價比例
+    const totalSale=items.reduce((s,it)=>s+it.qty*it.price,0);
+    if(totalSale<=0){
+      items.forEach(it=>{if(it.el.querySelector('.bp_unit'))it.el.querySelector('.bp_unit').value='';});
+      hint='請先填各品項的售價';
+    }else{
+      let allocated=0;
+      items.forEach((it,i)=>{
+        if(it.qty<=0||it.price<=0){
+          if(it.el.querySelector('.bp_unit'))it.el.querySelector('.bp_unit').value='';
+          return;
+        }
+        const itemSaleTotal=it.qty*it.price;
+        // 該品項分到的成本比例
+        const allocatedCost=i===items.length-1?groupTotal-allocated:Math.round(itemSaleTotal/totalSale*groupTotal);
+        const unitCost=Math.round(allocatedCost/it.qty*100)/100;
+        if(it.el.querySelector('.bp_unit'))it.el.querySelector('.bp_unit').value=unitCost;
+        allocated+=allocatedCost;
+      });
+      const margin=Math.round((totalSale-groupTotal)/totalSale*100);
+      hint=`售價總和 $${fmt(totalSale)} ｜ 整組成本 $${fmt(groupTotal)} ｜ 整組毛利率 <b>${margin}%</b>`;
+    }
+  }
+  if($('m_bpGroupHint'))$('m_bpGroupHint').innerHTML=hint;
+};
+
 window.saveBatchPurchase=async()=>{
   const date=$('m_bpDate')?.value||today();
   const supSel=$('m_bpSup')?.value;
@@ -3650,31 +3754,42 @@ window.saveBatchPurchase=async()=>{
   collectBatchRows();
   const validRows=S.modal.rows.filter(r=>r.name&&toN(r.qty)>0);
   if(validRows.length===0){alert('請至少填寫一筆有效資料（產品名稱與數量）');return;}
+  const isGroup=S.modal.groupMode||false;
+  const groupTotal=parseFloat($('m_bpGroupTotal')?.value)||0;
+  if(isGroup&&groupTotal<=0){alert('請填整組總成本');return;}
   const d=new Date(date);
   let count=0;
+  let groupNote=isGroup?`整組 $${fmt(groupTotal)}`:'';
   for(const r of validRows){
     const qty=toN(r.qty);
     const unitCost=toN(r.unit);
     const sellPrice=toN(r.price);
-    // 找或建立產品
+    const totalCost=qty*unitCost;
     let prod=(S.data.products||[]).find(p=>p.name===r.name&&p.category===r.cat);
     let pid;
     if(!prod){
       pid=uid();
-      const newProd={id:pid,name:r.name,category:r.cat,price:sellPrice,cost:unitCost};
+      const newProd={id:pid,name:r.name,category:r.cat,price:sellPrice,cost:unitCost,supplier};
       S.data.products=[...(S.data.products||[]),newProd];
-      S.data.inventory=[...S.data.inventory,{productId:pid,qty,minQty:5}];
+      S.data.inventory=[...S.data.inventory,{productId:pid,qty,minQty:5,avgCost:unitCost,totalPurchaseCost:totalCost}];
     }else{
       pid=prod.id;
       const inv=getInv(pid);
-      S.data.inventory=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:toN(inv.qty)+qty,minQty:inv.minQty||5}];
+      const oldQty=toN(inv.qty);
+      const oldAvg=toN(inv.avgCost)||toN(prod.cost)||0;
+      const newAvg=calculateNewAvgCost(oldQty,oldAvg,qty,unitCost);
+      const newTotalCost=toN(inv.totalPurchaseCost||0)+totalCost;
+      S.data.inventory=[...S.data.inventory.filter(i=>i.productId!==pid),
+                       {productId:pid,qty:oldQty+qty,minQty:inv.minQty||5,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
+      // 更新產品平均成本
+      S.data.products=(S.data.products||[]).map(p=>p.id===pid?{...p,cost:newAvg,supplier:p.supplier||supplier}:p);
     }
-    await addSub('purchases',{date,productId:pid,productName:r.name,category:r.cat,qty,unitCost,totalCost:qty*unitCost,supplier,note:'',month:d.getMonth()+1,year:d.getFullYear()});
+    await addSub('purchases',{date,productId:pid,productName:r.name,category:r.cat,qty,unitCost,totalCost,supplier,note:groupNote,month:d.getMonth()+1,year:d.getFullYear()});
     count++;
   }
-  // 統一存產品和庫存
   await saveMain({products:S.data.products,inventory:S.data.inventory});
-  toast(`✅ 已批次新增 ${count} 筆進貨`);closeMod();
+  toast(`✅ 已批次新增 ${count} 筆進貨${isGroup?`（整組 $${fmt(groupTotal)}）`:''}`);
+  closeMod();
 };
 
 // ── Inventory ──
