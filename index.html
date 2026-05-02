@@ -238,7 +238,11 @@ let S={
     houseFund:[],
     quarterReviews:[],
     coolingDecisions:[],
-    advisorChats:[]
+    advisorChats:[],
+    // 出貨記錄（客戶購買、自用、損耗、贈品）
+    stockOuts:[],
+    // 設備（含折舊）
+    equipment:[]
   }
 };
 
@@ -278,7 +282,7 @@ function startSync(){
     setSyncing('synced');render();
   },()=>setSyncing('error'));
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts'].forEach(col=>{
     onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -358,6 +362,8 @@ function appHTML(){
     {id:'expenses',ico:'💸',lbl:'支出記帳'},
     {id:'purchase',ico:'📦',lbl:'進貨管理'},
     {id:'inventory',ico:'🗂️',lbl:'庫存盤點'},
+    {id:'stockout',ico:'📤',lbl:'出貨耗用'},
+    {id:'equipment',ico:'🛋️',lbl:'設備折舊'},
     {id:'courses',ico:'📋',lbl:'課程管理'},
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
     {id:'cashflow',ico:'🏦',lbl:'現金流水帳'},
@@ -400,6 +406,8 @@ function renderPage(){
     case'expenses':  return pgExpenses();
     case'purchase':  return pgPurchase();
     case'inventory': return pgInventory();
+    case'stockout':  return pgStockOut();
+    case'equipment': return pgEquipment();
     case'courses':   return pgCourses();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
@@ -417,6 +425,34 @@ function moSel(){
 function getSales(mo){const m=mo||S.month;return S.data.sales.filter(s=>s.month===m&&s.year===yr());}
 function getExp(mo){const m=mo||S.month;return S.data.expenses.filter(e=>e.month===m&&e.year===yr());}
 function getInv(pid){return S.data.inventory.find(i=>i.productId===pid)||{qty:0,minQty:5};}
+
+// ── 加權平均成本（每次進貨自動更新）──
+// 取得產品當前的加權平均成本（從 inventory.avgCost 讀，沒有就從 product.cost）
+function getAvgCost(pid){
+  const inv=getInv(pid);
+  if(inv.avgCost!==undefined&&toN(inv.avgCost)>0)return toN(inv.avgCost);
+  const p=(S.data.products||[]).find(x=>x.id===pid);
+  return toN(p?.cost)||0;
+}
+
+// 進貨時更新加權平均成本
+// newAvgCost = (現有量 × 現有平均成本 + 新進貨量 × 新單價) ÷ 總量
+function calculateNewAvgCost(currentQty,currentAvg,addQty,addUnitCost){
+  const cq=toN(currentQty),ca=toN(currentAvg),aq=toN(addQty),au=toN(addUnitCost);
+  if(cq+aq===0)return au;
+  return Math.round((cq*ca+aq*au)*100)/100;  // 保留 2 位小數
+}
+
+// 計算當期出貨成本（用平均成本）
+function getStockOutCost(pid,qty){
+  return Math.round(getAvgCost(pid)*toN(qty));
+}
+
+// 計算產品的有效庫存（進貨總量 - 出貨總量）
+function getEffectiveQty(pid){
+  const inv=getInv(pid);
+  return toN(inv.qty);  // 實際以 inventory.qty 為準
+}
 function getSvcTotal(mo){return getSales(mo).filter(s=>s.type==='service').reduce((s,r)=>s+toN(r.amount),0);}
 function getPrdTotal(mo){return getSales(mo).filter(s=>s.type==='product').reduce((s,r)=>s+toN(r.amount),0);}
 function getCrsTotal(mo){return getSales(mo).filter(s=>s.type==='course').reduce((s,r)=>s+toN(r.amount),0);}
@@ -1652,17 +1688,76 @@ function pgPurchase(){
 // ─── INVENTORY ─────────────────────────────────────────────
 function pgInventory(){
   const prods=S.data.products||[];
-  // 統計各類別產品數
   const cats=['全部',...PRODUCT_CATS];
   const curCat=cats[S.subTab]||'全部';
   const filtered=curCat==='全部'?prods:prods.filter(p=>p.category===curCat);
-  // 統計
   const lowCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)<toN(i.minQty||5);}).length;
-  const totalValue=prods.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(p.cost||0);},0);
+  const totalValue=prods.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0);
   const okCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)>=toN(i.minQty||5);}).length;
+
+  // 「保養品販售」用廠商/系列分組顯示
+  const useGrouped=curCat==='保養品販售';
+  let groupedHTML='';
+  if(useGrouped&&filtered.length>0){
+    // 分組：依 supplier > series 分組
+    const groups={};
+    filtered.forEach(p=>{
+      const sup=p.supplier||'未指定廠商';
+      const ser=p.series||'未分系列';
+      const k=`${sup}__${ser}`;
+      if(!groups[k])groups[k]={supplier:sup,series:ser,items:[]};
+      groups[k].items.push(p);
+    });
+    groupedHTML=Object.entries(groups).sort((a,b)=>{
+      if(a[1].supplier!==b[1].supplier)return a[1].supplier.localeCompare(b[1].supplier);
+      return a[1].series.localeCompare(b[1].series);
+    }).map(([k,g])=>{
+      const groupValue=g.items.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0);
+      return`<div class="card" style="margin-bottom:14px;">
+        <div class="card-hd" style="background:linear-gradient(90deg,var(--goldL),transparent);">
+          <span class="card-ttl">🏷️ ${g.supplier}　·　${g.series}</span>
+          <span class="bdg gold">${g.items.length} 項　$${fmt(groupValue)}</span>
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>產品</th><th>售價</th><th>平均成本</th><th>毛利率</th><th>庫存</th><th>低量警示</th><th>狀態</th><th>庫存價值</th><th>調整</th><th></th></tr></thead>
+          <tbody>${g.items.map(p=>{
+            const inv=getInv(p.id);
+            const qty=toN(inv.qty);
+            const minQty=toN(inv.minQty||5);
+            const avgCost=getAvgCost(p.id);
+            const val=qty*avgCost;
+            const margin=p.price>0?Math.round((p.price-avgCost)/p.price*100):0;
+            const status=qty<=0?'<span class="tag tag-low">缺貨</span>':qty<minQty?'<span class="tag tag-warn">偏低</span>':'<span class="tag tag-ok">正常</span>';
+            return`<tr style="${qty<minQty?'background:var(--redL);':''}">
+              <td><b>${p.name}</b>${p.note?`<div class="tm">${p.note}</div>`:''}</td>
+              <td><b style="color:var(--rose);">$${fmt(p.price||0)}</b></td>
+              <td class="tm">$${fmt(avgCost)}</td>
+              <td><span class="${margin>=50?'ap':margin>=30?'ag':'an'}">${margin}%</span></td>
+              <td style="font-size:18px;font-weight:700;color:${qty<minQty?'var(--red)':'var(--grn)'};">${qty}</td>
+              <td class="tm">${minQty}</td>
+              <td>${status}</td>
+              <td class="ag">$${fmt(val)}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <button class="btn btn-s btn-sm" onclick="adjInv('${p.id}',-1)">－</button>
+                  <span style="font-weight:700;min-width:24px;text-align:center;">${qty}</span>
+                  <button class="btn btn-p btn-sm" onclick="adjInv('${p.id}',1)">＋</button>
+                </div>
+              </td>
+              <td style="white-space:nowrap;">
+                <button class="bdel" style="color:#aaa;" onclick="openM('editProduct','${p.id}')">✏️</button>
+                <button class="bdel" onclick="delProduct('${p.id}')">×</button>
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>`;
+    }).join('');
+  }
+
   return`
   <div class="pg-ttl">🗂️ 庫存盤點</div>
-  <div class="pg-sub">點上方分頁切換不同類別，方便快速查找產品售價</div>
+  <div class="pg-sub">點上方分頁切換不同類別。「保養品販售」會依廠商系列分組</div>
   <div class="sg sg4">
     <div class="sc"><div class="sl">產品總數</div><div class="sv">${prods.length}</div></div>
     <div class="sc red"><div class="sl">低庫存警示</div><div class="sv red">${lowCount}</div></div>
@@ -1670,34 +1765,37 @@ function pgInventory(){
     <div class="sc grn"><div class="sl">正常庫存</div><div class="sv grn">${okCount}</div></div>
   </div>
 
-  <!-- 類別分頁 -->
   <div class="tab-bar">${cats.map((c,i)=>{
     const cnt=c==='全部'?prods.length:prods.filter(p=>p.category===c).length;
     return`<button class="tab-p${S.subTab===i?' active':''}" onclick="setT(${i})">${c}（${cnt}）</button>`;
   }).join('')}</div>
 
-  <div class="card">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <button class="btn btn-y btn-sm" onclick="openM('stockCheck')">📋 手動盤點</button>
+    <button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增產品</button>
+    <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="setP('stockout')">📤 出貨耗用</button>
+    <button class="btn btn-s btn-sm" onclick="setP('purchase')">📦 新增進貨</button>
+  </div>
+
+  ${useGrouped?groupedHTML:`<div class="card">
     <div class="card-hd">
       <span class="card-ttl">${curCat==='全部'?'所有產品':curCat}　共 ${filtered.length} 項</span>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-y btn-sm" onclick="openM('stockCheck')">📋 手動盤點</button>
-        <button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增產品</button>
-      </div>
     </div>
     <div class="tw"><table>
-      <thead><tr><th>產品名稱</th><th>類別</th><th>售價</th><th>成本</th><th>現有庫存</th><th>最低庫存</th><th>狀態</th><th>庫存價值</th><th>快速調整</th><th></th></tr></thead>
-      <tbody>${filtered.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>${curCat==='全部'?'尚未建立產品，請先到「基本設定」或「進貨管理」新增':'此類別尚無產品'}</p></div></td></tr>`:
+      <thead><tr><th>產品</th><th>類別</th><th>售價</th><th>平均成本</th><th>庫存</th><th>低量</th><th>狀態</th><th>庫存價值</th><th>調整</th><th></th></tr></thead>
+      <tbody>${filtered.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>${curCat==='全部'?'尚未建立產品':'此類別尚無產品'}</p></div></td></tr>`:
         filtered.map(p=>{
           const inv=getInv(p.id);
           const qty=toN(inv.qty);
           const minQty=toN(inv.minQty||5);
-          const val=qty*toN(p.cost||0);
+          const avgCost=getAvgCost(p.id);
+          const val=qty*avgCost;
           const status=qty<=0?'<span class="tag tag-low">缺貨</span>':qty<minQty?'<span class="tag tag-warn">偏低</span>':'<span class="tag tag-ok">正常</span>';
           return`<tr style="${qty<minQty?'background:var(--redL);':''}">
             <td><b>${p.name}</b>${p.note?`<div class="tm">${p.note}</div>`:''}</td>
             <td><span class="bdg gold">${p.category||''}</span></td>
             <td><b style="color:var(--rose);font-size:16px;">$${fmt(p.price||0)}</b></td>
-            <td class="tm">$${fmt(p.cost||0)}</td>
+            <td class="tm">$${fmt(avgCost)}</td>
             <td style="font-size:18px;font-weight:700;color:${qty<minQty?'var(--red)':'var(--grn)'};">${qty}</td>
             <td class="tm">${minQty}</td>
             <td>${status}</td>
@@ -1719,8 +1817,127 @@ function pgInventory(){
     </table></div>
     ${filtered.length>0?`<div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div><b>${curCat==='全部'?'總計':curCat}：</b>${filtered.length} 項</div>
-      <div><b>合計庫存價值：</b><span class="ag" style="font-size:16px;">$${fmt(filtered.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(p.cost||0);},0))}</span></div>
+      <div><b>合計庫存價值：</b><span class="ag" style="font-size:16px;">$${fmt(filtered.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0))}</span></div>
     </div>`:''}
+  </div>`}`;
+}
+
+// ─── 出貨耗用 ─────────────────────────────────────────────
+function pgStockOut(){
+  const outs=(S.data.stockOuts||[]).filter(o=>o.month===S.month&&o.year===yr()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const types={'sale':'客戶購買','self':'工作室自用','damage':'損耗報廢','gift':'贈送樣品'};
+  const colors={'sale':'grn','self':'gold','damage':'red','gift':'pur'};
+  // 統計各類型
+  const stats={sale:0,self:0,damage:0,gift:0};
+  const costStats={sale:0,self:0,damage:0,gift:0};
+  outs.forEach(o=>{
+    const c=getStockOutCost(o.productId,o.qty);
+    if(stats[o.type]!==undefined){stats[o.type]+=toN(o.qty);costStats[o.type]+=c;}
+  });
+  return`
+  <div class="pg-ttl">📤 出貨耗用紀錄</div>
+  <div class="pg-sub">客戶購買、自用、損耗、贈品 — 自動扣庫存、按平均成本計算</div>
+  ${moSel()}
+
+  <div class="sg sg4">
+    <div class="sc grn"><div class="sl">客戶購買</div><div class="sv grn">${stats.sale}</div><div class="ss">成本 $${fmt(costStats.sale)}</div></div>
+    <div class="sc gold"><div class="sl">工作室自用</div><div class="sv gold">${stats.self}</div><div class="ss">成本 $${fmt(costStats.self)}</div></div>
+    <div class="sc red"><div class="sl">損耗報廢</div><div class="sv red">${stats.damage}</div><div class="ss">成本 $${fmt(costStats.damage)}</div></div>
+    <div class="sc pur"><div class="sl">贈送樣品</div><div class="sv" style="color:var(--pur);">${stats.gift}</div><div class="ss">成本 $${fmt(costStats.gift)}</div></div>
+  </div>
+
+  <div class="sec-hd">
+    <span class="sec-ttl">出貨明細</span>
+    <button class="btn btn-p btn-sm" onclick="openM('addStockOut')">＋ 新增出貨/耗用</button>
+  </div>
+
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>日期</th><th>類型</th><th>產品</th><th>數量</th><th>當時平均成本</th><th>總成本</th><th>備註</th><th></th></tr></thead>
+      <tbody>${outs.length===0?`<tr><td colspan="8"><div class="empty"><div class="empty-ico">📤</div><p>本月尚無出貨/耗用紀錄</p></div></td></tr>`:
+        outs.map(o=>{
+          const cost=getStockOutCost(o.productId,o.qty);
+          const unitCost=toN(o.qty)>0?cost/toN(o.qty):0;
+          return`<tr>
+            <td>${o.date}</td>
+            <td><span class="bdg ${colors[o.type]||''}">${types[o.type]||o.type}</span></td>
+            <td><b>${o.productName||''}</b></td>
+            <td>${o.qty}</td>
+            <td class="tm">$${fmt(Math.round(unitCost))}</td>
+            <td class="an">-$${fmt(cost)}</td>
+            <td class="tm">${o.note||''}${o.customer?` (${o.customer})`:''}</td>
+            <td><button class="bdel" onclick="delStockOut('${o.id}')">×</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+// ─── 設備折舊 ─────────────────────────────────────────────
+function pgEquipment(){
+  const eqs=S.data.equipment||[];
+  // 計算當期折舊（按月線性折舊）
+  const today_d=new Date();
+  function calcDepreciation(eq){
+    if(!eq.purchaseDate||!eq.years||toN(eq.years)<=0)return{monthly:0,accumulated:0,bookValue:toN(eq.cost)};
+    const purDate=new Date(eq.purchaseDate);
+    const months=Math.max(0,(today_d.getFullYear()-purDate.getFullYear())*12+(today_d.getMonth()-purDate.getMonth()));
+    const totalMonths=toN(eq.years)*12;
+    const monthlyDepre=toN(eq.cost)/totalMonths;
+    const accumulated=Math.min(toN(eq.cost),Math.round(monthlyDepre*months));
+    const bookValue=Math.max(0,toN(eq.cost)-accumulated);
+    return{monthly:Math.round(monthlyDepre),accumulated,bookValue};
+  }
+
+  const totalCost=eqs.reduce((s,e)=>s+toN(e.cost),0);
+  const totalBook=eqs.reduce((s,e)=>s+calcDepreciation(e).bookValue,0);
+  const totalMonthly=eqs.reduce((s,e)=>s+calcDepreciation(e).monthly,0);
+
+  return`
+  <div class="pg-ttl">🛋️ 設備折舊</div>
+  <div class="pg-sub">設備不算庫存（如美體趴枕、按摩床、蒸臉器），每月按使用年限折舊計算</div>
+
+  <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+    💡 <b>會計概念：</b>設備是公司「資產」，分多年攤提折舊。<br>
+    例：$30,000 美體床 / 5 年使用年限 → 每月折舊 $500，每月計入「設備折舊費」（支出）
+  </div>
+
+  <div class="sg sg3">
+    <div class="sc gold"><div class="sl">設備總原值</div><div class="sv gold sm">$${fmt(totalCost)}</div><div class="ss">${eqs.length} 項設備</div></div>
+    <div class="sc"><div class="sl">當前帳面價值</div><div class="sv sm" style="color:var(--blu);">$${fmt(totalBook)}</div><div class="ss">扣除累計折舊</div></div>
+    <div class="sc red"><div class="sl">每月折舊費</div><div class="sv red sm">$${fmt(totalMonthly)}</div><div class="ss">計入每月支出</div></div>
+  </div>
+
+  <div class="sec-hd">
+    <span class="sec-ttl">設備清單</span>
+    <button class="btn btn-p btn-sm" onclick="openM('addEquipment')">＋ 新增設備</button>
+  </div>
+
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>名稱</th><th>類別</th><th>購入日期</th><th>原值</th><th>使用年限</th><th>每月折舊</th><th>累計折舊</th><th>帳面價值</th><th>備註</th><th></th></tr></thead>
+      <tbody>${eqs.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">🛋️</div><p>尚未建立設備清單，例如美體床、蒸臉器、按摩椅等</p></div></td></tr>`:
+        eqs.sort((a,b)=>(b.purchaseDate||'').localeCompare(a.purchaseDate||'')).map(e=>{
+          const d=calcDepreciation(e);
+          return`<tr>
+            <td><b>${e.name||''}</b></td>
+            <td><span class="bdg">${e.category||'其他'}</span></td>
+            <td class="tm">${e.purchaseDate||''}</td>
+            <td>$${fmt(e.cost)}</td>
+            <td class="tm">${e.years||'-'} 年</td>
+            <td class="an">$${fmt(d.monthly)}</td>
+            <td class="tm">$${fmt(d.accumulated)}</td>
+            <td class="ag">$${fmt(d.bookValue)}</td>
+            <td class="tm">${e.note||''}</td>
+            <td style="white-space:nowrap;">
+              <button class="bdel" style="color:#aaa;" onclick="openM('editEquipment','${e.id}')">✏️</button>
+              <button class="bdel" onclick="delEquipment('${e.id}')">×</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
   </div>`;
 }
 
@@ -2163,10 +2380,14 @@ function renderModal(){
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updExp('${e.id}')">✓ 更新</button></div>`;}
 
   if(m.t==='addPurchase'){c=`<div class="mttl">📦 新增進貨（單筆）</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 進貨成本自動套用「加權平均法」。例：原本 5 瓶 × $200，新進 10 瓶 × $150 → 新均價 = $166.67
+    </div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${today()}"></div>
       <div class="fgrp"><label>產品類別</label><select id="m_pCat">${PRODUCT_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="fgrp"><label>產品名稱</label><input type="text" id="m_p2" placeholder="如：玻尿酸精華液"></div>
+      <div class="fgrp"><label>產品系列（選填）</label><input type="text" id="m_pSeries" placeholder="如：保濕系列"></div>
       <div class="fgrp"><label>進貨數量</label><input type="number" id="m_p3" placeholder="0" min="1" onchange="calcPTotal()"></div>
       <div class="fgrp"><label>進貨單價</label><input type="number" id="m_p4" placeholder="0" onchange="calcPTotal()"></div>
       <div class="fgrp"><label>總成本</label><input type="number" id="m_p5" placeholder="0"></div>
@@ -2177,7 +2398,7 @@ function renderModal(){
         </select>
       </div>
       <div class="fgrp" id="m_p6c_wrap" style="display:none;"><label>自訂廠商名稱</label><input type="text" id="m_p6c" placeholder="輸入廠商名稱"></div>
-      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_p7" placeholder="選填"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_p7" placeholder="如：特價優惠、年中促銷"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="savePurchase()">✓ 確認進貨</button></div>`;}
 
@@ -2321,6 +2542,92 @@ function renderModal(){
       <div class="fgrp"><label>售價（參考）</label><input type="number" id="m_sv2" placeholder="0"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveService()">✓ 新增</button></div>`;}
+
+  // ─── 出貨/耗用 modal ───
+  if(m.t==='addStockOut'){
+    const prods=S.data.products||[];
+    c=`<div class="mttl">📤 新增出貨/耗用</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 出貨自動扣庫存。成本按當前「加權平均成本」計算（已包含過去進貨的均價）。
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_so0" value="${today()}"></div>
+      <div class="fgrp"><label>類型 *</label>
+        <select id="m_so1" onchange="toggleStockOutCust()">
+          <option value="self">🏪 工作室自用（耗材使用）</option>
+          <option value="sale">💰 客戶購買</option>
+          <option value="damage">⚠️ 損耗報廢</option>
+          <option value="gift">🎁 贈送樣品</option>
+        </select>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1"><label>產品 *</label>
+        <select id="m_so2" onchange="updateStockOutHint()">
+          <option value="">-- 選擇產品 --</option>
+          ${prods.sort((a,b)=>a.category.localeCompare(b.category)||a.name.localeCompare(b.name)).map(p=>{
+            const inv=getInv(p.id);
+            return`<option value="${p.id}" data-cost="${getAvgCost(p.id)}" data-qty="${inv.qty}">${p.name}（${p.category}・庫存 ${inv.qty}）</option>`;
+          }).join('')}
+        </select>
+      </div>
+      <div class="fgrp"><label>數量 *</label><input type="number" id="m_so3" value="1" min="1" onchange="updateStockOutHint()"></div>
+      <div class="fgrp"><label>當前平均成本</label><input type="text" id="m_so_cost" readonly placeholder="自動計算" style="background:var(--bg2);"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>總成本（自動計算）</label><input type="text" id="m_so_total" readonly style="background:var(--bg2);font-size:18px;font-weight:700;color:var(--red);"></div>
+      <div class="fgrp" id="m_so_cust_wrap" style="grid-column:1/-1;display:none;"><label>客戶（選填，會關聯到客戶歷史）</label>
+        <select id="m_so_cust">
+          <option value="">-- 不指定 --</option>
+          ${getAllCustomerNames().map(n=>`<option value="${n}">${n}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_so4" placeholder="如：做臉時使用、開封過期"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveStockOut()">✓ 確認出貨</button></div>`;
+    setTimeout(()=>{toggleStockOutCust();updateStockOutHint();},50);
+  }
+
+  // ─── 設備 modal ───
+  if(m.t==='addEquipment'){c=`<div class="mttl">🛋️ 新增設備</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 設備是公司資產，會分多年攤提折舊（例：$30,000 美體床 / 5 年 → 每月折舊 $500）<br>
+      購買金額會自動寫入支出記帳，並按月計算折舊。
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>設備名稱 *</label><input type="text" id="m_eq0" placeholder="如：美體趴枕"></div>
+      <div class="fgrp"><label>類別</label>
+        <select id="m_eq1">
+          <option>美體設備</option>
+          <option>美容儀器</option>
+          <option>家具</option>
+          <option>3C/電器</option>
+          <option>其他</option>
+        </select>
+      </div>
+      <div class="fgrp"><label>購入日期 *</label><input type="date" id="m_eq2" value="${today()}"></div>
+      <div class="fgrp"><label>原值（購入金額）*</label><input type="number" id="m_eq3" placeholder="0"></div>
+      <div class="fgrp"><label>使用年限 *</label><input type="number" id="m_eq4" value="5" min="1"><div class="tm" style="font-size:11px;">家具 5 年、3C 3 年、機械設備 8 年</div></div>
+      <div class="fgrp"><label>付款方式</label><select id="m_eq5"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_eq6" placeholder="如：放在二樓做臉房"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="m_eqExp" checked> 同時記入「支出記帳」（類別：設備購置）
+        </label>
+      </div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveEquipment()">✓ 新增</button></div>`;}
+
+  if(m.t==='editEquipment'){const e=(S.data.equipment||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✏️ 編輯設備</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>設備名稱</label><input type="text" id="m_eq0" value="${e.name||''}"></div>
+      <div class="fgrp"><label>類別</label>
+        <select id="m_eq1">
+          ${['美體設備','美容儀器','家具','3C/電器','其他'].map(c=>`<option${c===e.category?' selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp"><label>購入日期</label><input type="date" id="m_eq2" value="${e.purchaseDate||today()}"></div>
+      <div class="fgrp"><label>原值</label><input type="number" id="m_eq3" value="${e.cost||0}"></div>
+      <div class="fgrp"><label>使用年限</label><input type="number" id="m_eq4" value="${e.years||5}" min="1"></div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_eq6" value="${e.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updEquipment('${e.id}')">✓ 更新</button></div>`;}
 
   if(m.t==='addProduct'){c=`<div class="mttl">🧴 新增產品</div>
     <div class="fg fg2">
@@ -2842,8 +3149,22 @@ window.saveCartOrder=async(continueInput)=>{
       if(!it.custom&&it.id){
         const inv=getInv(it.id);
         const newQty=Math.max(0,toN(inv.qty)-toN(it.qty));
-        const newInv=[...S.data.inventory.filter(i=>i.productId!==it.id),{productId:it.id,qty:newQty,minQty:inv.minQty||5}];
+        const newInv=[...S.data.inventory.filter(i=>i.productId!==it.id),{...inv,productId:it.id,qty:newQty,minQty:inv.minQty||5}];
         await saveMain({inventory:newInv});
+        // 自動建立出貨紀錄
+        try{
+          await addSub('stockOuts',{
+            date,type:'sale',
+            productId:it.id,
+            productName:it.name,
+            qty:toN(it.qty),
+            unitCost:getAvgCost(it.id),
+            totalCost:getStockOutCost(it.id,it.qty),
+            customer,
+            note:'銷售開單',
+            month:d.getMonth()+1,year:d.getFullYear()
+          });
+        }catch(e){console.warn('建立 stockOut 失敗',e);}
       }
     }
     // 自動建檔
@@ -2986,10 +3307,25 @@ window.saveOrder=async(type,continueInput)=>{
       }
       await addSub('sales',saleData);
       if(pid&&pid!==''){
+        const prod=(S.data.products||[]).find(p=>p.id===pid);
         const inv=getInv(pid);
         const newQty=Math.max(0,toN(inv.qty)-qty);
-        const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
+        const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{...inv,productId:pid,qty:newQty,minQty:inv.minQty||5}];
         await saveMain({inventory:newInv});
+        // 自動建立出貨紀錄
+        try{
+          await addSub('stockOuts',{
+            date,type:'sale',
+            productId:pid,
+            productName:prod?.name||item,
+            qty,
+            unitCost:getAvgCost(pid),
+            totalCost:getStockOutCost(pid,qty),
+            customer,
+            note:'銷售開單',
+            month:d.getMonth()+1,year:d.getFullYear()
+          });
+        }catch(e){console.warn('建立 stockOut 失敗',e);}
       }
       if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
         const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
@@ -3041,6 +3377,7 @@ window.savePurchase=async()=>{
   const unitCost=parseFloat($('m_p4')?.value)||0;
   let totalCost=parseFloat($('m_p5')?.value)||qty*unitCost;
   const sellPrice=parseFloat($('m_pPrice')?.value)||0;
+  const series=$('m_pSeries')?.value?.trim()||'';
   if(!date||!qty||!productName){alert('請填日期、產品名稱和數量');return;}
   const supSel=$('m_p6')?.value;
   const supplier=supSel==='其他手動輸入廠商'?($('m_p6c')?.value||'').trim():supSel;
@@ -3049,21 +3386,180 @@ window.savePurchase=async()=>{
   let pid;
   if(!prod){
     pid=uid();
-    const newProd={id:pid,name:productName,category,price:sellPrice,cost:unitCost};
+    const newProd={id:pid,name:productName,category,price:sellPrice,cost:unitCost,supplier,series};
     const prods=[...(S.data.products||[]),newProd];
-    const newInv=[...S.data.inventory,{productId:pid,qty,minQty:5}];
+    // 新產品：avgCost = 進貨單價
+    const newInv=[...S.data.inventory,{productId:pid,qty,minQty:5,avgCost:unitCost,totalPurchaseCost:totalCost}];
     await saveMain({products:prods,inventory:newInv});
   }else{
     pid=prod.id;
     const inv=getInv(pid);
-    const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:toN(inv.qty)+qty,minQty:inv.minQty||5}];
-    await saveMain({inventory:newInv});
+    const oldQty=toN(inv.qty);
+    const oldAvg=toN(inv.avgCost)||toN(prod.cost)||0;
+    // 加權平均：新均價 = (舊量×舊均價 + 新量×新單價) / 總量
+    const newAvg=calculateNewAvgCost(oldQty,oldAvg,qty,unitCost);
+    const newQty=oldQty+qty;
+    const newTotalCost=toN(inv.totalPurchaseCost||0)+totalCost;
+    const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),
+                  {productId:pid,qty:newQty,minQty:inv.minQty||5,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
+    // 順帶更新產品的 cost 為平均成本（顯示用）
+    const updProd={...prod,cost:newAvg};
+    if(supplier&&!prod.supplier)updProd.supplier=supplier;
+    if(series&&!prod.series)updProd.series=series;
+    if(sellPrice>0&&!prod.price)updProd.price=sellPrice;
+    const prods=(S.data.products||[]).map(p=>p.id===pid?updProd:p);
+    await saveMain({inventory:newInv,products:prods});
   }
   const d=new Date(date);
-  await addSub('purchases',{date,productId:pid,productName,category,qty,unitCost,totalCost,supplier,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
-  toast(`✅ 進貨完成，庫存已增加 ${qty} 個`);closeMod();
+  await addSub('purchases',{date,productId:pid,productName,category,qty,unitCost,totalCost,supplier,series,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  const finalAvg=getAvgCost(pid);
+  toast(`✅ 進貨完成 ${qty} 個，平均成本更新為 $${fmt(finalAvg)}`);
+  closeMod();
 };
 window.delPurchase=async id=>{if(!confirm('確認刪除？'))return;await delSub('purchases',id);toast('已刪除');};
+
+// ── 出貨/耗用 ──
+window.toggleStockOutCust=()=>{
+  const t=$('m_so1')?.value;
+  const wrap=$('m_so_cust_wrap');
+  if(wrap)wrap.style.display=(t==='sale'||t==='gift')?'block':'none';
+};
+window.updateStockOutHint=()=>{
+  const sel=$('m_so2');
+  const opt=sel?.selectedOptions?.[0];
+  if(!opt||!opt.value){
+    if($('m_so_cost'))$('m_so_cost').value='';
+    if($('m_so_total'))$('m_so_total').value='';
+    return;
+  }
+  const cost=toN(opt.dataset.cost);
+  const qty=parseFloat($('m_so3')?.value)||0;
+  if($('m_so_cost'))$('m_so_cost').value='$'+fmt(cost);
+  if($('m_so_total'))$('m_so_total').value='$'+fmt(Math.round(cost*qty));
+};
+window.saveStockOut=async()=>{
+  try{
+    const date=$('m_so0')?.value;
+    const type=$('m_so1')?.value;
+    const pid=$('m_so2')?.value;
+    const qty=parseFloat($('m_so3')?.value)||0;
+    if(!date||!type||!pid||qty<=0){alert('請填日期、類型、產品和數量');return;}
+    const prod=(S.data.products||[]).find(p=>p.id===pid);
+    if(!prod){alert('找不到產品');return;}
+    const inv=getInv(pid);
+    if(toN(inv.qty)<qty){
+      if(!confirm(`⚠️ 庫存不足！\n目前庫存 ${inv.qty}，要出貨 ${qty}\n是否仍要扣除（會變負數）？`))return;
+    }
+    const customer=$('m_so_cust')?.value||'';
+    const note=$('m_so4')?.value||'';
+    const d=new Date(date);
+    const cost=getStockOutCost(pid,qty);
+    // 記錄出貨
+    await addSub('stockOuts',{
+      date,type,
+      productId:pid,
+      productName:prod.name,
+      qty,unitCost:getAvgCost(pid),
+      totalCost:cost,
+      customer,note,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    // 扣庫存
+    const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),
+                  {...inv,productId:pid,qty:toN(inv.qty)-qty}];
+    await saveMain({inventory:newInv});
+    // 自用/損耗 → 寫支出
+    if(type==='self'||type==='damage'||type==='gift'){
+      const catLabels={self:'材料耗材',damage:'雜支',gift:'行銷廣告'};
+      const noteLabels={self:'工作室自用',damage:'損耗報廢',gift:'贈送樣品'};
+      await addSub('expenses',{
+        date,
+        category:catLabels[type]||'雜支',
+        amount:cost,
+        payMethod:'內部結轉',
+        note:`【${noteLabels[type]}】${prod.name} × ${qty}${note?'　'+note:''}`,
+        fromStockOut:true,
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+    }
+    toast(`✅ 出貨 ${qty} 個，扣成本 $${fmt(cost)}`);
+    closeMod();
+  }catch(err){
+    console.error('saveStockOut 失敗:',err);
+    alert('出貨失敗：'+(err.message||err));
+  }
+};
+window.delStockOut=async id=>{
+  const o=(S.data.stockOuts||[]).find(x=>x.id===id);
+  if(!o)return;
+  if(!confirm(`確認刪除這筆出貨紀錄？\n會還原 ${o.qty} 個庫存`))return;
+  // 還原庫存
+  const inv=getInv(o.productId);
+  if(inv){
+    const newInv=[...S.data.inventory.filter(i=>i.productId!==o.productId),{...inv,qty:toN(inv.qty)+toN(o.qty)}];
+    await saveMain({inventory:newInv});
+  }
+  await delSub('stockOuts',id);
+  toast('已刪除並還原庫存');
+};
+
+// ── 設備 ──
+window.saveEquipment=async()=>{
+  try{
+    const name=$('m_eq0')?.value?.trim();
+    const cost=parseFloat($('m_eq3')?.value)||0;
+    const years=parseFloat($('m_eq4')?.value)||5;
+    const purchaseDate=$('m_eq2')?.value||today();
+    if(!name||!cost){alert('請填設備名稱和原值');return;}
+    const eqs=[...(S.data.equipment||[]),{
+      id:uid(),name,
+      category:$('m_eq1')?.value||'其他',
+      purchaseDate,cost,years,
+      payMethod:$('m_eq5')?.value||'轉帳',
+      note:$('m_eq6')?.value||''
+    }];
+    await saveMain({equipment:eqs});
+    // 同步寫支出
+    if($('m_eqExp')?.checked){
+      const d=new Date(purchaseDate);
+      await addSub('expenses',{
+        date:purchaseDate,
+        category:'設備購置',
+        amount:cost,
+        payMethod:$('m_eq5')?.value||'轉帳',
+        note:`【設備】${name}　使用年限 ${years} 年（每月折舊 $${fmt(Math.round(cost/years/12))}）`,
+        fromEquipment:true,
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+    }
+    toast(`✅ 設備已新增　每月折舊 $${fmt(Math.round(cost/years/12))}`);
+    closeMod();
+  }catch(err){
+    console.error('saveEquipment 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+window.updEquipment=async(id)=>{
+  const old=(S.data.equipment||[]).find(x=>x.id===id);
+  if(!old)return;
+  const eqs=(S.data.equipment||[]).map(e=>e.id===id?{
+    ...e,
+    name:$('m_eq0')?.value||e.name,
+    category:$('m_eq1')?.value||e.category,
+    purchaseDate:$('m_eq2')?.value||e.purchaseDate,
+    cost:parseFloat($('m_eq3')?.value)||e.cost,
+    years:parseFloat($('m_eq4')?.value)||e.years,
+    note:$('m_eq6')?.value||''
+  }:e);
+  await saveMain({equipment:eqs});
+  toast('✅ 已更新');closeMod();
+};
+window.delEquipment=async id=>{
+  if(!confirm('確認刪除這筆設備？\n（不會刪除已寫入的支出紀錄）'))return;
+  const eqs=(S.data.equipment||[]).filter(e=>e.id!==id);
+  await saveMain({equipment:eqs});
+  toast('已刪除');
+};
 
 window.updPurchase=async(id)=>{
   const date=$('m_p0')?.value;
