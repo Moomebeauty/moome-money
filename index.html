@@ -1196,15 +1196,22 @@ function pgCustomerDetail(c){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">💳 儲值入帳紀錄</span></div>
       <div class="tw"><table>
-        <thead><tr><th>日期</th><th>金額</th><th>付款方式</th><th>備註</th><th></th></tr></thead>
-        <tbody>${c.deposits.length===0?`<tr><td colspan="5"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
-          c.deposits.map(d=>`<tr>
+        <thead><tr><th>日期</th><th>面額</th><th>實收</th><th>折扣</th><th>付款方式</th><th>備註</th><th></th></tr></thead>
+        <tbody>${c.deposits.length===0?`<tr><td colspan="7"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
+          c.deposits.map(d=>{
+            const actual=toN(d.actualReceived||d.amount);
+            const face=toN(d.amount);
+            const rate=face>0?actual/face:1;
+            const rateText=rate<1?`${(rate*10).toFixed(1)}折`:'-';
+            return`<tr>
             <td>${d.date}</td>
-            <td class="ag">+$${fmt(d.amount)}</td>
+            <td class="ag">$${fmt(face)}</td>
+            <td class="tm">$${fmt(actual)}</td>
+            <td class="tm">${rateText}</td>
             <td><span class="bdg">${d.payMethod||''}</span></td>
             <td class="tm">${d.note||''}</td>
-            <td><button class="bdel" onclick="delDeposit('${d.id}')">×</button></td>
-          </tr>`).join('')}
+            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editDeposit','${d.id}')" title="編輯">✏️</button><button class="bdel" onclick="delDeposit('${d.id}')" title="刪除">×</button></td>
+          </tr>`;}).join('')}
         </tbody>
       </table></div>
     </div>
@@ -1213,14 +1220,15 @@ function pgCustomerDetail(c){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">🌸 服務歷史</span></div>
       <div class="tw"><table>
-        <thead><tr><th>日期</th><th>項目</th><th>金額</th><th>付款</th><th>老師</th></tr></thead>
-        <tbody>${c.services.length===0?`<tr><td colspan="5"><div class="empty"><p>尚無服務紀錄</p></div></td></tr>`:
+        <thead><tr><th>日期</th><th>項目</th><th>金額</th><th>付款</th><th>老師</th><th></th></tr></thead>
+        <tbody>${c.services.length===0?`<tr><td colspan="6"><div class="empty"><p>尚無服務紀錄</p></div></td></tr>`:
           c.services.map(s=>`<tr>
             <td>${s.date}</td>
             <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}${s.payMethod==='儲值扣款'&&s.depositOwner&&s.depositOwner!==c.name?`<div class="tm" style="color:var(--pur);">🔗 從 ${s.depositOwner} 共用儲值扣款</div>`:''}</td>
             <td class="ap">$${fmt(s.amount)}</td>
             <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
             <td class="tm">${s.staff||''}</td>
+            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
           </tr>`).join('')}
         </tbody>
       </table></div>
@@ -1230,13 +1238,14 @@ function pgCustomerDetail(c){
   ${c.usedByOthers&&c.usedByOthers.length>0?`<div class="card">
     <div class="card-hd"><span class="card-ttl">🔗 他人使用 ${c.name} 儲值的紀錄</span></div>
     <div class="tw"><table>
-      <thead><tr><th>日期</th><th>使用人</th><th>項目</th><th>金額</th><th>老師</th></tr></thead>
+      <thead><tr><th>日期</th><th>使用人</th><th>項目</th><th>金額</th><th>老師</th><th></th></tr></thead>
       <tbody>${c.usedByOthers.map(s=>`<tr>
         <td>${s.date}</td>
         <td><b>${s.customer||''}</b></td>
         <td>${s.item||''}${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
         <td class="an">-$${fmt(s.amount)}</td>
         <td class="tm">${s.staff||''}</td>
+        <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
       </tr>`).join('')}</tbody>
     </table></div>
   </div>`:''}`;
@@ -2224,6 +2233,35 @@ function renderModal(){
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDepositFor('${custName}')">✓ 確認入帳</button></div>`;
   }
 
+  // ─── 編輯儲值紀錄 ───
+  if(m.t==='editDeposit'){
+    const d=(S.data.deposits||[]).find(x=>x.id===m.x)||{};
+    c=`<div class="mttl">✏️ 編輯儲值紀錄：${d.customer||''}</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>日期</label><input type="date" id="m_dp0" value="${d.date||today()}"></div>
+      <div class="fgrp"><label>實際收款方式</label><select id="m_dp3"><option${d.payMethod==='轉帳'?' selected':''}>轉帳</option><option${d.payMethod==='現金'?' selected':''}>現金</option><option${d.payMethod==='信用卡'?' selected':''}>信用卡</option></select></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:12px;border-radius:8px;border-left:3px solid var(--gold);">
+        <label style="color:var(--goldDk);font-weight:700;">📦 儲值方案（一鍵套用）</label>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(19800,22000)">A：$19,800 / $22,000（9折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(36800,46000)">B：$36,800 / $46,000（8折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(0,0)">自訂</button>
+        </div>
+      </div>
+      <div class="fgrp"><label>💰 實收現金 *</label><input type="number" id="m_dp_actual" value="${toN(d.actualReceived||d.amount)}" oninput="calcDiscountRate()"></div>
+      <div class="fgrp"><label>📦 儲值面額 *</label><input type="number" id="m_dp2" value="${toN(d.amount)}" oninput="calcDiscountRate()"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bg2);padding:10px;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="tm">折扣率：<b id="m_dp_rate" style="color:var(--rose);font-size:16px;">--</b></span>
+          <span class="tm">贈送額度：<b id="m_dp_bonus" style="color:var(--gold);">$0</b></span>
+        </div>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_dp4" value="${d.note||''}"></div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updDeposit('${d.id}')">✓ 更新</button></div>`;
+    setTimeout(()=>calcDiscountRate(),50);
+  }
+
   // ─── 新增分流比例編輯 ───
   if(m.t==='editAlloc'){
     const al=S.data.allocation||{risk:10,operation:25,salary:40,study:10,invest:15,bigPurchaseLimit:30000};
@@ -3151,6 +3189,32 @@ window.delDeposit=async id=>{
   if(!confirm('確認刪除這筆儲值紀錄？'))return;
   await delSub('deposits',id);
   toast('已刪除');
+};
+
+window.updDeposit=async(id)=>{
+  try{
+    const old=(S.data.deposits||[]).find(x=>x.id===id);
+    if(!old){alert('找不到該筆儲值');return;}
+    const date=$('m_dp0')?.value||old.date;
+    const amount=parseFloat($('m_dp2')?.value)||0;
+    const actualReceived=parseFloat($('m_dp_actual')?.value)||amount;
+    if(!date||!amount){alert('請填日期和儲值面額');return;}
+    if(actualReceived<=0){alert('請填實收金額');return;}
+    const payMethod=$('m_dp3')?.value||old.payMethod||'轉帳';
+    const note=$('m_dp4')?.value||'';
+    const d=new Date(date);
+    const discountRate=actualReceived/amount;
+    await setSub('deposits',id,{
+      ...old,
+      date,amount,actualReceived,discountRate,payMethod,note,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    toast(`✅ 已更新 ${old.customer} 的儲值紀錄`);
+    closeMod();
+  }catch(err){
+    console.error('updDeposit 失敗:',err);
+    alert('更新失敗：'+(err.message||err));
+  }
 };
 
 // ── 銷售開單時即時顯示客戶儲值餘額 ──
