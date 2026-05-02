@@ -206,6 +206,7 @@ const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 const TEACHERS=['珞熙','璇璇','婉甄','其他']; // 服務老師
+const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
 const SERVICE_PRESETS=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩','自訂項目'];
 const PRODUCT_CATS=['保養品販售','做臉耗材','霧唇霧眉耗材','彩妝耗材','熱蠟耗材','美體耗材','工作室耗材'];
 const SUPPLIER_PRESETS=['Ten','EXU','AN','泌美麗','淘寶','蝦皮','其他手動輸入廠商'];
@@ -421,6 +422,40 @@ function getPrdTotal(mo){return getSales(mo).filter(s=>s.type==='product').reduc
 function getCrsTotal(mo){return getSales(mo).filter(s=>s.type==='course').reduce((s,r)=>s+toN(r.amount),0);}
 function getExpTotal(mo){return getExp(mo).reduce((s,e)=>s+toN(e.amount),0);}
 function getRevTotal(mo){return getSales(mo).reduce((s,r)=>s+toN(r.amount),0);}
+
+// ── 真實財務分析（含老師抽成、公司吸收的折讓）──
+// 取得單筆銷售的真實財務指標
+function getSaleFinancials(s){
+  if(!s)return{realRevenue:0,faceAmount:0,commission:0,absorbed:0,companyNet:0};
+  const realRevenue=toN(s.amount);  // 實際認列營收（已折扣後）
+  // 抽成基準金額：優先用 depositFaceAmount（儲值扣款的原價面額）→ amount（實收）
+  const faceAmount=toN(s.depositFaceAmount)||realRevenue;
+  // 老師抽成率：每筆可自訂（commissionRate），否則用預設
+  const rate=s.commissionRate!==undefined?toN(s.commissionRate):DEFAULT_COMMISSION_RATE;
+  // 抽成基準：commissionBase 可指定 'face'（原價面額）或 'real'（實收）
+  const base=s.commissionBase==='real'?realRevenue:faceAmount;
+  const commission=Math.round(base*rate);
+  // 公司吸收的折讓 = 原價面額 - 實際認列營收（如果有儲值折扣）
+  const absorbed=Math.max(0,faceAmount-realRevenue);
+  // 公司淨收（不含產品成本）= 實際營收 - 老師抽成
+  const companyNet=realRevenue-commission;
+  return{realRevenue,faceAmount,commission,absorbed,companyNet,rate,base};
+}
+
+// 月份的真實財務總計
+function getMonthFinancials(mo){
+  const sales=getSales(mo);
+  let totalRev=0,totalFace=0,totalCommission=0,totalAbsorbed=0,totalCompanyNet=0;
+  sales.forEach(s=>{
+    const f=getSaleFinancials(s);
+    totalRev+=f.realRevenue;
+    totalFace+=f.faceAmount;
+    totalCommission+=f.commission;
+    totalAbsorbed+=f.absorbed;
+    totalCompanyNet+=f.companyNet;
+  });
+  return{totalRev,totalFace,totalCommission,totalAbsorbed,totalCompanyNet,saleCount:sales.length};
+}
 
 // ── 客戶儲值相關計算 ──
 // 客戶當前儲值餘額 = 累計儲值 - 累計儲值扣款消費
@@ -649,6 +684,54 @@ function pgOverview(){
       <div class="ss">未消費完的客戶數</div>
     </div>
   </div>
+
+  <!-- 真實財報（含老師抽成、公司吸收折讓）-->
+  ${(()=>{
+    const fin=getMonthFinancials();
+    const realProfit=fin.totalCompanyNet-exp;  // 真實淨利 = 公司淨收 - 支出
+    return`<div class="card" style="background:linear-gradient(135deg,var(--bluL),var(--card));border:2px solid var(--blu);">
+      <div class="card-hd" style="background:transparent;border:none;">
+        <span class="card-ttl" style="color:var(--blu);">💎 真實財報分析（扣除老師抽成）</span>
+        <span class="bdg" style="background:var(--blu);color:#fff;">最重要的數字</span>
+      </div>
+      <div class="card-bd">
+        <div class="sg sg4">
+          <div class="sc" style="border-top-color:var(--gold);">
+            <div class="sl">📦 原價面額總計</div>
+            <div class="sv sm" style="color:var(--gold);">$${fmt(fin.totalFace)}</div>
+            <div class="ss">未打折前的服務價值</div>
+          </div>
+          <div class="sc rose">
+            <div class="sl">💰 認列營收</div>
+            <div class="sv rose sm">$${fmt(fin.totalRev)}</div>
+            <div class="ss">客戶實際買單金額</div>
+          </div>
+          <div class="sc red">
+            <div class="sl">👩‍💼 老師抽成</div>
+            <div class="sv red sm">$${fmt(fin.totalCommission)}</div>
+            <div class="ss">${fin.saleCount} 筆交易合計</div>
+          </div>
+          <div class="sc ${(fin.totalCompanyNet-exp)>=0?'grn':'red'}">
+            <div class="sl">✨ 公司真實淨利</div>
+            <div class="sv ${(fin.totalCompanyNet-exp)>=0?'grn':'red'} sm">$${fmt(fin.totalCompanyNet-exp)}</div>
+            <div class="ss">營收-抽成-支出</div>
+          </div>
+        </div>
+        ${fin.totalAbsorbed>0?`<div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:13px;margin-top:12px;">
+          ⚠️ <b>公司吸收的折讓：$${fmt(fin.totalAbsorbed)}</b>　
+          這是因為「客戶有打折但老師仍按原價抽成」造成的差額，直接侵蝕公司獲利。
+          <button class="btn btn-s btn-sm" style="margin-left:10px;" onclick="setP('staff')">看明細 →</button>
+        </div>`:''}
+        <div class="tm" style="margin-top:8px;font-size:12px;line-height:1.6;">
+          📐 計算公式：<br>
+          • 認列營收 = 客戶實付（已打折）= <b>$${fmt(fin.totalRev)}</b><br>
+          • 老師抽成 = 原價面額 × 抽成率 = <b>$${fmt(fin.totalCommission)}</b>（按原價計算，不受折扣影響）<br>
+          • 公司淨收 = 認列營收 − 老師抽成 = <b>$${fmt(fin.totalCompanyNet)}</b><br>
+          • 真實淨利 = 公司淨收 − 本月支出 = <b style="color:var(--blu);">$${fmt(fin.totalCompanyNet-exp)}</b>
+        </div>
+      </div>
+    </div>`;
+  })()}
 
   <!-- 當月獲利重點 -->
   <div class="card">
@@ -1341,6 +1424,20 @@ function pgOrder(){
             <select id="m_od_owner"></select>
             <div class="tm" style="margin-top:4px;font-size:11px;color:var(--pur);">💡 共用儲值金可以從家人/伴侶的餘額扣</div>
           </div>
+          <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
+            <label style="color:var(--blu);">👩‍💼 老師抽成設定</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+              <span class="tm">抽成率</span>
+              <input type="number" id="m_od_comm" value="${DEFAULT_COMMISSION_RATE*100}" min="0" max="100" step="5" style="width:70px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+              <span class="tm">%</span>
+              <span class="tm">　基準</span>
+              <select id="m_od_combase" style="padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+                <option value="face">原價面額（公司吸收折讓）</option>
+                <option value="real">實收金額（同步折扣）</option>
+              </select>
+            </div>
+            <div class="tm" style="font-size:11px;margin-top:4px;color:var(--blu);">💡 預設 60% × 原價面額（即使客戶有打折，老師仍照原價抽成，公司吸收差額）</div>
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('service',false)">✓ 確認並關閉</button>
@@ -1395,6 +1492,20 @@ function pgOrder(){
             <label style="color:var(--pur);">💳 從誰的儲值金扣款？</label>
             <select id="m_pd_owner"></select>
             <div class="tm" style="margin-top:4px;font-size:11px;color:var(--pur);">💡 共用儲值金可以從家人/伴侶的餘額扣</div>
+          </div>
+          <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
+            <label style="color:var(--blu);">👩‍💼 老師抽成設定</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+              <span class="tm">抽成率</span>
+              <input type="number" id="m_pd_comm" value="${DEFAULT_COMMISSION_RATE*100}" min="0" max="100" step="5" style="width:70px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+              <span class="tm">%</span>
+              <span class="tm">　基準</span>
+              <select id="m_pd_combase" style="padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+                <option value="face">原價面額（公司吸收折讓）</option>
+                <option value="real">實收金額（同步折扣）</option>
+              </select>
+            </div>
+            <div class="tm" style="font-size:11px;margin-top:4px;color:var(--blu);">💡 預設 60% × 原價面額。產品銷售時可改為 0%（不抽成）</div>
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -1654,40 +1765,74 @@ function pgCourses(){
 function pgStaff(){
   const staff=S.data.staff||[];
   const sales=getSales();
+  // 統計每位老師：使用 getSaleFinancials 計算真實抽成
   const byStaff={};
   sales.forEach(s=>{
     const u=s.staff||'未分配';
-    if(!byStaff[u])byStaff[u]={total:0,cnt:0,svc:0,prd:0};
-    byStaff[u].total+=toN(s.amount);byStaff[u].cnt++;
-    if(s.type==='service')byStaff[u].svc+=toN(s.amount);
-    if(s.type==='product')byStaff[u].prd+=toN(s.amount);
+    if(!byStaff[u])byStaff[u]={total:0,cnt:0,svc:0,prd:0,commission:0,absorbed:0,faceTotal:0,companyNet:0};
+    const f=getSaleFinancials(s);
+    byStaff[u].total+=f.realRevenue;
+    byStaff[u].faceTotal+=f.faceAmount;
+    byStaff[u].cnt++;
+    byStaff[u].commission+=f.commission;
+    byStaff[u].absorbed+=f.absorbed;
+    byStaff[u].companyNet+=f.companyNet;
+    if(s.type==='service')byStaff[u].svc+=f.realRevenue;
+    if(s.type==='product')byStaff[u].prd+=f.realRevenue;
   });
   return`
   <div class="pg-ttl">👩‍💼 老師業績</div>
-  <div class="pg-sub">本月各老師服務筆數、金額、抽成計算</div>
+  <div class="pg-sub">本月各老師服務筆數、抽成（按原價面額計算）、公司吸收的折讓</div>
   ${moSel()}
   <div class="sg ${Object.keys(byStaff).length>0?'sg4':'sg2'}">
-    ${Object.entries(byStaff).sort((a,b)=>b[1].total-a[1].total).map(([name,d])=>`
+    ${Object.entries(byStaff).sort((a,b)=>b[1].commission-a[1].commission).map(([name,d])=>`
     <div class="sc rose">
       <div class="sl">${name}</div>
-      <div class="sv rose sm">$${fmt(d.total)}</div>
-      <div class="ss">${d.cnt} 筆 ｜ 服務 $${fmt(d.svc)} / 產品 $${fmt(d.prd)}</div>
+      <div class="sv rose sm">抽成 $${fmt(d.commission)}</div>
+      <div class="ss">${d.cnt} 筆 ｜ 認列營收 $${fmt(d.total)}${d.absorbed>0?`<br>公司吸收折讓 $${fmt(d.absorbed)}`:''}</div>
     </div>`).join('')}
   </div>
+
+  <div class="card">
+    <div class="card-hd"><span class="card-ttl">📊 老師抽成明細（每筆訂單）</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>日期</th><th>老師</th><th>項目</th><th>客戶</th><th>原價面額</th><th>實收</th><th>抽成率</th><th>抽成基準</th><th>抽成金額</th><th>公司吸收</th><th>公司淨收</th></tr></thead>
+      <tbody>${sales.length===0?`<tr><td colspan="11"><div class="empty"><p>本月尚無銷售紀錄</p></div></td></tr>`:
+        sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(s=>{
+          const f=getSaleFinancials(s);
+          const baseLabel=f.base===f.faceAmount?'原價':'實收';
+          return`<tr>
+            <td class="tm">${s.date||''}</td>
+            <td><b>${s.staff||''}</b></td>
+            <td>${s.item||''}${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
+            <td class="tm">${s.customer||''}</td>
+            <td>$${fmt(f.faceAmount)}</td>
+            <td>$${fmt(f.realRevenue)}</td>
+            <td>${Math.round(f.rate*100)}%</td>
+            <td><span class="bdg">${baseLabel}</span></td>
+            <td class="ag">$${fmt(f.commission)}</td>
+            <td class="${f.absorbed>0?'an':''}">${f.absorbed>0?`-$${fmt(f.absorbed)}`:'-'}</td>
+            <td class="${f.companyNet>=0?'ap':'an'}">$${fmt(f.companyNet)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+  </div>
+
   <div class="card">
     <div class="card-hd"><span class="card-ttl">👥 老師資料</span><button class="btn btn-p btn-sm" onclick="openM('addStaff')">＋ 新增老師</button></div>
     <div class="tw"><table>
-      <thead><tr><th>姓名</th><th>職稱</th><th>抽成比例</th><th>本月業績</th><th>本月抽成</th><th></th></tr></thead>
-      <tbody>${staff.length===0?`<tr><td colspan="6"><div class="empty"><p>尚未建立老師資料</p></div></td></tr>`:
+      <thead><tr><th>姓名</th><th>職稱</th><th>本月服務數</th><th>本月認列營收</th><th>本月抽成</th><th>公司吸收折讓</th><th></th></tr></thead>
+      <tbody>${staff.length===0?`<tr><td colspan="7"><div class="empty"><p>尚未建立老師資料</p></div></td></tr>`:
         staff.map(u=>{
-          const d=byStaff[u.name]||{total:0,cnt:0};
-          const comm=Math.round(d.total*(toN(u.commRate||0)/100));
+          const d=byStaff[u.name]||{total:0,cnt:0,commission:0,absorbed:0};
           return`<tr>
             <td><b>${u.name}</b></td>
             <td><span class="bdg">${u.title||''}</span></td>
-            <td>${u.commRate||0}%</td>
+            <td>${d.cnt}</td>
             <td class="ap">$${fmt(d.total)}</td>
-            <td class="ag">$${fmt(comm)}</td>
+            <td class="ag">$${fmt(d.commission)}</td>
+            <td class="${d.absorbed>0?'an':''}">${d.absorbed>0?`$${fmt(d.absorbed)}`:'-'}</td>
             <td><button class="bdel" onclick="delStaff('${u.id}')">×</button></td>
           </tr>`;
         }).join('')}
@@ -2555,6 +2700,10 @@ window.saveCartOrder=async(continueInput)=>{
     const d=new Date(date);
     const note=$('m_pdNote')?.value||'';
     const staff=$('m_pd6')?.value||'';
+    // 老師抽成設定
+    const commPercent=parseFloat($('m_pd_comm')?.value);
+    const commissionRate=isNaN(commPercent)?DEFAULT_COMMISSION_RATE:commPercent/100;
+    const commissionBase=$('m_pd_combase')?.value||'face';
     // 為每件商品建立一筆 sales 記錄
     for(const it of items){
       const subtotal=toN(it.price)*toN(it.qty);
@@ -2565,6 +2714,7 @@ window.saveCartOrder=async(continueInput)=>{
         amount:realRev,
         qty:it.qty,unitPrice:it.price,
         payMethod,staff,customer,
+        commissionRate,commissionBase,
         month:d.getMonth()+1,year:d.getFullYear()
       };
       if(payMethod==='儲值扣款'&&depositOwner){
@@ -2637,6 +2787,10 @@ window.saveOrder=async(type,continueInput)=>{
         realRevenue=Math.round(depositFaceAmount*rate);
       }
       const d=new Date(date);
+      // 老師抽成設定
+      const commPercent=parseFloat($('m_od_comm')?.value);
+      const commissionRate=isNaN(commPercent)?DEFAULT_COMMISSION_RATE:commPercent/100;
+      const commissionBase=$('m_od_combase')?.value||'face';
       const saleData={
         date,type:'service',item,
         subNote:$('m_odNote')?.value||'',
@@ -2644,6 +2798,8 @@ window.saveOrder=async(type,continueInput)=>{
         payMethod,
         staff:$('m_od5')?.value||'',
         customer,
+        commissionRate,
+        commissionBase,
         month:d.getMonth()+1,year:d.getFullYear()
       };
       if(payMethod==='儲值扣款'&&depositOwner){
@@ -2704,6 +2860,8 @@ window.saveOrder=async(type,continueInput)=>{
         payMethod,
         staff:$('m_pd6')?.value||'',
         customer,
+        commissionRate:isNaN(parseFloat($('m_pd_comm')?.value))?DEFAULT_COMMISSION_RATE:parseFloat($('m_pd_comm').value)/100,
+        commissionBase:$('m_pd_combase')?.value||'face',
         month:d.getMonth()+1,year:d.getFullYear()
       };
       if(payMethod==='儲值扣款'&&depositOwner){
@@ -3228,6 +3386,52 @@ window.repairCustomerNames=async()=>{
     alert('修復失敗：'+(err.message||err));
   }
 };
+
+// ── 修復「儲值扣款」舊紀錄的 depositFaceAmount 欄位 ──
+// 問題：舊紀錄只存了 amount（折扣後營收），沒存 depositFaceAmount（面額）
+// 修復：找出每筆儲值扣款，用同期儲值的折扣率反推面額
+window.repairDepositFaceAmount=async()=>{
+  const sales=S.data.sales||[];
+  const targets=sales.filter(s=>s.payMethod==='儲值扣款'&&!s.depositFaceAmount);
+  if(targets.length===0){alert('沒有需要修復的紀錄');return;}
+  // 預覽
+  let preview=`找到 ${targets.length} 筆「儲值扣款」紀錄沒有面額資料。\n\n會用客戶當時的折扣率反推面額：\n面額 = 認列營收 ÷ 折扣率\n\n範例（前 5 筆）：\n`;
+  for(let i=0;i<Math.min(5,targets.length);i++){
+    const s=targets[i];
+    const owner=(s.depositOwner||s.customer||'').trim();
+    // 找該客戶在 s.date 之前最近一次儲值的折扣率
+    const rate=findHistoricalDiscountRate(owner,s.date);
+    const facade=Math.round(toN(s.amount)/rate);
+    preview+=`• ${s.date} ${s.item} ${owner}：認列 $${fmt(s.amount)} ÷ ${(rate*10).toFixed(1)}折 = 面額 $${fmt(facade)}\n`;
+  }
+  preview+=`\n確認執行？`;
+  if(!confirm(preview))return;
+  let fixed=0;
+  for(const s of targets){
+    const owner=(s.depositOwner||s.customer||'').trim();
+    const rate=findHistoricalDiscountRate(owner,s.date);
+    const facade=Math.round(toN(s.amount)/rate);
+    try{
+      await setSub('sales',s.id,{...s,depositFaceAmount:facade});
+      fixed++;
+    }catch(e){console.warn('修復失敗:',s.id,e);}
+  }
+  alert(`✅ 完成！修復 ${fixed} 筆儲值扣款紀錄的面額`);
+};
+
+// 找客戶在指定日期「之前或當天」最近一次儲值的折扣率
+function findHistoricalDiscountRate(custName,saleDate){
+  if(!custName)return 1;
+  const group=getSharedGroup(custName).map(n=>(n||'').trim());
+  const deposits=(S.data.deposits||[])
+    .filter(d=>group.includes((d.customer||'').trim()))
+    .filter(d=>(d.date||'')<=saleDate)
+    .filter(d=>toN(d.actualReceived)>0&&toN(d.amount)>0)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(deposits.length===0)return 1;
+  const rate=toN(deposits[0].actualReceived)/toN(deposits[0].amount);
+  return rate>0&&rate<=1?rate:1;
+}
 
 // 刪除「未建檔」客戶（同時刪除所有相關銷售與儲值紀錄）
 window.delGhostCustomer=async(name)=>{
