@@ -326,6 +326,10 @@ function render(){
   if(S.auth&&S.sync==='idle'&&auth.currentUser){
     startSync();
   }
+  // 進入銷售開單頁時，自動初始化購物車顯示
+  if(S.auth&&S.page==='order'&&typeof renderCart==='function'){
+    setTimeout(renderCart,0);
+  }
 }
 
 function loginHTML(){return`
@@ -1351,15 +1355,28 @@ function pgOrder(){
       <div class="card-bd">
         <div class="fg">
           <div class="fgrp"><label>日期</label><input type="date" id="m_pd0" value="${today()}"></div>
-          <div class="fgrp"><label>產品</label>
-            <select id="m_pd1">
-              <option value="">-- 選擇產品 --</option>
-              ${products.map(p=>{const inv=getInv(p.id);return`<option value="${p.id}" data-price="${p.price}" data-qty="${inv.qty}">${p.name}（庫存:${inv.qty}）$${fmt(p.price)}</option>`;}).join('')}
-            </select>
+        </div>
+
+        <div style="background:var(--goldL);padding:14px;border-radius:10px;margin:14px 0;border-left:3px solid var(--gold);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-weight:700;color:var(--goldDk);">🛒 購物車（可加多項商品）</span>
+            <span class="tm">商品總額：<b id="m_pd_total" style="color:var(--gold);font-size:16px;">$0</b></span>
           </div>
-          <div class="fgrp"><label>數量</label><input type="number" id="m_pd2" placeholder="1" value="1" min="1" onchange="calcPrdTotal()"></div>
-          <div class="fgrp"><label>單價</label><input type="number" id="m_pd3" placeholder="0" onchange="calcPrdTotal()"></div>
-          <div class="fgrp"><label>小計</label><input type="number" id="m_pd4" placeholder="0" readonly style="background:var(--bg2);"></div>
+          <div id="m_pd_cart" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
+            <!-- 購物車項目會顯示在這裡 -->
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="m_pd_pick" style="flex:1;min-width:200px;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;">
+              <option value="">+ 從保養品清單加入...</option>
+              ${products.filter(p=>p.category==='保養品販售').map(p=>{const inv=getInv(p.id);return`<option value="${p.id}" data-price="${p.price}" data-name="${p.name}" data-qty="${inv.qty}">${p.name}（庫存 ${inv.qty}）$${fmt(p.price)}</option>`;}).join('')}
+            </select>
+            <button class="btn btn-s btn-sm" onclick="addProductToCart()">＋ 加入購物車</button>
+            <button class="btn btn-y btn-sm" onclick="addCustomProductRow()">✏️ 新增自訂產品</button>
+          </div>
+          <div class="tm" style="font-size:11px;margin-top:8px;">💡 下拉只顯示「保養品販售」類別的商品。臨時/特殊商品用「新增自訂產品」直接輸入名稱與價格</div>
+        </div>
+
+        <div class="fg">
           <div class="fgrp"><label>細項備註</label><input type="text" id="m_pdNote" placeholder="選填"></div>
           <div class="fgrp"><label>客戶</label>
             <select id="m_pd5" onchange="updateBalanceHint('pd')">
@@ -1381,8 +1398,8 @@ function pgOrder(){
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveOrder('product',false)">✓ 確認並關閉</button>
-          <button class="btn btn-y" style="flex:1;min-width:140px;" onclick="saveOrder('product',true)">＋ 確認並再輸入一筆</button>
+          <button class="btn btn-p" style="flex:1;min-width:140px;" onclick="saveCartOrder(false)">✓ 結帳並關閉</button>
+          <button class="btn btn-y" style="flex:1;min-width:140px;" onclick="saveCartOrder(true)">＋ 結帳並再開單</button>
         </div>
       </div>
     </div>
@@ -2373,13 +2390,10 @@ function bindEvents(){
   if(mbg){
     mbg.onclick=e=>{if(e.target===mbg)closeMod();};
   }
-  const pd1=$('m_pd1');
-  if(pd1)pd1.onchange=()=>{
-    const opt=pd1.options[pd1.selectedIndex];
-    const price=opt.dataset.price||0;
-    if($('m_pd3'))$('m_pd3').value=price;
-    calcPrdTotal();
-  };
+  // 購物車初始化（如果在銷售開單頁）
+  if($('m_pd_cart')){
+    renderCart();
+  }
 }
 
 window.openM=(t,x)=>{
@@ -2393,7 +2407,11 @@ window.openM=(t,x)=>{
   }
 };
 window.closeMod=()=>{S.modal=null;const bg=$('modal-bg');if(bg)bg.className='modal-bg';};
-window.setP=p=>{S.page=p;S.subTab=0;render();};
+window.setP=p=>{
+  // 離開銷售開單頁時清空購物車
+  if(S.page==='order'&&p!=='order')S.cart=[];
+  S.page=p;S.subTab=0;render();
+};
 window.setT=i=>{S.subTab=i;const c=$('pg-content');if(c)c.innerHTML=renderPage();};
 window.setMo=m=>{S.month=m;const c=$('pg-content');if(c)c.innerHTML=renderPage();};
 
@@ -2427,6 +2445,169 @@ window.updSale=async(id)=>{
 window.delSale=async id=>{if(!confirm('確認刪除？'))return;await delSub('sales',id);toast('已刪除');};
 
 // ── Order ──（連續輸入版）
+// ── 購物車（多項產品） ──
+S.cart=S.cart||[];
+
+window.addProductToCart=()=>{
+  const sel=$('m_pd_pick');
+  if(!sel||!sel.value)return;
+  const opt=sel.options[sel.selectedIndex];
+  const id=opt.value;
+  const name=opt.dataset.name||opt.text.split('（')[0];
+  const price=parseFloat(opt.dataset.price)||0;
+  // 檢查是否已加過 → 數量 +1
+  const existed=S.cart.find(it=>it.id===id&&!it.custom);
+  if(existed){existed.qty++;}
+  else{S.cart.push({id,name,price,qty:1,custom:false});}
+  sel.value='';
+  renderCart();
+};
+
+window.addCustomProductRow=()=>{
+  S.cart.push({id:'custom_'+Date.now(),name:'',price:0,qty:1,custom:true});
+  renderCart();
+};
+
+window.removeCartItem=(idx)=>{
+  S.cart.splice(idx,1);
+  renderCart();
+};
+
+window.updCartQty=(idx,delta)=>{
+  if(!S.cart[idx])return;
+  S.cart[idx].qty=Math.max(1,(S.cart[idx].qty||1)+delta);
+  renderCart();
+};
+
+window.updCartField=(idx,field,value)=>{
+  if(!S.cart[idx])return;
+  if(field==='price'||field==='qty')value=parseFloat(value)||0;
+  S.cart[idx][field]=value;
+  // 只更新總額，不重繪整個購物車（避免 input 失焦）
+  const total=S.cart.reduce((s,it)=>s+toN(it.price)*toN(it.qty),0);
+  if($('m_pd_total'))$('m_pd_total').textContent='$'+fmt(total);
+};
+
+function renderCart(){
+  const cart=$('m_pd_cart');
+  if(!cart)return;
+  if(S.cart.length===0){
+    cart.innerHTML='<div class="tm" style="text-align:center;padding:14px;">尚無商品，請從上方選擇或新增</div>';
+  }else{
+    cart.innerHTML=S.cart.map((it,i)=>{
+      const subtotal=toN(it.price)*toN(it.qty);
+      if(it.custom){
+        // 臨時產品 — 名稱與價格可編輯
+        return`<div style="display:flex;gap:6px;align-items:center;background:var(--card);padding:8px;border-radius:6px;border:1px dashed var(--gold);">
+          <span class="bdg gold" style="flex-shrink:0;">臨時</span>
+          <input type="text" placeholder="商品名稱" value="${it.name}" oninput="updCartField(${i},'name',this.value)" style="flex:2;min-width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+          <input type="number" placeholder="單價" value="${it.price||''}" oninput="updCartField(${i},'price',this.value)" style="flex:1;width:80px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+          <span style="white-space:nowrap;font-size:13px;">×</span>
+          <input type="number" value="${it.qty}" min="1" oninput="updCartField(${i},'qty',this.value)" style="width:50px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+          <span style="white-space:nowrap;font-weight:700;color:var(--gold);min-width:60px;text-align:right;">$${fmt(subtotal)}</span>
+          <button class="bdel" onclick="removeCartItem(${i})">×</button>
+        </div>`;
+      }else{
+        // 正式產品
+        return`<div style="display:flex;gap:6px;align-items:center;background:var(--card);padding:8px;border-radius:6px;">
+          <span style="flex:2;min-width:100px;font-weight:700;">${it.name}</span>
+          <input type="number" value="${it.price}" oninput="updCartField(${i},'price',this.value)" style="width:80px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;" title="可改單價">
+          <button class="btn btn-s btn-sm" onclick="updCartQty(${i},-1)" style="padding:2px 8px;">-</button>
+          <span style="min-width:24px;text-align:center;font-weight:700;">${it.qty}</span>
+          <button class="btn btn-p btn-sm" onclick="updCartQty(${i},1)" style="padding:2px 8px;">+</button>
+          <span style="white-space:nowrap;font-weight:700;color:var(--gold);min-width:60px;text-align:right;">$${fmt(subtotal)}</span>
+          <button class="bdel" onclick="removeCartItem(${i})">×</button>
+        </div>`;
+      }
+    }).join('');
+  }
+  // 更新總額
+  const total=S.cart.reduce((s,it)=>s+toN(it.price)*toN(it.qty),0);
+  if($('m_pd_total'))$('m_pd_total').textContent='$'+fmt(total);
+}
+
+// 購物車結帳
+window.saveCartOrder=async(continueInput)=>{
+  try{
+    if(S.cart.length===0){alert('購物車是空的，請先加入商品');return;}
+    // 過濾掉空商品
+    const items=S.cart.filter(it=>it.name&&toN(it.price)*toN(it.qty)>0);
+    if(items.length===0){alert('購物車內所有商品都還沒填寫名稱或價格');return;}
+    const date=$('m_pd0')?.value||today();
+    const totalAmount=items.reduce((s,it)=>s+toN(it.price)*toN(it.qty),0);
+    let customer=$('m_pd5')?.value||'';
+    if(customer==='__new__')customer=$('m_pd5_new')?.value?.trim()||'';
+    const payMethod=$('m_pd7')?.value||'';
+    let depositOwner='';
+    let depositFaceAmount=0;
+    let realRevenueRate=1;
+    if(payMethod==='儲值扣款'){
+      if(!customer){alert('儲值扣款必須選擇客戶');return;}
+      depositOwner=$('m_pd_owner')?.value||customer;
+      const bal=getCustomerBalance(depositOwner);
+      depositFaceAmount=totalAmount;
+      if(bal<depositFaceAmount){
+        const ownerLabel=depositOwner===customer?'此客戶':`${depositOwner}（共用儲值）`;
+        if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(depositFaceAmount)}\n\n是否仍要記錄？`))return;
+      }
+      realRevenueRate=getCustomerDiscountRate(depositOwner);
+    }
+    const d=new Date(date);
+    const note=$('m_pdNote')?.value||'';
+    const staff=$('m_pd6')?.value||'';
+    // 為每件商品建立一筆 sales 記錄
+    for(const it of items){
+      const subtotal=toN(it.price)*toN(it.qty);
+      const realRev=Math.round(subtotal*realRevenueRate);
+      const saleData={
+        date,type:'product',item:it.name,
+        subNote:note,
+        amount:realRev,
+        qty:it.qty,unitPrice:it.price,
+        payMethod,staff,customer,
+        month:d.getMonth()+1,year:d.getFullYear()
+      };
+      if(payMethod==='儲值扣款'&&depositOwner){
+        saleData.depositOwner=depositOwner;
+        saleData.depositFaceAmount=subtotal;
+      }
+      await addSub('sales',saleData);
+      // 扣庫存（只有正式產品）
+      if(!it.custom&&it.id){
+        const inv=getInv(it.id);
+        const newQty=Math.max(0,toN(inv.qty)-toN(it.qty));
+        const newInv=[...S.data.inventory.filter(i=>i.productId!==it.id),{productId:it.id,qty:newQty,minQty:inv.minQty||5}];
+        await saveMain({inventory:newInv});
+      }
+    }
+    // 自動建檔
+    if(customer&&!(S.data.customers||[]).find(c=>(c.name||'').trim()===customer)){
+      const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
+      await saveMain({customers});
+    }
+    const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值扣款）`:'';
+    const realTotal=Math.round(totalAmount*realRevenueRate);
+    const discountHint=payMethod==='儲值扣款'&&realTotal!==totalAmount?`扣儲值 $${fmt(totalAmount)} → 認列營收 $${fmt(realTotal)}`:`$${fmt(realTotal)}`;
+    toast(`✅ ${items.length} 件商品結帳完成 ${discountHint}${ownerHint}`);
+    // 清空購物車
+    S.cart=[];
+    if(continueInput){
+      ['m_pdNote'].forEach(id=>{if($(id))$(id).value='';});
+      if($('m_pd5'))$('m_pd5').value='';
+      if($('m_pd5_new')){$('m_pd5_new').value='';$('m_pd5_new').style.display='none';}
+      if($('m_pd_hint'))$('m_pd_hint').innerHTML='';
+      if($('m_pd_owner_wrap'))$('m_pd_owner_wrap').style.display='none';
+      renderCart();
+    }else{
+      const c=$('pg-content');if(c)c.innerHTML=renderPage();
+    }
+  }catch(err){
+    console.error('saveCartOrder 失敗:',err);
+    alert('結帳失敗：'+(err.message||err));
+  }
+};
+
+
 window.saveOrder=async(type,continueInput)=>{
   try{
     if(type==='service'){
