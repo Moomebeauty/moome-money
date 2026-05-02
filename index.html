@@ -1796,8 +1796,8 @@ function pgStaff(){
   <div class="card">
     <div class="card-hd"><span class="card-ttl">📊 老師抽成明細（每筆訂單）</span></div>
     <div class="tw"><table>
-      <thead><tr><th>日期</th><th>老師</th><th>項目</th><th>客戶</th><th>原價面額</th><th>實收</th><th>抽成率</th><th>抽成基準</th><th>抽成金額</th><th>公司吸收</th><th>公司淨收</th></tr></thead>
-      <tbody>${sales.length===0?`<tr><td colspan="11"><div class="empty"><p>本月尚無銷售紀錄</p></div></td></tr>`:
+      <thead><tr><th>日期</th><th>老師</th><th>項目</th><th>客戶</th><th>原價面額</th><th>實收</th><th>抽成率</th><th>抽成基準</th><th>抽成金額</th><th>公司吸收</th><th>公司淨收</th><th></th></tr></thead>
+      <tbody>${sales.length===0?`<tr><td colspan="12"><div class="empty"><p>本月尚無銷售紀錄</p></div></td></tr>`:
         sales.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(s=>{
           const f=getSaleFinancials(s);
           const baseLabel=f.base===f.faceAmount?'原價':'實收';
@@ -1813,6 +1813,7 @@ function pgStaff(){
             <td class="ag">$${fmt(f.commission)}</td>
             <td class="${f.absorbed>0?'an':''}">${f.absorbed>0?`-$${fmt(f.absorbed)}`:'-'}</td>
             <td class="${f.companyNet>=0?'ap':'an'}">$${fmt(f.companyNet)}</td>
+            <td><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯抽成">✏️</button></td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1988,7 +1989,15 @@ function pgSettings(){
     </div>
     <div class="card-bd">
       <div class="tm" style="margin-bottom:10px;">如果客戶建檔後仍顯示「未建檔」，或共用儲值勾選沒效果，多半是名稱有隱形空白導致比對失敗。點下方按鈕可一鍵清理：</div>
-      <button class="btn btn-y" onclick="repairCustomerNames()">🔧 清理客戶/銷售/儲值的名稱空白</button>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <button class="btn btn-y" onclick="repairCustomerNames()">🔧 清理客戶/銷售/儲值的名稱空白</button>
+        </div>
+        <div>
+          <button class="btn btn-p" onclick="openM('batchSetCommission')">👩‍💼 批次設定舊紀錄的老師抽成</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">為過去的銷售紀錄補上抽成設定（不會自動覆蓋已設定的）</div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="sg sg3">
@@ -2043,18 +2052,77 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveSale()">✓ 確認</button></div>`;}
 
-  if(m.t==='editSale'){const s=(S.data.sales||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✏️ 編輯收入</div>
+  if(m.t==='editSale'){const s=(S.data.sales||[]).find(x=>x.id===m.x)||{};
+    const curRate=s.commissionRate!==undefined?toN(s.commissionRate):DEFAULT_COMMISSION_RATE;
+    const curBase=s.commissionBase||'face';
+    const curFace=toN(s.depositFaceAmount)||toN(s.amount);
+    c=`<div class="mttl">✏️ 編輯銷售紀錄</div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_s0" value="${s.date||today()}"></div>
       <div class="fgrp"><label>類型</label><select id="m_s1"><option value="service"${s.type==='service'?' selected':''}>🌸 服務</option><option value="product"${s.type==='product'?' selected':''}>🧴 產品</option><option value="course"${s.type==='course'?' selected':''}>📚 課程</option></select></div>
       <div class="fgrp"><label>項目名稱</label><input type="text" id="m_s2" value="${s.item||''}"></div>
       <div class="fgrp"><label>細項備註</label><input type="text" id="m_sNote" value="${s.subNote||''}"></div>
-      <div class="fgrp"><label>金額</label><input type="number" id="m_s3" value="${s.amount||0}"></div>
+      <div class="fgrp"><label>原價面額</label><input type="number" id="m_sFace" value="${curFace}"><div class="tm" style="font-size:11px;">老師抽成的計算基礎（例：價目表 $2,080）</div></div>
+      <div class="fgrp"><label>認列營收（實際金額）</label><input type="number" id="m_s3" value="${s.amount||0}"><div class="tm" style="font-size:11px;">客戶實際買單（折扣後）</div></div>
       <div class="fgrp"><label>付款方式</label><select id="m_s4">${PAY.map(p=>`<option${p===s.payMethod?' selected':''}>${p}</option>`).join('')}</select></div>
       <div class="fgrp"><label>服務老師</label><select id="m_s5">${TEACHERS.map(u=>`<option${u===s.staff?' selected':''}>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>客戶</label><input type="text" id="m_s6" value="${s.customer||''}"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
+        <label style="color:var(--blu);">👩‍💼 老師抽成設定（可單筆調整）</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+          <span class="tm">抽成率</span>
+          <input type="number" id="m_sComm" value="${Math.round(curRate*100)}" min="0" max="100" step="5" style="width:70px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+          <span class="tm">%</span>
+          <span class="tm">　基準</span>
+          <select id="m_sCombase" style="padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+            <option value="face"${curBase==='face'?' selected':''}>原價面額（公司吸收折讓）</option>
+            <option value="real"${curBase==='real'?' selected':''}>認列營收（同步折扣）</option>
+          </select>
+        </div>
+        <div class="tm" style="font-size:11px;margin-top:6px;">💡 例：方宜敏美體 → 原價 $2,080、認列 $1,664（8折）、璇璇抽 60%×原價 = $1,248、公司收 $1,664-$1,248 = $416</div>
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updSale('${s.id}')">✓ 更新</button></div>`;}
+
+
+  if(m.t==='batchSetCommission'){
+    const allSales=S.data.sales||[];
+    const noComm=allSales.filter(s=>s.commissionRate===undefined);
+    c=`<div class="mttl">👩‍💼 批次設定老師抽成</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 為「過去尚未設定抽成」的銷售紀錄套用標準設定。<br>
+      已經個別設定過抽成的紀錄不會被覆蓋。
+    </div>
+    <div style="background:var(--bg2);padding:12px;border-radius:8px;margin-bottom:12px;">
+      <div style="font-size:14px;">
+        📊 全部銷售：<b>${allSales.length}</b> 筆<br>
+        📊 尚未設定抽成的紀錄：<b style="color:var(--gold);">${noComm.length}</b> 筆
+      </div>
+    </div>
+    ${noComm.length===0?'<div class="empty"><p>所有銷售紀錄都已設定抽成，無需批次處理</p></div>':`
+    <div class="fg fg2">
+      <div class="fgrp"><label>抽成率</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" id="m_bc_rate" value="60" min="0" max="100" step="5" style="width:80px;">
+          <span class="tm">%</span>
+        </div>
+      </div>
+      <div class="fgrp"><label>抽成基準</label>
+        <select id="m_bc_base">
+          <option value="face">原價面額（建議）</option>
+          <option value="real">認列營收（同步打折）</option>
+        </select>
+      </div>
+    </div>
+    <div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:12px;margin-top:10px;">
+      ⚠️ 注意：執行後會把「原價面額」設為等於「認列營收」（也就是預設沒有折讓）。<br>
+      若是儲值扣款的舊紀錄，請先個別到老師業績頁編輯該筆，填入正確的「原價面額」。
+    </div>`}
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      ${noComm.length>0?`<button class="btn btn-p" onclick="batchSetCommission()">✓ 套用到 ${noComm.length} 筆</button>`:''}
+    </div>`;
+  }
 
   if(m.t==='addExp'){c=`<div class="mttl">💸 新增支出</div>
     <div class="fg fg2">
@@ -2584,7 +2652,35 @@ window.updSale=async(id)=>{
   const date=$('m_s0')?.value,amount=parseFloat($('m_s3')?.value)||0;
   if(!date||!amount){alert('請填日期和金額');return;}
   const d=new Date(date);
-  await setSub('sales',id,{date,type:$('m_s1')?.value,item:$('m_s2')?.value||'',subNote:$('m_sNote')?.value||'',amount,payMethod:$('m_s4')?.value,staff:$('m_s5')?.value,customer:$('m_s6')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  const old=(S.data.sales||[]).find(x=>x.id===id)||{};
+  const face=parseFloat($('m_sFace')?.value)||amount;
+  const commPercent=parseFloat($('m_sComm')?.value);
+  const commissionRate=isNaN(commPercent)?DEFAULT_COMMISSION_RATE:commPercent/100;
+  const commissionBase=$('m_sCombase')?.value||'face';
+  const updated={
+    ...old,
+    date,
+    type:$('m_s1')?.value,
+    item:$('m_s2')?.value||'',
+    subNote:$('m_sNote')?.value||'',
+    amount,
+    payMethod:$('m_s4')?.value,
+    staff:$('m_s5')?.value,
+    customer:$('m_s6')?.value||'',
+    commissionRate,
+    commissionBase,
+    month:d.getMonth()+1,year:d.getFullYear()
+  };
+  // 只有當原價面額 > 認列營收時才存（代表有公司吸收折讓）
+  if(face>amount){
+    updated.depositFaceAmount=face;
+  }else if(face===amount){
+    // 相等代表沒有折讓，移除欄位
+    delete updated.depositFaceAmount;
+  }else{
+    updated.depositFaceAmount=face;
+  }
+  await setSub('sales',id,updated);
   toast('✅ 已更新');closeMod();
 };
 window.delSale=async id=>{if(!confirm('確認刪除？'))return;await delSub('sales',id);toast('已刪除');};
@@ -3331,6 +3427,30 @@ window.delCustomer=async(id)=>{
 };
 
 // ── 資料修復：清理所有客戶/銷售/儲值的名稱空白 ──
+window.batchSetCommission=async()=>{
+  try{
+    const rate=parseFloat($('m_bc_rate')?.value)/100;
+    const base=$('m_bc_base')?.value||'face';
+    if(isNaN(rate)||rate<0||rate>1){alert('抽成率必須在 0~100 之間');return;}
+    const targets=(S.data.sales||[]).filter(s=>s.commissionRate===undefined);
+    if(targets.length===0){alert('沒有需要設定的紀錄');return;}
+    if(!confirm(`確認為 ${targets.length} 筆紀錄套用：\n抽成率 ${Math.round(rate*100)}%\n基準：${base==='face'?'原價面額':'認列營收'}`))return;
+    let done=0;
+    for(const s of targets){
+      try{
+        const updated={...s,commissionRate:rate,commissionBase:base};
+        await setSub('sales',s.id,updated);
+        done++;
+      }catch(e){console.warn('更新失敗',s.id,e);}
+    }
+    toast(`✅ 已為 ${done} 筆紀錄套用抽成設定`);
+    closeMod();
+  }catch(err){
+    console.error('batchSetCommission 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
 window.repairCustomerNames=async()=>{
   if(!confirm('確認執行資料修復？\n\n會把所有客戶、銷售紀錄、儲值紀錄中的姓名空白清除，並合併重複的客戶。\n\n此操作不會刪除任何資料。'))return;
   let fixedCustomers=0,fixedSales=0,fixedDeposits=0,mergedDup=0;
