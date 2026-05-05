@@ -619,7 +619,7 @@ function pgOverview(){
   const exp=getExpTotal();
   const profit=rev-exp;
   const svc=getSvcTotal(),prd=getPrdTotal(),crs=getCrsTotal();
-  const lowStock=S.data.products.filter(p=>{const inv=getInv(p.id);return toN(inv.qty)<toN(inv.minQty||5);});
+  const lowStock=S.data.products.filter(p=>{const inv=getInv(p.id);return toN(inv.qty)<toN(inv.minQty||1);});
   const staffSales={};
   getSales().forEach(s=>{const u=s.staff||'未分配';staffSales[u]=(staffSales[u]||0)+toN(s.amount);});
   const pending=(S.data.courseStudents||[]).filter(s=>!s.paid&&s.month===S.month&&s.year===yr());
@@ -1691,9 +1691,9 @@ function pgInventory(){
   const cats=['全部',...PRODUCT_CATS];
   const curCat=cats[S.subTab]||'全部';
   const filtered=curCat==='全部'?prods:prods.filter(p=>p.category===curCat);
-  const lowCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)<toN(i.minQty||5);}).length;
+  const lowCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)<toN(i.minQty||1);}).length;
   const totalValue=prods.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0);
-  const okCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)>=toN(i.minQty||5);}).length;
+  const okCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)>=toN(i.minQty||1);}).length;
 
   // 「保養品販售」用廠商/系列分組顯示
   const useGrouped=curCat==='保養品販售';
@@ -1723,7 +1723,7 @@ function pgInventory(){
           <tbody>${g.items.map(p=>{
             const inv=getInv(p.id);
             const qty=toN(inv.qty);
-            const minQty=toN(inv.minQty||5);
+            const minQty=toN(inv.minQty||1);
             const avgCost=getAvgCost(p.id);
             const val=qty*avgCost;
             const margin=p.price>0?Math.round((p.price-avgCost)/p.price*100):0;
@@ -1787,7 +1787,7 @@ function pgInventory(){
         filtered.map(p=>{
           const inv=getInv(p.id);
           const qty=toN(inv.qty);
-          const minQty=toN(inv.minQty||5);
+          const minQty=toN(inv.minQty||1);
           const avgCost=getAvgCost(p.id);
           const val=qty*avgCost;
           const status=qty<=0?'<span class="tag tag-low">缺貨</span>':qty<minQty?'<span class="tag tag-warn">偏低</span>':'<span class="tag tag-ok">正常</span>';
@@ -2232,6 +2232,10 @@ function pgSettings(){
           <button class="btn btn-p" onclick="openM('batchSetCommission')">👩‍💼 批次設定舊紀錄的老師抽成</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">為過去的銷售紀錄補上抽成設定（不會自動覆蓋已設定的）</div>
         </div>
+        <div>
+          <button class="btn btn-pur" style="background:var(--pur);color:#fff;" onclick="openM('batchEditProducts')">🏷️ 批次修改產品分類/廠商/系列</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">一次性整理所有產品的「類別、廠商、系列」，讓庫存盤點分組更整齊</div>
+        </div>
       </div>
     </div>
   </div>
@@ -2359,6 +2363,56 @@ function renderModal(){
     </div>`;
   }
 
+  // ─── 批次編輯產品分類/廠商/系列 ───
+  if(m.t==='batchEditProducts'){
+    const prods=(S.data.products||[]).slice().sort((a,b)=>(a.category||'').localeCompare(b.category||'')||(a.name||'').localeCompare(b.name||''));
+    c=`<div class="mttl">🏷️ 批次修改產品分類/廠商/系列</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 一次整理所有產品的「類別、廠商、系列」，讓庫存盤點頁分組更整齊。<br>
+      ✏️ 直接修改下方欄位 → 點「✓ 全部儲存」<br>
+      📌 提醒：痘痘水/粉刺水這類「廠商來源不明的工作室自製品」可改類別為「做臉耗材」或「工作室耗材」
+    </div>
+    <div style="max-height:60vh;overflow-y:auto;border:1px solid var(--bdr);border-radius:8px;">
+      <table style="width:100%;font-size:13px;">
+        <thead style="background:var(--bg2);position:sticky;top:0;">
+          <tr>
+            <th style="text-align:left;padding:8px 10px;">產品名稱</th>
+            <th style="text-align:left;padding:8px 10px;width:120px;">類別</th>
+            <th style="text-align:left;padding:8px 10px;width:110px;">廠商</th>
+            <th style="text-align:left;padding:8px 10px;width:120px;">系列</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${prods.length===0?'<tr><td colspan="4" style="padding:30px;text-align:center;color:var(--mut);">尚無產品</td></tr>':
+            prods.map(p=>`<tr data-pid="${p.id}" style="border-top:1px solid var(--bdr);">
+              <td style="padding:6px 10px;"><b>${p.name||''}</b></td>
+              <td style="padding:6px 10px;">
+                <select class="bep_cat" style="width:100%;padding:4px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+                  ${PRODUCT_CATS.map(c=>`<option${c===p.category?' selected':''}>${c}</option>`).join('')}
+                </select>
+              </td>
+              <td style="padding:6px 10px;">
+                <select class="bep_sup" style="width:100%;padding:4px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;" onchange="this.nextElementSibling.style.display=this.value==='__custom__'?'block':'none';">
+                  <option value="">未指定</option>
+                  ${SUPPLIER_PRESETS.filter(s=>s!=='其他手動輸入廠商').map(s=>`<option${s===p.supplier?' selected':''}>${s}</option>`).join('')}
+                  <option value="__custom__"${(p.supplier&&!SUPPLIER_PRESETS.includes(p.supplier))?' selected':''}>自訂...</option>
+                </select>
+                <input type="text" class="bep_supC" placeholder="自訂" value="${p.supplier&&!SUPPLIER_PRESETS.includes(p.supplier)?p.supplier:''}" style="width:100%;margin-top:3px;padding:3px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;display:${p.supplier&&!SUPPLIER_PRESETS.includes(p.supplier)?'block':'none'};">
+              </td>
+              <td style="padding:6px 10px;">
+                <input type="text" class="bep_series" value="${p.series||''}" placeholder="選填" style="width:100%;padding:4px 6px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="saveBatchEditProducts()">✓ 全部儲存（${prods.length} 項）</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   if(m.t==='addExp'){c=`<div class="mttl">💸 新增支出</div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_e0" value="${today()}"></div>
@@ -2379,12 +2433,22 @@ function renderModal(){
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updExp('${e.id}')">✓ 更新</button></div>`;}
 
-  if(m.t==='addPurchase'){c=`<div class="mttl">📦 新增進貨（單筆）</div>
+  if(m.t==='addPurchase'){
+    const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.category||'').localeCompare(b.category||'')||(a.name||'').localeCompare(b.name||''));
+    c=`<div class="mttl">📦 新增進貨（單筆）</div>
     <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
-      💡 進貨成本自動套用「加權平均法」。例：原本 5 瓶 × $200，新進 10 瓶 × $150 → 新均價 = $166.67
+      💡 進貨成本自動套用「加權平均法」。例：原本 5 瓶 × $200，新進 10 瓶 × $150 → 新均價 = $166.67<br>
+      🌟 <b>建議先從下拉選現有產品</b>，避免重複建立同一個產品
     </div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${today()}"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;border-left:3px solid var(--gold);">
+        <label style="color:var(--goldDk);font-weight:700;">🔍 選擇現有產品（避免重複建立）</label>
+        <select id="m_pPick" onchange="onPurchaseProdSelect(this)" style="width:100%;margin-top:4px;">
+          <option value="">＋ 新增產品（手動輸入下方）</option>
+          ${allProds.map(p=>`<option value="${p.id}" data-cat="${p.category||''}" data-name="${p.name||''}" data-price="${p.price||0}" data-supplier="${p.supplier||''}">${p.name}（${p.category||''}）${p.supplier?' · '+p.supplier:''}</option>`).join('')}
+        </select>
+      </div>
       <div class="fgrp"><label>產品類別</label><select id="m_pCat">${PRODUCT_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="fgrp"><label>產品名稱</label><input type="text" id="m_p2" placeholder="如：玻尿酸精華液"></div>
       <div class="fgrp"><label>產品系列（選填）</label><input type="text" id="m_pSeries" placeholder="如：保濕系列"></div>
@@ -2400,7 +2464,8 @@ function renderModal(){
       <div class="fgrp" id="m_p6c_wrap" style="display:none;"><label>自訂廠商名稱</label><input type="text" id="m_p6c" placeholder="輸入廠商名稱"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_p7" placeholder="如：特價優惠、年中促銷"></div>
     </div>
-    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="savePurchase()">✓ 確認進貨</button></div>`;}
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="savePurchase()">✓ 確認進貨</button></div>`;
+  }
 
   if(m.t==='editPurchase'){const p=(S.data.purchases||[]).find(x=>x.id===m.x)||{};c=`<div class="mttl">✏️ 編輯進貨</div>
     <div class="fg fg2">
@@ -2484,7 +2549,7 @@ function renderModal(){
   if(m.t==='setInv'){const p=(S.data.products||[]).find(x=>x.id===m.x)||{};const inv=getInv(m.x);c=`<div class="mttl">🗂️ 設定庫存：${p.name}</div>
     <div class="fg">
       <div class="fgrp"><label>現有庫存數量</label><input type="number" id="m_i0" value="${inv.qty||0}"></div>
-      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_i1" value="${inv.minQty||5}"></div>
+      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_i1" value="${inv.minQty||1}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveInv('${m.x}')">✓ 儲存</button></div>`;}
 
@@ -2656,25 +2721,45 @@ function renderModal(){
     <div class="fg fg2">
       <div class="fgrp"><label>產品名稱</label><input type="text" id="m_pr0" placeholder="產品名稱"></div>
       <div class="fgrp"><label>類別</label><select id="m_pr1">${PRODUCT_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>廠商</label>
+        <select id="m_prSup">
+          ${SUPPLIER_PRESETS.filter(s=>s!=='其他手動輸入廠商').map(s=>`<option>${s}</option>`).join('')}
+          <option value="__custom__">＋ 自訂廠商</option>
+        </select>
+        <input type="text" id="m_prSupC" placeholder="自訂廠商名稱" style="margin-top:6px;display:none;">
+      </div>
+      <div class="fgrp"><label>產品系列</label><input type="text" id="m_prSeries" placeholder="如：保濕系列、抗老系列（選填）"></div>
       <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" placeholder="0"></div>
       <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" placeholder="0"></div>
       <div class="fgrp"><label>初始庫存</label><input type="number" id="m_pr4" placeholder="0"></div>
-      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="5" value="5"></div>
+      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="1" value="1"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註（選填）</label><input type="text" id="m_pr6" placeholder="如：適合敏感肌、規格 50ml"></div>
     </div>
-    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveProduct()">✓ 新增</button></div>`;}
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveProduct()">✓ 新增</button></div>`;
+    setTimeout(()=>{const s=$('m_prSup');if(s)s.onchange=()=>{$('m_prSupC').style.display=s.value==='__custom__'?'block':'none';};},50);
+  }
 
   if(m.t==='editProduct'){const pr=(S.data.products||[]).find(x=>x.id===m.x)||{};const inv=getInv(m.x);c=`<div class="mttl">✏️ 編輯產品</div>
     <div class="fg fg2">
       <div class="fgrp"><label>產品名稱</label><input type="text" id="m_pr0" value="${pr.name||''}"></div>
       <div class="fgrp"><label>類別</label><select id="m_pr1">${PRODUCT_CATS.map(cc=>`<option${cc===pr.category?' selected':''}>${cc}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>廠商</label>
+        <select id="m_prSup">
+          ${SUPPLIER_PRESETS.filter(s=>s!=='其他手動輸入廠商').map(s=>`<option${s===pr.supplier?' selected':''}>${s}</option>`).join('')}
+          <option value="__custom__"${(pr.supplier&&!SUPPLIER_PRESETS.includes(pr.supplier))?' selected':''}>＋ 自訂廠商</option>
+        </select>
+        <input type="text" id="m_prSupC" placeholder="自訂廠商名稱" value="${pr.supplier&&!SUPPLIER_PRESETS.includes(pr.supplier)?pr.supplier:''}" style="margin-top:6px;display:${pr.supplier&&!SUPPLIER_PRESETS.includes(pr.supplier)?'block':'none'};">
+      </div>
+      <div class="fgrp"><label>產品系列（如：保濕系列、抗老系列）</label><input type="text" id="m_prSeries" value="${pr.series||''}" placeholder="選填，可以分組顯示"></div>
       <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" value="${pr.price||0}"></div>
       <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" value="${pr.cost||0}"></div>
       <div class="fgrp"><label>現有庫存</label><input type="number" id="m_pr4" value="${inv.qty||0}"></div>
-      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" value="${inv.minQty||5}"></div>
+      <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" value="${inv.minQty||1}"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_pr6" value="${pr.note||''}"></div>
     </div>
-    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updProduct('${pr.id}')">✓ 更新</button></div>`;}
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updProduct('${pr.id}')">✓ 更新</button></div>`;
+    setTimeout(()=>{const s=$('m_prSup');if(s)s.onchange=()=>{$('m_prSupC').style.display=s.value==='__custom__'?'block':'none';};},50);
+  }
 
   if(m.t==='addSupplier'){c=`<div class="mttl">🏭 新增供應商</div>
     <div class="fg fg2">
@@ -2933,8 +3018,17 @@ function renderModal(){
 
 // 批次進貨單列 HTML
 function batchRowHTML(r,i,isGroup){
+  // 整理現有產品清單（依類別與名稱排序）
+  const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.category||'').localeCompare(b.category||'')||(a.name||'').localeCompare(b.name||''));
+  const productOptions=allProds.map(p=>`<option value="${p.id}"${r.productId===p.id?' selected':''} data-cat="${p.category||''}" data-name="${p.name||''}">${p.name}（${p.category||''}）</option>`).join('');
   if(isGroup){
     return`<div class="batch-row" data-idx="${i}">
+      <div class="fgrp" style="grid-column:1/-1"><label>選擇現有產品（避免重複建立）</label>
+        <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="width:100%;">
+          <option value="">＋ 新增此產品（手動輸入下方）</option>
+          ${productOptions}
+        </select>
+      </div>
       <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
       <div class="fgrp"><label>類別</label>
         <select class="bp_cat">
@@ -2948,6 +3042,12 @@ function batchRowHTML(r,i,isGroup){
     </div>`;
   }
   return`<div class="batch-row" data-idx="${i}">
+    <div class="fgrp" style="grid-column:1/-1"><label>選擇現有產品（避免重複建立）</label>
+      <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="width:100%;">
+        <option value="">＋ 新增此產品（手動輸入下方）</option>
+        ${productOptions}
+      </select>
+    </div>
     <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
     <div class="fgrp"><label>類別</label>
       <select class="bp_cat">
@@ -3186,7 +3286,7 @@ window.saveCartOrder=async(continueInput)=>{
       if(!it.custom&&it.id){
         const inv=getInv(it.id);
         const newQty=Math.max(0,toN(inv.qty)-toN(it.qty));
-        const newInv=[...S.data.inventory.filter(i=>i.productId!==it.id),{...inv,productId:it.id,qty:newQty,minQty:inv.minQty||5}];
+        const newInv=[...S.data.inventory.filter(i=>i.productId!==it.id),{...inv,productId:it.id,qty:newQty,minQty:inv.minQty||1}];
         await saveMain({inventory:newInv});
         // 自動建立出貨紀錄
         try{
@@ -3347,7 +3447,7 @@ window.saveOrder=async(type,continueInput)=>{
         const prod=(S.data.products||[]).find(p=>p.id===pid);
         const inv=getInv(pid);
         const newQty=Math.max(0,toN(inv.qty)-qty);
-        const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{...inv,productId:pid,qty:newQty,minQty:inv.minQty||5}];
+        const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{...inv,productId:pid,qty:newQty,minQty:inv.minQty||1}];
         await saveMain({inventory:newInv});
         // 自動建立出貨紀錄
         try{
@@ -3408,6 +3508,7 @@ window.delExp=async id=>{if(!confirm('確認刪除？'))return;await delSub('exp
 // ── Purchase 單筆 ──
 window.savePurchase=async()=>{
   const date=$('m_p0')?.value;
+  const pickedPid=$('m_pPick')?.value||'';
   const productName=$('m_p2')?.value?.trim();
   const category=$('m_pCat')?.value;
   const qty=parseFloat($('m_p3')?.value)||0;
@@ -3415,18 +3516,27 @@ window.savePurchase=async()=>{
   let totalCost=parseFloat($('m_p5')?.value)||qty*unitCost;
   const sellPrice=parseFloat($('m_pPrice')?.value)||0;
   const series=$('m_pSeries')?.value?.trim()||'';
-  if(!date||!qty||!productName){alert('請填日期、產品名稱和數量');return;}
+  if(!date||!qty){alert('請填日期和數量');return;}
+  if(!pickedPid&&!productName){alert('請選擇現有產品或填寫產品名稱');return;}
   const supSel=$('m_p6')?.value;
   const supplier=supSel==='其他手動輸入廠商'?($('m_p6c')?.value||'').trim():supSel;
-  // 自動建立或找到產品
-  let prod=(S.data.products||[]).find(p=>p.name===productName&&p.category===category);
+  // 優先：用 productId 直接找產品（避免名稱比對問題）
+  let prod=null;
+  if(pickedPid){
+    prod=(S.data.products||[]).find(p=>p.id===pickedPid);
+  }
+  // 次選：用名稱+類別比對（兩邊 trim 並去除空白避免重複建立）
+  if(!prod&&productName){
+    const tName=productName.trim().replace(/[\u3000\s]+/g,'');
+    prod=(S.data.products||[]).find(p=>(p.name||'').trim().replace(/[\u3000\s]+/g,'')===tName&&p.category===category);
+  }
   let pid;
   if(!prod){
     pid=uid();
-    const newProd={id:pid,name:productName,category,price:sellPrice,cost:unitCost,supplier,series};
+    const newProd={id:pid,name:productName.trim(),category,price:sellPrice,cost:unitCost,supplier,series};
     const prods=[...(S.data.products||[]),newProd];
-    // 新產品：avgCost = 進貨單價
-    const newInv=[...S.data.inventory,{productId:pid,qty,minQty:5,avgCost:unitCost,totalPurchaseCost:totalCost}];
+    // 新產品：avgCost = 進貨單價，最低庫存預設 1
+    const newInv=[...S.data.inventory,{productId:pid,qty,minQty:1,avgCost:unitCost,totalPurchaseCost:totalCost}];
     await saveMain({products:prods,inventory:newInv});
   }else{
     pid=prod.id;
@@ -3438,8 +3548,8 @@ window.savePurchase=async()=>{
     const newQty=oldQty+qty;
     const newTotalCost=toN(inv.totalPurchaseCost||0)+totalCost;
     const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),
-                  {productId:pid,qty:newQty,minQty:inv.minQty||5,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
-    // 順帶更新產品的 cost 為平均成本（顯示用）
+                  {productId:pid,qty:newQty,minQty:inv.minQty||1,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
+    // 順帶更新產品的 cost 為平均成本（顯示用）+ 補填空欄位
     const updProd={...prod,cost:newAvg};
     if(supplier&&!prod.supplier)updProd.supplier=supplier;
     if(series&&!prod.series)updProd.series=series;
@@ -3448,7 +3558,8 @@ window.savePurchase=async()=>{
     await saveMain({inventory:newInv,products:prods});
   }
   const d=new Date(date);
-  await addSub('purchases',{date,productId:pid,productName,category,qty,unitCost,totalCost,supplier,series,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  const recordName=prod?prod.name:productName.trim();
+  await addSub('purchases',{date,productId:pid,productName:recordName,category,qty,unitCost,totalCost,supplier,series,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   const finalAvg=getAvgCost(pid);
   toast(`✅ 進貨完成 ${qty} 個，平均成本更新為 $${fmt(finalAvg)}`);
   closeMod();
@@ -3652,6 +3763,55 @@ window.unpayPurchase=async(id)=>{
 };
 
 // ── Purchase 批次 ──
+// 單筆進貨：選擇現有產品 → 自動填入名稱/類別/廠商/售價
+window.onPurchaseProdSelect=(sel)=>{
+  if(!sel||!sel.value)return;
+  const opt=sel.selectedOptions?.[0];
+  if(!opt)return;
+  const prod=(S.data.products||[]).find(p=>p.id===sel.value);
+  if(!prod)return;
+  if($('m_p2'))$('m_p2').value=prod.name||'';
+  if($('m_pCat'))$('m_pCat').value=prod.category||PRODUCT_CATS[0];
+  if($('m_pSeries')&&prod.series)$('m_pSeries').value=prod.series;
+  if($('m_pPrice')&&prod.price)$('m_pPrice').value=prod.price;
+  if($('m_p6')&&prod.supplier){
+    const supplierExists=SUPPLIER_PRESETS.includes(prod.supplier);
+    if(supplierExists){
+      $('m_p6').value=prod.supplier;
+    }else{
+      $('m_p6').value='其他手動輸入廠商';
+      if($('m_p6c'))$('m_p6c').value=prod.supplier;
+      toggleCustomSupplier();
+    }
+  }
+};
+
+// 批次進貨：選擇現有產品 → 自動填入類別、售價、產品名稱
+window.onBatchProdSelect=(sel,idx)=>{
+  const row=sel.closest('.batch-row');
+  if(!row)return;
+  const pid=sel.value;
+  if(!pid){
+    // 清空產品 ID，但保留輸入內容讓使用者繼續輸入
+    return;
+  }
+  const prod=(S.data.products||[]).find(p=>p.id===pid);
+  if(!prod)return;
+  // 自動填入名稱
+  const nameInput=row.querySelector('.bp_name');
+  if(nameInput)nameInput.value=prod.name||'';
+  // 自動填類別
+  const catSel=row.querySelector('.bp_cat');
+  if(catSel)catSel.value=prod.category||PRODUCT_CATS[0];
+  // 自動填售價（以已存的 price 為主，若沒有就空著）
+  const priceInput=row.querySelector('.bp_price');
+  if(priceInput&&!priceInput.value)priceInput.value=prod.price||'';
+  // 把 productId 寫入 dataset 給儲存時使用
+  row.dataset.pid=pid;
+  // 整組模式才需要重算
+  if(S.modal&&S.modal.groupMode)recalcGroupCosts();
+};
+
 window.addBatchRow=()=>{
   if(!S.modal||S.modal.t!=='batchPurchase')return;
   collectBatchRows(); // 保存目前輸入
@@ -3669,6 +3829,7 @@ function collectBatchRows(){
   if(!S.modal||S.modal.t!=='batchPurchase')return;
   const rowEls=document.querySelectorAll('.batch-row');
   S.modal.rows=Array.from(rowEls).map(el=>({
+    productId:el.querySelector('.bp_prod')?.value||el.dataset.pid||'',
     name:el.querySelector('.bp_name')?.value||'',
     cat:el.querySelector('.bp_cat')?.value||PRODUCT_CATS[0],
     qty:el.querySelector('.bp_qty')?.value||'',
@@ -3752,8 +3913,8 @@ window.saveBatchPurchase=async()=>{
   const supSel=$('m_bpSup')?.value;
   const supplier=supSel==='其他手動輸入廠商'?($('m_bpSupC')?.value||'').trim():supSel;
   collectBatchRows();
-  const validRows=S.modal.rows.filter(r=>r.name&&toN(r.qty)>0);
-  if(validRows.length===0){alert('請至少填寫一筆有效資料（產品名稱與數量）');return;}
+  const validRows=S.modal.rows.filter(r=>(r.productId||r.name)&&toN(r.qty)>0);
+  if(validRows.length===0){alert('請至少填寫一筆有效資料（選擇現有產品或填寫名稱+數量）');return;}
   const isGroup=S.modal.groupMode||false;
   const groupTotal=parseFloat($('m_bpGroupTotal')?.value)||0;
   if(isGroup&&groupTotal<=0){alert('請填整組總成本');return;}
@@ -3765,13 +3926,22 @@ window.saveBatchPurchase=async()=>{
     const unitCost=toN(r.unit);
     const sellPrice=toN(r.price);
     const totalCost=qty*unitCost;
-    let prod=(S.data.products||[]).find(p=>p.name===r.name&&p.category===r.cat);
+    // 優先：用 productId 直接找產品（避免名稱比對問題）
+    let prod=null;
+    if(r.productId){
+      prod=(S.data.products||[]).find(p=>p.id===r.productId);
+    }
+    // 次選：用名稱+類別比對（兩邊 trim 並去除空白避免重複建立）
+    if(!prod&&r.name){
+      const tName=r.name.trim().replace(/[\u3000\s]+/g,'');
+      prod=(S.data.products||[]).find(p=>(p.name||'').trim().replace(/[\u3000\s]+/g,'')===tName&&p.category===r.cat);
+    }
     let pid;
     if(!prod){
       pid=uid();
-      const newProd={id:pid,name:r.name,category:r.cat,price:sellPrice,cost:unitCost,supplier};
+      const newProd={id:pid,name:r.name.trim(),category:r.cat,price:sellPrice,cost:unitCost,supplier};
       S.data.products=[...(S.data.products||[]),newProd];
-      S.data.inventory=[...S.data.inventory,{productId:pid,qty,minQty:5,avgCost:unitCost,totalPurchaseCost:totalCost}];
+      S.data.inventory=[...S.data.inventory,{productId:pid,qty,minQty:1,avgCost:unitCost,totalPurchaseCost:totalCost}];
     }else{
       pid=prod.id;
       const inv=getInv(pid);
@@ -3780,11 +3950,16 @@ window.saveBatchPurchase=async()=>{
       const newAvg=calculateNewAvgCost(oldQty,oldAvg,qty,unitCost);
       const newTotalCost=toN(inv.totalPurchaseCost||0)+totalCost;
       S.data.inventory=[...S.data.inventory.filter(i=>i.productId!==pid),
-                       {productId:pid,qty:oldQty+qty,minQty:inv.minQty||5,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
-      // 更新產品平均成本
-      S.data.products=(S.data.products||[]).map(p=>p.id===pid?{...p,cost:newAvg,supplier:p.supplier||supplier}:p);
+                       {productId:pid,qty:oldQty+qty,minQty:inv.minQty||1,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
+      // 更新產品平均成本（若有變化）+ 補填廠商/售價（若空著）
+      S.data.products=(S.data.products||[]).map(p=>p.id===pid?{
+        ...p,
+        cost:newAvg,
+        supplier:p.supplier||supplier,
+        price:p.price||sellPrice
+      }:p);
     }
-    await addSub('purchases',{date,productId:pid,productName:r.name,category:r.cat,qty,unitCost,totalCost,supplier,note:groupNote,month:d.getMonth()+1,year:d.getFullYear()});
+    await addSub('purchases',{date,productId:pid,productName:r.name.trim()||(prod?.name||''),category:r.cat,qty,unitCost,totalCost,supplier,note:groupNote,month:d.getMonth()+1,year:d.getFullYear()});
     count++;
   }
   await saveMain({products:S.data.products,inventory:S.data.inventory});
@@ -3796,11 +3971,11 @@ window.saveBatchPurchase=async()=>{
 window.adjInv=async(pid,delta)=>{
   const inv=getInv(pid);
   const newQty=Math.max(0,toN(inv.qty)+delta);
-  const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||5}];
+  const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty:newQty,minQty:inv.minQty||1}];
   await saveMain({inventory:newInv});
 };
 window.saveInv=async(pid)=>{
-  const qty=parseFloat($('m_i0')?.value)||0,minQty=parseFloat($('m_i1')?.value)||5;
+  const qty=parseFloat($('m_i0')?.value)||0,minQty=parseFloat($('m_i1')?.value)||1;
   const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty}];
   await saveMain({inventory:newInv});toast('✅ 庫存已更新');closeMod();
 };
@@ -3810,7 +3985,7 @@ window.saveStockCheck=async()=>{
     const el=$('ck_'+p.id);
     const inv=getInv(p.id);
     const qty=el&&el.value!==''?parseFloat(el.value):inv.qty;
-    return{productId:p.id,qty,minQty:inv.minQty||5};
+    return{productId:p.id,qty,minQty:inv.minQty||1};
   });
   await saveMain({inventory:newInv});toast('✅ 盤點完成');closeMod();
 };
@@ -3885,17 +4060,42 @@ window.saveProduct=async()=>{
   const name=$('m_pr0')?.value?.trim();if(!name){alert('請填產品名稱');return;}
   const pid=uid();
   const qty=parseFloat($('m_pr4')?.value)||0;
-  const minQty=parseFloat($('m_pr5')?.value)||5;
-  const prods=[...(S.data.products||[]),{id:pid,name,category:$('m_pr1')?.value,price:parseFloat($('m_pr2')?.value)||0,cost:parseFloat($('m_pr3')?.value)||0,note:$('m_pr6')?.value||''}];
-  const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty}];
+  const minQty=parseFloat($('m_pr5')?.value)||1;
+  // 廠商：選擇 __custom__ 時用自訂值
+  const supSel=$('m_prSup')?.value;
+  const supplier=supSel==='__custom__'?($('m_prSupC')?.value||'').trim():(supSel||'');
+  const series=$('m_prSeries')?.value?.trim()||'';
+  const cost=parseFloat($('m_pr3')?.value)||0;
+  const prods=[...(S.data.products||[]),{
+    id:pid,name,
+    category:$('m_pr1')?.value,
+    price:parseFloat($('m_pr2')?.value)||0,
+    cost,
+    supplier,series,
+    note:$('m_pr6')?.value||''
+  }];
+  const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty,avgCost:cost}];
   await saveMain({products:prods,inventory:newInv});toast('✅ 產品已新增');closeMod();
 };
 window.updProduct=async(id)=>{
   const name=$('m_pr0')?.value?.trim();if(!name){alert('請填產品名稱');return;}
   const qty=parseFloat($('m_pr4')?.value)||0;
-  const minQty=parseFloat($('m_pr5')?.value)||5;
-  const prods=(S.data.products||[]).map(p=>p.id===id?{...p,name,category:$('m_pr1')?.value,price:parseFloat($('m_pr2')?.value)||0,cost:parseFloat($('m_pr3')?.value)||0,note:$('m_pr6')?.value||''}:p);
-  const newInv=[...S.data.inventory.filter(i=>i.productId!==id),{productId:id,qty,minQty}];
+  const minQty=parseFloat($('m_pr5')?.value)||1;
+  // 廠商：選擇 __custom__ 時用自訂值
+  const supSel=$('m_prSup')?.value;
+  const supplier=supSel==='__custom__'?($('m_prSupC')?.value||'').trim():(supSel||'');
+  const series=$('m_prSeries')?.value?.trim()||'';
+  const prods=(S.data.products||[]).map(p=>p.id===id?{
+    ...p,name,
+    category:$('m_pr1')?.value,
+    price:parseFloat($('m_pr2')?.value)||0,
+    cost:parseFloat($('m_pr3')?.value)||0,
+    supplier,series,
+    note:$('m_pr6')?.value||''
+  }:p);
+  // 保留原有 avgCost / totalPurchaseCost
+  const oldInv=getInv(id);
+  const newInv=[...S.data.inventory.filter(i=>i.productId!==id),{...oldInv,productId:id,qty,minQty}];
   await saveMain({products:prods,inventory:newInv});toast('✅ 產品已更新');closeMod();
 };
 window.delProduct=async id=>{
@@ -4055,6 +4255,38 @@ window.delCustomer=async(id)=>{
   if(!confirm('確認刪除這位客戶？\n（消費紀錄與儲值紀錄不會被刪除）'))return;
   await saveMain({customers:(S.data.customers||[]).filter(c=>c.id!==id)});
   toast('已刪除');
+};
+
+// ── 批次編輯產品分類/廠商/系列 ──
+window.saveBatchEditProducts=async()=>{
+  try{
+    const rows=document.querySelectorAll('tr[data-pid]');
+    if(rows.length===0){alert('沒有可儲存的資料');return;}
+    let updated=0;
+    const newProds=(S.data.products||[]).map(p=>p);  // copy
+    rows.forEach(row=>{
+      const pid=row.dataset.pid;
+      const cat=row.querySelector('.bep_cat')?.value;
+      const supSel=row.querySelector('.bep_sup')?.value;
+      const supC=row.querySelector('.bep_supC')?.value?.trim()||'';
+      const series=row.querySelector('.bep_series')?.value?.trim()||'';
+      const supplier=supSel==='__custom__'?supC:(supSel||'');
+      const idx=newProds.findIndex(p=>p.id===pid);
+      if(idx<0)return;
+      const old=newProds[idx];
+      if(old.category!==cat||old.supplier!==supplier||old.series!==series){
+        newProds[idx]={...old,category:cat,supplier,series};
+        updated++;
+      }
+    });
+    if(updated===0){toast('沒有變更');closeMod();return;}
+    await saveMain({products:newProds});
+    toast(`✅ 已更新 ${updated} 項產品`);
+    closeMod();
+  }catch(err){
+    console.error('saveBatchEditProducts 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
 };
 
 // ── 資料修復：清理所有客戶/銷售/儲值的名稱空白 ──
@@ -4557,7 +4789,7 @@ window.exportXLSX=()=>{
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(salesRows),'銷售記錄');
   const expRows=[['日期','類別','金額','付款','備註'],...S.data.expenses.map(e=>[e.date,e.category,e.amount,e.payMethod,e.note])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(expRows),'支出記錄');
-  const invRows=[['產品名稱','類別','現有庫存','最低庫存','售價','成本','庫存價值'],...(S.data.products||[]).map(p=>{const i=getInv(p.id);return[p.name,p.category,i.qty,i.minQty||5,p.price,p.cost||0,toN(i.qty)*toN(p.cost||0)];})];
+  const invRows=[['產品名稱','類別','現有庫存','最低庫存','售價','成本','庫存價值'],...(S.data.products||[]).map(p=>{const i=getInv(p.id);return[p.name,p.category,i.qty,i.minQty||1,p.price,p.cost||0,toN(i.qty)*toN(p.cost||0)];})];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(invRows),'庫存清單');
   const purRows=[['日期','產品','類別','數量','單價','總成本','供應商'],...S.data.purchases.map(p=>[p.date,p.productName,p.category,p.qty,p.unitCost,p.totalCost,p.supplier])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(purRows),'進貨記錄');
