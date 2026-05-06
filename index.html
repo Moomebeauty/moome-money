@@ -269,6 +269,7 @@ function startSync(){
     S.data.inventory=d.inventory||[];
     S.data.settings=d.settings||{};
     S.data.assets=d.assets||[];
+    S.data.equipment=d.equipment||[];  // 設備（每月折舊）
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
     if(Array.isArray(d.customers)&&d.customers.length>0){
