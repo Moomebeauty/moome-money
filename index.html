@@ -1633,21 +1633,25 @@ function pgExpenses(){
 function pgPurchase(){
   const purchases=S.data.purchases.filter(p=>p.month===S.month&&p.year===yr()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total=purchases.reduce((s,p)=>s+toN(p.totalCost),0);
-  const paidTotal=purchases.filter(p=>p.paidToExpense).reduce((s,p)=>s+toN(p.totalCost),0);
+  // 兼容舊欄位（paidToExpense）和新欄位（paid）
+  const isPaid=(p)=>p.paid||p.paidToExpense;
+  const paidTotal=purchases.filter(isPaid).reduce((s,p)=>s+toN(p.totalCost),0);
   const unpaidTotal=total-paidTotal;
   return`
   <div class="pg-ttl">📦 進貨管理</div>
-  <div class="pg-sub">支援批次輸入，可手動點「✓ 已付款」同步到支出記帳</div>
+  <div class="pg-sub">進貨自動更新庫存與加權平均成本，已付款項自動寫入支出與現金流</div>
   ${moSel()}
   <div class="sg sg4">
     <div class="sc gold"><div class="sl">本月進貨筆數</div><div class="sv gold">${purchases.length}</div></div>
     <div class="sc red"><div class="sl">本月進貨成本</div><div class="sv red sm">$${fmt(total)}</div></div>
     <div class="sc grn"><div class="sl">已付款</div><div class="sv grn sm">$${fmt(paidTotal)}</div></div>
-    <div class="sc"><div class="sl">未付款</div><div class="sv sm" style="color:var(--gold);">$${fmt(unpaidTotal)}</div></div>
+    <div class="sc"><div class="sl">廠商欠款（未付）</div><div class="sv sm" style="color:var(--gold);">$${fmt(unpaidTotal)}</div></div>
   </div>
 
   <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">
-    💡 進貨記錄不會自動寫入「支出記帳」。等實際付款（信用卡扣款 / 轉帳）後，再點該筆進貨的「<b>✓ 已付款</b>」按鈕，才會寫入支出。
+    💡 <b>進貨自動連動：</b><br>
+    ✓ 已付款進貨：自動更新庫存 + 加權平均成本 + 寫入支出記帳 + 寫入現金流水帳<br>
+    ⏳ 未付款進貨（賒帳）：自動更新庫存 + 加權平均成本，但暫不記支出。月底結算後點「✓ 標記已付款」即可
   </div>
 
   <div class="sec-hd">
@@ -1662,7 +1666,9 @@ function pgPurchase(){
     <div class="tw"><table>
       <thead><tr><th>日期</th><th>產品</th><th>類別</th><th>數量</th><th>單價</th><th>總成本</th><th>供應商</th><th>備註</th><th>付款狀態</th><th></th></tr></thead>
       <tbody>${purchases.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>本月尚無進貨記錄</p></div></td></tr>`:
-        purchases.map(p=>`<tr style="${p.paidToExpense?'background:var(--grnL);':''}">
+        purchases.map(p=>{
+          const paid=isPaid(p);
+          return`<tr style="${paid?'background:var(--grnL);':''}">
           <td>${p.date||''}</td>
           <td><b>${p.productName||''}</b></td>
           <td><span class="bdg gold">${p.category||''}</span></td>
@@ -1671,15 +1677,15 @@ function pgPurchase(){
           <td class="an">$${fmt(p.totalCost)}</td>
           <td class="tm">${p.supplier||''}</td>
           <td class="tm">${p.note||''}</td>
-          <td>${p.paidToExpense?
-            `<div><span class="pill grn">✅ 已付款</span><div class="tm" style="margin-top:4px;font-size:11px;">${p.paidDate||''} ${p.paidMethod||''}</div></div>`
-            :`<button class="btn btn-g btn-sm" onclick="openM('payPurchase','${p.id}')">✓ 標記已付款</button>`}</td>
+          <td>${paid?
+            `<div><span class="pill grn">✅ 已付款</span><div class="tm" style="margin-top:4px;font-size:11px;">${p.paidDate||''} ${p.payMethod||p.paidMethod||''}</div></div>`
+            :`<button class="btn btn-g btn-sm" onclick="payPurchase('${p.id}')">✓ 標記已付款</button>`}</td>
           <td style="white-space:nowrap;">
-            ${p.paidToExpense?`<button class="btn btn-s btn-sm" onclick="unpayPurchase('${p.id}')">取消付款</button>`:''}
+            ${paid?`<button class="btn btn-s btn-sm" onclick="unpayPurchase('${p.id}')">取消付款</button>`:''}
             <button class="bdel" style="color:#aaa;" onclick="openM('editPurchase','${p.id}')">✏️</button>
             <button class="bdel" onclick="delPurchase('${p.id}')">×</button>
           </td>
-        </tr>`).join('')}
+        </tr>`;}).join('')}
       </tbody>
     </table></div>
   </div>`;
@@ -1695,11 +1701,9 @@ function pgInventory(){
   const totalValue=prods.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0);
   const okCount=prods.filter(p=>{const i=getInv(p.id);return toN(i.qty)>=toN(i.minQty||1);}).length;
 
-  // 「保養品販售」用廠商/系列分組顯示
-  const useGrouped=curCat==='保養品販售';
+  // 所有分頁都依「廠商→系列→名稱」分組
   let groupedHTML='';
-  if(useGrouped&&filtered.length>0){
-    // 分組：依 supplier > series 分組
+  if(filtered.length>0){
     const groups={};
     filtered.forEach(p=>{
       const sup=p.supplier||'未指定廠商';
@@ -1708,18 +1712,26 @@ function pgInventory(){
       if(!groups[k])groups[k]={supplier:sup,series:ser,items:[]};
       groups[k].items.push(p);
     });
+    // 每組內依名稱排序
+    Object.values(groups).forEach(g=>{
+      g.items.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    });
     groupedHTML=Object.entries(groups).sort((a,b)=>{
-      if(a[1].supplier!==b[1].supplier)return a[1].supplier.localeCompare(b[1].supplier);
-      return a[1].series.localeCompare(b[1].series);
+      // 「未指定廠商」排到最後
+      if(a[1].supplier==='未指定廠商'&&b[1].supplier!=='未指定廠商')return 1;
+      if(b[1].supplier==='未指定廠商'&&a[1].supplier!=='未指定廠商')return -1;
+      if(a[1].supplier!==b[1].supplier)return a[1].supplier.localeCompare(b[1].supplier,'zh-Hant');
+      return a[1].series.localeCompare(b[1].series,'zh-Hant');
     }).map(([k,g])=>{
       const groupValue=g.items.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0);
+      const groupBg=g.supplier==='未指定廠商'?'var(--bg2)':'linear-gradient(90deg,var(--goldL),transparent)';
       return`<div class="card" style="margin-bottom:14px;">
-        <div class="card-hd" style="background:linear-gradient(90deg,var(--goldL),transparent);">
+        <div class="card-hd" style="background:${groupBg};">
           <span class="card-ttl">🏷️ ${g.supplier}　·　${g.series}</span>
           <span class="bdg gold">${g.items.length} 項　$${fmt(groupValue)}</span>
         </div>
         <div class="tw"><table>
-          <thead><tr><th>產品</th><th>售價</th><th>平均成本</th><th>毛利率</th><th>庫存</th><th>低量警示</th><th>狀態</th><th>庫存價值</th><th>調整</th><th></th></tr></thead>
+          <thead><tr><th>產品</th>${curCat==='全部'?'<th>類別</th>':''}<th>售價</th><th>平均成本</th><th>毛利率</th><th>庫存</th><th>低量</th><th>狀態</th><th>庫存價值</th><th>調整</th><th></th></tr></thead>
           <tbody>${g.items.map(p=>{
             const inv=getInv(p.id);
             const qty=toN(inv.qty);
@@ -1730,6 +1742,7 @@ function pgInventory(){
             const status=qty<=0?'<span class="tag tag-low">缺貨</span>':qty<minQty?'<span class="tag tag-warn">偏低</span>':'<span class="tag tag-ok">正常</span>';
             return`<tr style="${qty<minQty?'background:var(--redL);':''}">
               <td><b>${p.name}</b>${p.note?`<div class="tm">${p.note}</div>`:''}</td>
+              ${curCat==='全部'?`<td><span class="bdg gold">${p.category||''}</span></td>`:''}
               <td><b style="color:var(--rose);">$${fmt(p.price||0)}</b></td>
               <td class="tm">$${fmt(avgCost)}</td>
               <td><span class="${margin>=50?'ap':margin>=30?'ag':'an'}">${margin}%</span></td>
@@ -1745,8 +1758,8 @@ function pgInventory(){
                 </div>
               </td>
               <td style="white-space:nowrap;">
-                <button class="bdel" style="color:#aaa;" onclick="openM('editProduct','${p.id}')">✏️</button>
-                <button class="bdel" onclick="delProduct('${p.id}')">×</button>
+                <button class="bdel" style="color:#aaa;font-size:18px;padding:4px 8px;" onclick="openM('editProduct','${p.id}')" title="編輯產品">✏️</button>
+                <button class="bdel" onclick="delProduct('${p.id}')" title="刪除">×</button>
               </td>
             </tr>`;
           }).join('')}</tbody>
@@ -1757,7 +1770,7 @@ function pgInventory(){
 
   return`
   <div class="pg-ttl">🗂️ 庫存盤點</div>
-  <div class="pg-sub">點上方分頁切換不同類別。「保養品販售」會依廠商系列分組</div>
+  <div class="pg-sub">產品依「廠商 → 系列 → 名稱」自動分組排序，方便快速查找與盤點</div>
   <div class="sg sg4">
     <div class="sc"><div class="sl">產品總數</div><div class="sv">${prods.length}</div></div>
     <div class="sc red"><div class="sl">低庫存警示</div><div class="sv red">${lowCount}</div></div>
@@ -1771,62 +1784,20 @@ function pgInventory(){
   }).join('')}</div>
 
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-    <button class="btn btn-y btn-sm" onclick="openM('stockCheck')">📋 手動盤點</button>
+    <button class="btn btn-y btn-sm" onclick="openM('monthStockCheck')">📋 月度盤點</button>
     <button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增產品</button>
     <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="setP('stockout')">📤 出貨耗用</button>
     <button class="btn btn-s btn-sm" onclick="setP('purchase')">📦 新增進貨</button>
   </div>
 
-  ${useGrouped?groupedHTML:`<div class="card">
-    <div class="card-hd">
-      <span class="card-ttl">${curCat==='全部'?'所有產品':curCat}　共 ${filtered.length} 項</span>
-    </div>
-    <div class="tw"><table>
-      <thead><tr><th>產品</th><th>類別</th><th>售價</th><th>平均成本</th><th>庫存</th><th>低量</th><th>狀態</th><th>庫存價值</th><th>調整</th><th></th></tr></thead>
-      <tbody>${filtered.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>${curCat==='全部'?'尚未建立產品':'此類別尚無產品'}</p></div></td></tr>`:
-        filtered.map(p=>{
-          const inv=getInv(p.id);
-          const qty=toN(inv.qty);
-          const minQty=toN(inv.minQty||1);
-          const avgCost=getAvgCost(p.id);
-          const val=qty*avgCost;
-          const status=qty<=0?'<span class="tag tag-low">缺貨</span>':qty<minQty?'<span class="tag tag-warn">偏低</span>':'<span class="tag tag-ok">正常</span>';
-          return`<tr style="${qty<minQty?'background:var(--redL);':''}">
-            <td><b>${p.name}</b>${p.note?`<div class="tm">${p.note}</div>`:''}</td>
-            <td><span class="bdg gold">${p.category||''}</span></td>
-            <td><b style="color:var(--rose);font-size:16px;">$${fmt(p.price||0)}</b></td>
-            <td class="tm">$${fmt(avgCost)}</td>
-            <td style="font-size:18px;font-weight:700;color:${qty<minQty?'var(--red)':'var(--grn)'};">${qty}</td>
-            <td class="tm">${minQty}</td>
-            <td>${status}</td>
-            <td class="ag">$${fmt(val)}</td>
-            <td>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <button class="btn btn-s btn-sm" onclick="adjInv('${p.id}',-1)">－</button>
-                <span style="font-weight:700;min-width:32px;text-align:center;">${qty}</span>
-                <button class="btn btn-p btn-sm" onclick="adjInv('${p.id}',1)">＋</button>
-              </div>
-            </td>
-            <td style="white-space:nowrap;">
-              <button class="bdel" style="color:#aaa;" onclick="openM('editProduct','${p.id}')">✏️</button>
-              <button class="bdel" onclick="delProduct('${p.id}')">×</button>
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table></div>
-    ${filtered.length>0?`<div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div><b>${curCat==='全部'?'總計':curCat}：</b>${filtered.length} 項</div>
-      <div><b>合計庫存價值：</b><span class="ag" style="font-size:16px;">$${fmt(filtered.reduce((s,p)=>{const i=getInv(p.id);return s+toN(i.qty)*toN(getAvgCost(p.id));},0))}</span></div>
-    </div>`:''}
-  </div>`}`;
+  ${filtered.length===0?`<div class="card"><div class="empty"><div class="empty-ico">📦</div><p>${curCat==='全部'?'尚未建立產品':'此類別尚無產品'}</p></div></div>`:groupedHTML}`;
 }
 
 // ─── 出貨耗用 ─────────────────────────────────────────────
 function pgStockOut(){
   const outs=(S.data.stockOuts||[]).filter(o=>o.month===S.month&&o.year===yr()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const types={'sale':'客戶購買','self':'工作室自用','damage':'損耗報廢','gift':'贈送樣品'};
-  const colors={'sale':'grn','self':'gold','damage':'red','gift':'pur'};
+  const types={'sale':'客戶購買','self':'工作室自用','damage':'損耗報廢','gift':'贈送樣品','check':'月度盤點'};
+  const colors={'sale':'grn','self':'gold','damage':'red','gift':'pur','check':''};
   // 統計各類型
   const stats={sale:0,self:0,damage:0,gift:0};
   const costStats={sale:0,self:0,damage:0,gift:0};
@@ -2462,6 +2433,23 @@ function renderModal(){
         </select>
       </div>
       <div class="fgrp" id="m_p6c_wrap" style="display:none;"><label>自訂廠商名稱</label><input type="text" id="m_p6c" placeholder="輸入廠商名稱"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
+        <label style="color:var(--blu);font-weight:700;">💰 付款狀態</label>
+        <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="m_pPaid" value="paid" checked> ✓ 已付款（記入支出+現金流）
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="m_pPaid" value="unpaid"> ⏳ 未付款（賒帳，月底再結）
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+          <span class="tm">付款方式：</span>
+          <select id="m_pPayMethod" style="padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+            <option>轉帳</option><option>現金</option><option>信用卡</option>
+          </select>
+        </div>
+      </div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_p7" placeholder="如：特價優惠、年中促銷"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="savePurchase()">✓ 確認進貨</button></div>`;
@@ -2541,6 +2529,21 @@ function renderModal(){
       ${rows.map((r,i)=>batchRowHTML(r,i,isGroup)).join('')}
     </div>
     <button class="btn btn-s" style="width:100%;margin-top:8px;" onclick="addBatchRow()">＋ 新增一列</button>
+    <div style="background:var(--bluL);padding:10px 14px;border-radius:8px;margin-top:14px;border-left:3px solid var(--blu);">
+      <label style="color:var(--blu);font-weight:700;display:block;margin-bottom:6px;">💰 整批付款狀態</label>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="radio" name="m_bpPaid" value="paid" checked> ✓ 已付款
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="radio" name="m_bpPaid" value="unpaid"> ⏳ 未付款
+        </label>
+        <span class="tm">付款方式</span>
+        <select id="m_bpPayMethod" style="padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;">
+          <option>轉帳</option><option>現金</option><option>信用卡</option>
+        </select>
+      </div>
+    </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveBatchPurchase()">✓ 全部送出</button></div>`;
     S.modal.lg=true;
     if(isGroup)setTimeout(recalcGroupCosts,50);
@@ -2562,6 +2565,76 @@ function renderModal(){
       </div>`}).join('')}
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveStockCheck()">✓ 確認盤點</button></div>`;}
+
+  // ─── 月度盤點 modal（含盤點日期、按廠商分組、實際 vs 系統差異）───
+  if(m.t==='monthStockCheck'){
+    const prods=(S.data.products||[]).slice();
+    // 依廠商分組
+    const groups={};
+    prods.forEach(p=>{
+      const sup=p.supplier||'未指定廠商';
+      const ser=p.series||'未分系列';
+      const k=`${sup}__${ser}`;
+      if(!groups[k])groups[k]={supplier:sup,series:ser,items:[]};
+      groups[k].items.push(p);
+    });
+    Object.values(groups).forEach(g=>{
+      g.items.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    });
+    const sortedGroups=Object.entries(groups).sort((a,b)=>{
+      if(a[1].supplier==='未指定廠商'&&b[1].supplier!=='未指定廠商')return 1;
+      if(b[1].supplier==='未指定廠商'&&a[1].supplier!=='未指定廠商')return -1;
+      return a[1].supplier.localeCompare(b[1].supplier,'zh-Hant');
+    });
+    c=`<div class="mttl">📋 月度盤點</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 <b>盤點流程：</b>實地清點各產品實際數量 → 填入「實際庫存」欄位 → 系統自動對照差異 → 確認後更新庫存與記錄盤點日期。<br>
+      ✏️ 留空表示「跳過此項」，不會更新該產品。
+    </div>
+    <div class="fg fg2" style="margin-bottom:14px;">
+      <div class="fgrp"><label>盤點日期 *</label><input type="date" id="m_msc_date" value="${today()}"></div>
+      <div class="fgrp"><label>盤點人</label><input type="text" id="m_msc_by" placeholder="選填" value="珞熙"></div>
+    </div>
+    <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bdr);border-radius:8px;">
+      ${sortedGroups.map(([k,g])=>`
+        <div style="background:var(--goldL);padding:8px 12px;font-weight:700;color:var(--goldDk);position:sticky;top:0;z-index:1;border-bottom:1px solid var(--bdr);">
+          🏷️ ${g.supplier}　·　${g.series}（${g.items.length} 項）
+        </div>
+        <table style="width:100%;font-size:13px;">
+          <thead style="background:var(--bg2);">
+            <tr>
+              <th style="text-align:left;padding:6px 10px;">產品</th>
+              <th style="padding:6px 8px;width:80px;">系統</th>
+              <th style="padding:6px 8px;width:90px;">實際</th>
+              <th style="padding:6px 8px;width:80px;">差異</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${g.items.map(p=>{
+              const inv=getInv(p.id);
+              return`<tr data-pid="${p.id}" style="border-top:1px solid var(--bdr);">
+                <td style="padding:6px 10px;"><b>${p.name}</b><div class="tm" style="font-size:11px;">${p.category||''}</div></td>
+                <td style="text-align:center;font-weight:700;color:var(--blu);">${inv.qty||0}</td>
+                <td style="padding:4px 6px;">
+                  <input type="number" class="msc_actual" data-systemqty="${inv.qty||0}" placeholder="留空跳過" min="0" oninput="calcStockDiff(this)" style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;text-align:center;">
+                </td>
+                <td class="msc_diff" style="text-align:center;font-weight:700;font-size:13px;">-</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `).join('')}
+    </div>
+    <div id="m_msc_summary" style="margin-top:10px;padding:12px;background:var(--bg2);border-radius:8px;font-size:13px;display:none;">
+      <b>盤點摘要：</b><span id="m_msc_summary_text">尚未填寫</span>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="saveMonthStockCheck()">✓ 完成盤點</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
 
   if(m.t==='addCourse'){c=`<div class="mttl">📋 新增課程</div>
     <div class="fg fg2">
@@ -3559,12 +3632,105 @@ window.savePurchase=async()=>{
   }
   const d=new Date(date);
   const recordName=prod?prod.name:productName.trim();
-  await addSub('purchases',{date,productId:pid,productName:recordName,category,qty,unitCost,totalCost,supplier,series,note:$('m_p7')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
+  // 付款狀態
+  const paidStatus=document.querySelector('input[name="m_pPaid"]:checked')?.value||'paid';
+  const payMethod=$('m_pPayMethod')?.value||'轉帳';
+  const paid=paidStatus==='paid';
+  // 建立進貨紀錄
+  const purchaseId=uid();
+  const purchaseData={
+    id:purchaseId,
+    date,productId:pid,productName:recordName,category,qty,unitCost,totalCost,
+    supplier,series,
+    paid,payMethod,paidDate:paid?date:null,
+    note:$('m_p7')?.value||'',
+    month:d.getMonth()+1,year:d.getFullYear()
+  };
+  await addSub('purchases',purchaseData);
+  // 已付款 → 同步寫入支出 + 現金流
+  if(paid){
+    const expNote=`【進貨】${recordName} × ${qty}${supplier?'（'+supplier+'）':''}`;
+    const expRef=await addSub('expenses',{
+      date,category:'進貨成本',amount:totalCost,
+      payMethod,note:expNote,
+      fromPurchase:true,purchaseRefId:purchaseId,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+    await addSub('cashFlow',{
+      date,amount:-totalCost,cat:'進貨支出',
+      note:expNote+`（${payMethod}）`,
+      fromPurchase:true,purchaseRefId:purchaseId,
+      month:d.getMonth()+1,year:d.getFullYear()
+    });
+  }
   const finalAvg=getAvgCost(pid);
-  toast(`✅ 進貨完成 ${qty} 個，平均成本更新為 $${fmt(finalAvg)}`);
+  toast(`✅ 進貨完成 ${qty} 個，平均成本更新為 $${fmt(finalAvg)}${paid?'（已記支出）':'（未付款，待結算）'}`);
   closeMod();
 };
-window.delPurchase=async id=>{if(!confirm('確認刪除？'))return;await delSub('purchases',id);toast('已刪除');};
+
+// ── 進貨：標記為已付款（補寫入支出/現金流）──
+window.payPurchase=async(id)=>{
+  const p=(S.data.purchases||[]).find(x=>x.id===id);
+  if(!p)return;
+  if(p.paid){alert('此筆已標記為已付款');return;}
+  const today_d=today();
+  const payMethod=p.payMethod||'轉帳';
+  if(!confirm(`確認標記「${p.productName}」這筆進貨為已付款？\n\n金額 $${fmt(p.totalCost)}　付款方式：${payMethod}\n\n會自動寫入支出記帳與現金流水帳`))return;
+  // 更新進貨紀錄
+  await setSub('purchases',id,{...p,paid:true,paidDate:today_d});
+  // 寫入支出
+  const expNote=`【進貨】${p.productName} × ${p.qty}${p.supplier?'（'+p.supplier+'）':''}`;
+  const d=new Date(today_d);
+  await addSub('expenses',{
+    date:today_d,category:'進貨成本',amount:p.totalCost,
+    payMethod,note:expNote,
+    fromPurchase:true,purchaseRefId:id,
+    month:d.getMonth()+1,year:d.getFullYear()
+  });
+  await addSub('cashFlow',{
+    date:today_d,amount:-p.totalCost,cat:'進貨支出',
+    note:expNote+`（${payMethod}）`,
+    fromPurchase:true,purchaseRefId:id,
+    month:d.getMonth()+1,year:d.getFullYear()
+  });
+  toast(`✅ 已標記為已付款，並寫入支出 $${fmt(p.totalCost)}`);
+};
+
+// ── 進貨：取消已付款狀態（撤銷支出和現金流）──
+window.unpayPurchase=async(id)=>{
+  const p=(S.data.purchases||[]).find(x=>x.id===id);
+  if(!p||!p.paid)return;
+  if(!confirm(`確認取消「${p.productName}」的已付款狀態？\n\n會自動刪除對應的支出和現金流紀錄`))return;
+  // 找到並刪除對應的支出和現金流
+  const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase&&e.purchaseRefId===id);
+  const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase&&f.purchaseRefId===id);
+  for(const e of exps)await delSub('expenses',e.id);
+  for(const f of flows)await delSub('cashFlow',f.id);
+  await setSub('purchases',id,{...p,paid:false,paidDate:null});
+  toast('已取消已付款狀態');
+};
+
+window.delPurchase=async id=>{
+  const p=(S.data.purchases||[]).find(x=>x.id===id);
+  if(!p)return;
+  if(!confirm(`確認刪除「${p.productName}」這筆進貨？\n\n會還原 ${p.qty} 個庫存${p.paid?'，並刪除對應的支出/現金流紀錄':''}`))return;
+  // 還原庫存（同時還原加權平均成本是複雜的，這裡簡化處理：只減去數量）
+  if(p.productId){
+    const inv=getInv(p.productId);
+    const newQty=Math.max(0,toN(inv.qty)-toN(p.qty));
+    const newInv=[...S.data.inventory.filter(i=>i.productId!==p.productId),{...inv,productId:p.productId,qty:newQty}];
+    await saveMain({inventory:newInv});
+  }
+  // 已付款 → 刪除對應支出/現金流
+  if(p.paid){
+    const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase&&e.purchaseRefId===id);
+    const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase&&f.purchaseRefId===id);
+    for(const e of exps)await delSub('expenses',e.id);
+    for(const f of flows)await delSub('cashFlow',f.id);
+  }
+  await delSub('purchases',id);
+  toast('已刪除進貨紀錄並還原庫存');
+};
 
 // ── 出貨/耗用 ──
 window.toggleStockOutCust=()=>{
@@ -3918,14 +4084,20 @@ window.saveBatchPurchase=async()=>{
   const isGroup=S.modal.groupMode||false;
   const groupTotal=parseFloat($('m_bpGroupTotal')?.value)||0;
   if(isGroup&&groupTotal<=0){alert('請填整組總成本');return;}
+  // 整批付款狀態
+  const paidStatus=document.querySelector('input[name="m_bpPaid"]:checked')?.value||'paid';
+  const payMethod=$('m_bpPayMethod')?.value||'轉帳';
+  const paid=paidStatus==='paid';
   const d=new Date(date);
   let count=0;
+  let totalAllCost=0;
   let groupNote=isGroup?`整組 $${fmt(groupTotal)}`:'';
   for(const r of validRows){
     const qty=toN(r.qty);
     const unitCost=toN(r.unit);
     const sellPrice=toN(r.price);
     const totalCost=qty*unitCost;
+    totalAllCost+=totalCost;
     // 優先：用 productId 直接找產品（避免名稱比對問題）
     let prod=null;
     if(r.productId){
@@ -3951,19 +4123,41 @@ window.saveBatchPurchase=async()=>{
       const newTotalCost=toN(inv.totalPurchaseCost||0)+totalCost;
       S.data.inventory=[...S.data.inventory.filter(i=>i.productId!==pid),
                        {productId:pid,qty:oldQty+qty,minQty:inv.minQty||1,avgCost:newAvg,totalPurchaseCost:newTotalCost}];
-      // 更新產品平均成本（若有變化）+ 補填廠商/售價（若空著）
       S.data.products=(S.data.products||[]).map(p=>p.id===pid?{
-        ...p,
-        cost:newAvg,
+        ...p,cost:newAvg,
         supplier:p.supplier||supplier,
         price:p.price||sellPrice
       }:p);
     }
-    await addSub('purchases',{date,productId:pid,productName:r.name.trim()||(prod?.name||''),category:r.cat,qty,unitCost,totalCost,supplier,note:groupNote,month:d.getMonth()+1,year:d.getFullYear()});
+    const purchaseId=uid();
+    const purchaseData={
+      id:purchaseId,
+      date,productId:pid,productName:r.name.trim()||(prod?.name||''),
+      category:r.cat,qty,unitCost,totalCost,supplier,
+      paid,payMethod,paidDate:paid?date:null,
+      note:groupNote,
+      month:d.getMonth()+1,year:d.getFullYear()
+    };
+    await addSub('purchases',purchaseData);
+    if(paid){
+      const expNote=`【進貨】${purchaseData.productName} × ${qty}${supplier?'（'+supplier+'）':''}`;
+      await addSub('expenses',{
+        date,category:'進貨成本',amount:totalCost,
+        payMethod,note:expNote,
+        fromPurchase:true,purchaseRefId:purchaseId,
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+      await addSub('cashFlow',{
+        date,amount:-totalCost,cat:'進貨支出',
+        note:expNote+`（${payMethod}）`,
+        fromPurchase:true,purchaseRefId:purchaseId,
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+    }
     count++;
   }
   await saveMain({products:S.data.products,inventory:S.data.inventory});
-  toast(`✅ 已批次新增 ${count} 筆進貨${isGroup?`（整組 $${fmt(groupTotal)}）`:''}`);
+  toast(`✅ 已批次新增 ${count} 筆進貨，總成本 $${fmt(totalAllCost)}${paid?'（已記支出）':'（未付款，待結算）'}`);
   closeMod();
 };
 
@@ -3988,6 +4182,126 @@ window.saveStockCheck=async()=>{
     return{productId:p.id,qty,minQty:inv.minQty||1};
   });
   await saveMain({inventory:newInv});toast('✅ 盤點完成');closeMod();
+};
+
+// ── 月度盤點：計算單筆差異 + 即時更新摘要 ──
+window.calcStockDiff=(input)=>{
+  const tr=input.closest('tr');
+  if(!tr)return;
+  const systemQty=parseFloat(input.dataset.systemqty)||0;
+  const actual=input.value===''?null:parseFloat(input.value);
+  const diffCell=tr.querySelector('.msc_diff');
+  if(actual===null||isNaN(actual)){
+    diffCell.textContent='-';
+    diffCell.style.color='';
+  }else{
+    const diff=actual-systemQty;
+    if(diff===0){
+      diffCell.textContent='✓ 一致';
+      diffCell.style.color='var(--grn)';
+    }else if(diff>0){
+      diffCell.textContent=`+${diff}`;
+      diffCell.style.color='var(--blu)';
+    }else{
+      diffCell.textContent=`${diff}`;
+      diffCell.style.color='var(--red)';
+    }
+  }
+  // 更新摘要
+  const allRows=document.querySelectorAll('.msc_actual');
+  let filled=0,match=0,shortage=0,surplus=0,shortQty=0,surplusQty=0;
+  allRows.forEach(el=>{
+    if(el.value==='')return;
+    filled++;
+    const sys=parseFloat(el.dataset.systemqty)||0;
+    const act=parseFloat(el.value)||0;
+    const d=act-sys;
+    if(d===0)match++;
+    else if(d<0){shortage++;shortQty+=Math.abs(d);}
+    else{surplus++;surplusQty+=d;}
+  });
+  const summary=$('m_msc_summary');
+  const text=$('m_msc_summary_text');
+  if(filled>0&&summary&&text){
+    summary.style.display='block';
+    let html=`已盤點 <b>${filled}</b> 項　`;
+    if(match>0)html+=`<span style="color:var(--grn);">✓ ${match} 項一致</span>　`;
+    if(shortage>0)html+=`<span style="color:var(--red);">▼ ${shortage} 項短少 (共 -${shortQty})</span>　`;
+    if(surplus>0)html+=`<span style="color:var(--blu);">▲ ${surplus} 項盤盈 (共 +${surplusQty})</span>`;
+    text.innerHTML=html;
+  }else if(summary){
+    summary.style.display='none';
+  }
+};
+
+window.saveMonthStockCheck=async()=>{
+  try{
+    const date=$('m_msc_date')?.value;
+    const by=$('m_msc_by')?.value||'';
+    if(!date){alert('請選擇盤點日期');return;}
+    const rows=document.querySelectorAll('tr[data-pid]');
+    if(rows.length===0){alert('沒有可盤點的產品');return;}
+    let updates=[];
+    let stats={total:0,match:0,shortage:0,surplus:0,shortQty:0,surplusQty:0};
+    rows.forEach(row=>{
+      const pid=row.dataset.pid;
+      const input=row.querySelector('.msc_actual');
+      if(!input||input.value==='')return;
+      const actual=parseFloat(input.value);
+      if(isNaN(actual))return;
+      const systemQty=parseFloat(input.dataset.systemqty)||0;
+      const diff=actual-systemQty;
+      stats.total++;
+      if(diff===0)stats.match++;
+      else if(diff<0){stats.shortage++;stats.shortQty+=Math.abs(diff);}
+      else{stats.surplus++;stats.surplusQty+=diff;}
+      updates.push({pid,actual,systemQty,diff});
+    });
+    if(updates.length===0){alert('請至少填寫一筆實際庫存');return;}
+    let confirmMsg=`確認執行盤點？\n\n盤點日期：${date}\n盤點 ${updates.length} 項`;
+    if(stats.match>0)confirmMsg+=`\n✓ ${stats.match} 項一致`;
+    if(stats.shortage>0)confirmMsg+=`\n▼ ${stats.shortage} 項短少（共 -${stats.shortQty}）`;
+    if(stats.surplus>0)confirmMsg+=`\n▲ ${stats.surplus} 項盤盈（共 +${stats.surplusQty}）`;
+    confirmMsg+=`\n\n系統庫存將被覆蓋為實際盤點數量`;
+    if(!confirm(confirmMsg))return;
+    // 更新庫存 + 為差異建立 stockOuts 紀錄
+    const newInv=[...(S.data.inventory||[])];
+    const d=new Date(date);
+    for(const u of updates){
+      const idx=newInv.findIndex(i=>i.productId===u.pid);
+      const old=idx>=0?newInv[idx]:{productId:u.pid,qty:0,minQty:1};
+      const updated={...old,qty:u.actual};
+      if(idx>=0)newInv[idx]=updated;
+      else newInv.push(updated);
+      // 為差異建立 stockOuts 紀錄（僅當有差異時）
+      if(u.diff!==0){
+        const prod=(S.data.products||[]).find(p=>p.id===u.pid);
+        const type=u.diff<0?'damage':'gift';  // 短少→損耗、盤盈→其他（用 gift 暫代）
+        const note=u.diff<0?`【月度盤點短少】${date}　應有 ${u.systemQty} → 實際 ${u.actual}`:`【月度盤點盤盈】${date}　應有 ${u.systemQty} → 實際 ${u.actual}`;
+        try{
+          await addSub('stockOuts',{
+            date,
+            type:'check',  // 盤點類型
+            productId:u.pid,
+            productName:prod?.name||'',
+            qty:Math.abs(u.diff),
+            unitCost:getAvgCost(u.pid),
+            totalCost:Math.abs(u.diff)*getAvgCost(u.pid),
+            note,
+            checkBy:by,
+            isShortage:u.diff<0,
+            month:d.getMonth()+1,year:d.getFullYear()
+          });
+        }catch(e){console.warn('盤點紀錄失敗',e);}
+      }
+    }
+    await saveMain({inventory:newInv});
+    toast(`✅ 盤點完成 ${updates.length} 項　${date}`);
+    closeMod();
+  }catch(err){
+    console.error('saveMonthStockCheck 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
 };
 
 // ── Courses ──
