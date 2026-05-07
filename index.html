@@ -242,7 +242,9 @@ let S={
     // 出貨記錄（客戶購買、自用、損耗、贈品）
     stockOuts:[],
     // 設備（含折舊）
-    equipment:[]
+    equipment:[],
+    // 服務成本卡（BOM）— 每個服務需要的產品與用量
+    serviceCosts:[]
   }
 };
 
@@ -270,6 +272,7 @@ function startSync(){
     S.data.settings=d.settings||{};
     S.data.assets=d.assets||[];
     S.data.equipment=d.equipment||[];  // 設備（每月折舊）
+    S.data.serviceCosts=d.serviceCosts||[];  // 服務成本卡
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
     if(Array.isArray(d.customers)&&d.customers.length>0){
@@ -365,6 +368,7 @@ function appHTML(){
     {id:'inventory',ico:'🗂️',lbl:'庫存盤點'},
     {id:'stockout',ico:'📤',lbl:'出貨耗用'},
     {id:'equipment',ico:'🛋️',lbl:'設備折舊'},
+    {id:'serviceCost',ico:'💎',lbl:'服務成本卡'},
     {id:'courses',ico:'📋',lbl:'課程管理'},
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
     {id:'cashflow',ico:'🏦',lbl:'現金流水帳'},
@@ -409,6 +413,7 @@ function renderPage(){
     case'inventory': return pgInventory();
     case'stockout':  return pgStockOut();
     case'equipment': return pgEquipment();
+    case'serviceCost': return pgServiceCost();
     case'courses':   return pgCourses();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
@@ -1913,6 +1918,149 @@ function pgEquipment(){
   </div>`;
 }
 
+// ─── 服務成本卡（BOM） ─────────────────────────────────────
+function pgServiceCost(){
+  const cards=S.data.serviceCosts||[];
+  const products=S.data.products||[];
+  // 統計：本月平均每筆服務分攤多少固定成本（房租水電）
+  const monthExp=getExp().filter(e=>['房租','水電','設備維修'].includes(e.category)).reduce((s,e)=>s+toN(e.amount),0);
+  const monthSvcCount=getSales().filter(s=>s.type==='service').length;
+  const fixedPerSvc=monthSvcCount>0?Math.round(monthExp/monthSvcCount):0;
+
+  return`
+  <div class="pg-ttl">💎 服務成本卡與毛利分析</div>
+  <div class="pg-sub">設定每項服務需要的產品與用量，自動計算成本與建議售價</div>
+
+  <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">
+    💡 <b>會計概念：</b><br>
+    • <b>材料成本</b>：服務需要的產品（從庫存抓加權平均成本）<br>
+    • <b>老師抽成</b>：售價 × 抽成率（預設 60%）<br>
+    • <b>固定攤分</b>：本月房租水電 ÷ 本月服務筆數（自動算）<br>
+    • <b>公司淨利</b>：售價 - 材料成本 - 老師抽成 - 固定攤分
+  </div>
+
+  <div class="sg sg3">
+    <div class="sc gold">
+      <div class="sl">本月固定成本</div>
+      <div class="sv gold sm">$${fmt(monthExp)}</div>
+      <div class="ss">房租+水電+維修</div>
+    </div>
+    <div class="sc rose">
+      <div class="sl">本月服務筆數</div>
+      <div class="sv rose">${monthSvcCount}</div>
+      <div class="ss">用於攤分計算</div>
+    </div>
+    <div class="sc">
+      <div class="sl">每筆攤分</div>
+      <div class="sv sm" style="color:var(--blu);">$${fmt(fixedPerSvc)}</div>
+      <div class="ss">本月實際攤分數</div>
+    </div>
+  </div>
+
+  <div class="sec-hd">
+    <span class="sec-ttl">🧮 售價試算機</span>
+    <button class="btn btn-y btn-sm" onclick="openM('priceCalculator')">📐 開始試算</button>
+  </div>
+  <div class="card">
+    <div class="card-bd">
+      <div class="tm">輸入服務內容、預期毛利率，系統自動推算「建議售價」與盈虧分析。<br>例：30 分鐘 SPA + HYGGE 精油 30g + 抽成 60% + 想賺 30% → 建議售價 $X,XXX</div>
+    </div>
+  </div>
+
+  <div class="sec-hd">
+    <span class="sec-ttl">📋 已建立的服務成本卡（${cards.length} 項）</span>
+    <button class="btn btn-p btn-sm" onclick="openM('addServiceCost')">＋ 新增成本卡</button>
+  </div>
+
+  ${cards.length===0?`<div class="card"><div class="empty"><div class="empty-ico">💎</div><p>尚未建立任何服務成本卡</p><p class="tm">點「+新增成本卡」開始為每項服務建立成本配方</p></div></div>`:
+    cards.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant')).map(card=>{
+      const fin=calcServiceCardFinancials(card,fixedPerSvc);
+      const profitColor=fin.companyNet>=0?'var(--grn)':'var(--red)';
+      const marginColor=fin.netMargin>=20?'var(--grn)':fin.netMargin>=0?'var(--gold)':'var(--red)';
+      return`<div class="card" style="margin-bottom:14px;">
+        <div class="card-hd" style="background:linear-gradient(90deg,var(--purL),transparent);">
+          <span class="card-ttl">💎 ${card.name||'未命名'}　${card.duration?`<span class="bdg">${card.duration} 分鐘</span>`:''}</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-s btn-sm" onclick="openM('editServiceCost','${card.id}')">✏️ 編輯</button>
+            <button class="bdel" onclick="delServiceCost('${card.id}')">×</button>
+          </div>
+        </div>
+        <div class="card-bd">
+          <div class="sg sg4" style="margin-bottom:10px;">
+            <div class="sc"><div class="sl">售價</div><div class="sv sm" style="color:var(--rose);">$${fmt(card.price||0)}</div></div>
+            <div class="sc"><div class="sl">總成本</div><div class="sv sm" style="color:var(--red);">$${fmt(fin.totalCost)}</div><div class="ss">材+抽+攤</div></div>
+            <div class="sc"><div class="sl">公司淨利</div><div class="sv sm" style="color:${profitColor};">$${fmt(fin.companyNet)}</div></div>
+            <div class="sc"><div class="sl">淨利率</div><div class="sv sm" style="color:${marginColor};">${fin.netMargin}%</div></div>
+          </div>
+
+          <div class="tw"><table style="font-size:13px;">
+            <thead><tr><th>項目</th><th>明細</th><th class="tm">金額</th></tr></thead>
+            <tbody>
+              <tr><td><b>📦 材料成本</b></td>
+                <td class="tm">${card.items?.length>0?card.items.map(it=>{
+                  const p=products.find(x=>x.id===it.productId);
+                  const cost=p?Math.round(getAvgCost(p.id)*toN(it.qty)):0;
+                  return`${p?.name||'(已刪除)'} × ${it.qty}${it.unit||''} = $${fmt(cost)}`;
+                }).join('　/　'):'<span class="tm">（無材料）</span>'}</td>
+                <td class="an">$${fmt(fin.materialCost)}</td>
+              </tr>
+              <tr><td><b>👩‍💼 老師抽成</b></td>
+                <td class="tm">售價 $${fmt(card.price||0)} × ${Math.round((card.commissionRate||0.6)*100)}%</td>
+                <td class="an">$${fmt(fin.commission)}</td>
+              </tr>
+              <tr><td><b>🏪 固定攤分</b></td>
+                <td class="tm">本月房租水電 ÷ 月服務數</td>
+                <td class="an">$${fmt(fixedPerSvc)}</td>
+              </tr>
+              <tr style="background:var(--bg2);font-weight:700;">
+                <td>總成本</td><td></td>
+                <td class="an">$${fmt(fin.totalCost)}</td>
+              </tr>
+              <tr style="background:${fin.companyNet>=0?'var(--grnL)':'var(--redL)'};font-weight:700;">
+                <td style="color:${profitColor};">公司淨利</td>
+                <td class="tm">售價 - 總成本</td>
+                <td style="color:${profitColor};">$${fmt(fin.companyNet)}　(${fin.netMargin}%)</td>
+              </tr>
+            </tbody>
+          </table></div>
+
+          ${fin.companyNet<0?`<div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:13px;margin-top:10px;">
+            ⚠️ <b>這項服務虧錢！</b>建議：① 降低材料用量　② 提高售價至 $${fmt(fin.suggestedPrice30)}（淨利 30%）　③ 降低抽成率
+          </div>`:fin.netMargin<10?`<div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;margin-top:10px;">
+            ⚠️ <b>淨利率偏低（${fin.netMargin}%）</b>建議：售價可調至 $${fmt(fin.suggestedPrice30)}（淨利 30%）
+          </div>`:`<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;margin-top:10px;">
+            ✅ <b>盈利狀態良好</b>　淨利率 ${fin.netMargin}%
+          </div>`}
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+// 計算服務成本卡的財務數據
+function calcServiceCardFinancials(card,fixedPerSvc){
+  const products=S.data.products||[];
+  // 材料成本（用加權平均成本）
+  const materialCost=(card.items||[]).reduce((s,it)=>{
+    const cost=getAvgCost(it.productId);
+    return s+Math.round(cost*toN(it.qty));
+  },0);
+  const price=toN(card.price);
+  const commRate=card.commissionRate!==undefined?toN(card.commissionRate):0.6;
+  const commission=Math.round(price*commRate);
+  const fixed=toN(fixedPerSvc);
+  const totalCost=materialCost+commission+fixed;
+  const companyNet=price-totalCost;
+  const netMargin=price>0?Math.round(companyNet/price*100):0;
+  // 倒推：要 30% 淨利的建議售價
+  // 售價 = (材料 + 攤分) / (1 - 抽成率 - 0.30)
+  const denominator30=1-commRate-0.30;
+  const suggestedPrice30=denominator30>0?Math.ceil((materialCost+fixed)/denominator30/100)*100:0;
+  // 倒推：要 20% 淨利的建議售價
+  const denominator20=1-commRate-0.20;
+  const suggestedPrice20=denominator20>0?Math.ceil((materialCost+fixed)/denominator20/100)*100:0;
+  return{materialCost,commission,fixed,totalCost,companyNet,netMargin,suggestedPrice30,suggestedPrice20};
+}
+
 // ─── COURSES ───────────────────────────────────────────────
 function pgCourses(){
   const courses=S.data.courses||[];
@@ -2790,6 +2938,87 @@ function renderModal(){
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_eq6" value="${e.note||''}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updEquipment('${e.id}')">✓ 更新</button></div>`;}
+
+  // ─── 服務成本卡 modal ───
+  if(m.t==='addServiceCost'||m.t==='editServiceCost'){
+    const editing=m.t==='editServiceCost';
+    const card=editing?(S.data.serviceCosts||[]).find(x=>x.id===m.x)||{}:{};
+    const items=editing?(card.items||[]):(S.modal.items||[]);
+    const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    c=`<div class="mttl">${editing?'✏️ 編輯服務成本卡':'💎 新增服務成本卡'}</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 設定此服務需要的<b>材料用量</b>，系統會用「加權平均成本」自動算每筆服務的材料成本
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>服務名稱 *</label><input type="text" id="m_sc_name" value="${card.name||''}" placeholder="如：精油 SPA 90 分鐘"></div>
+      <div class="fgrp"><label>時長（分鐘）</label><input type="number" id="m_sc_dur" value="${card.duration||''}" placeholder="如：90"></div>
+      <div class="fgrp"><label>售價 *</label><input type="number" id="m_sc_price" value="${card.price||''}" placeholder="如：3800" oninput="calcServiceCardLive()"></div>
+      <div class="fgrp"><label>抽成率（%）</label><input type="number" id="m_sc_comm" value="${(card.commissionRate||0.6)*100}" min="0" max="100" step="5" oninput="calcServiceCardLive()"></div>
+    </div>
+
+    <div style="background:var(--purL);padding:12px;border-radius:8px;margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <b style="color:var(--pur);">📦 此服務需要的材料</b>
+        <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="addServiceCardItem()">＋ 新增材料</button>
+      </div>
+      <div id="m_sc_items">
+        ${items.length===0?'<div class="empty" style="padding:20px;"><p class="tm">尚無材料，請點「+新增材料」</p></div>':
+          items.map((it,i)=>renderServiceCardItem(it,i,allProds)).join('')}
+      </div>
+    </div>
+
+    <div id="m_sc_summary" style="margin-top:12px;padding:14px;background:var(--bg2);border-radius:8px;font-size:13px;"></div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="${editing?`updServiceCost('${card.id}')`:'saveServiceCost()'}">✓ ${editing?'更新':'新增'}</button>
+    </div>`;
+    S.modal.lg=true;
+    if(!editing&&!S.modal.items)S.modal.items=[];
+    if(editing&&!S.modal._editLoaded){
+      S.modal.items=items.slice();
+      S.modal._editLoaded=true;
+    }
+    setTimeout(calcServiceCardLive,50);
+  }
+
+  // ─── 售價試算機 modal ───
+  if(m.t==='priceCalculator'){
+    const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    if(!S.modal.calcItems)S.modal.calcItems=[];
+    c=`<div class="mttl">📐 售價試算機</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      💡 設定材料用量、抽成率、期望淨利率，系統推算<b>建議售價</b>
+    </div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>服務名稱（選填）</label><input type="text" id="m_pc_name" placeholder="如：精油 SPA 90 分鐘"></div>
+      <div class="fgrp"><label>抽成率（%）</label><input type="number" id="m_pc_comm" value="60" min="0" max="100" step="5" oninput="calcPricerLive()"></div>
+    </div>
+    <div style="background:var(--purL);padding:12px;border-radius:8px;margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <b style="color:var(--pur);">📦 材料用量</b>
+        <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="addPricerItem()">＋ 新增材料</button>
+      </div>
+      <div id="m_pc_items">
+        <div class="empty" style="padding:20px;"><p class="tm">點「+新增材料」開始</p></div>
+      </div>
+    </div>
+
+    <div class="fg fg2" style="margin-top:14px;">
+      <div class="fgrp"><label>期望淨利率（%）</label><input type="number" id="m_pc_target" value="30" min="0" max="80" step="5" oninput="calcPricerLive()"></div>
+      <div class="fgrp"><label>固定攤分（房租水電/單）</label><input type="number" id="m_pc_fixed" value="0" oninput="calcPricerLive()"></div>
+    </div>
+
+    <div id="m_pc_result" style="margin-top:14px;padding:14px;background:var(--bg2);border-radius:8px;"></div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn btn-p" onclick="saveAsServiceCard()">📝 存為服務成本卡</button>
+    </div>`;
+    S.modal.lg=true;
+    setTimeout(calcPricerLive,50);
+  }
+
 
   if(m.t==='addProduct'){c=`<div class="mttl">🧴 新增產品</div>
     <div class="fg fg2">
@@ -3874,6 +4103,296 @@ window.delEquipment=async id=>{
   const eqs=(S.data.equipment||[]).filter(e=>e.id!==id);
   await saveMain({equipment:eqs});
   toast('已刪除');
+};
+
+// ─── 服務成本卡：渲染單筆材料 ───
+function renderServiceCardItem(it,idx,allProds){
+  const prod=allProds.find(p=>p.id===it.productId);
+  const cost=prod?Math.round(getAvgCost(prod.id)*toN(it.qty)):0;
+  return`<div class="sc_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
+    <div style="flex:2;min-width:140px;">
+      <label style="font-size:11px;color:var(--mut);">產品</label>
+      <select class="sci_pid" onchange="updateServiceCardItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="">-- 選擇產品 --</option>
+        ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}（成本 $${fmt(getAvgCost(p.id))}）</option>`).join('')}
+      </select>
+    </div>
+    <div style="flex:1;min-width:80px;">
+      <label style="font-size:11px;color:var(--mut);">用量</label>
+      <input type="number" class="sci_qty" value="${it.qty||''}" placeholder="0" step="0.1" oninput="updateServiceCardItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+    </div>
+    <div style="flex:1;min-width:60px;">
+      <label style="font-size:11px;color:var(--mut);">單位</label>
+      <select class="sci_unit" onchange="updateServiceCardItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="g"${it.unit==='g'?' selected':''}>g</option>
+        <option value="ml"${it.unit==='ml'?' selected':''}>ml</option>
+        <option value="片"${it.unit==='片'?' selected':''}>片</option>
+        <option value="瓶"${it.unit==='瓶'?' selected':''}>瓶</option>
+        <option value="次"${it.unit==='次'?' selected':''}>次</option>
+      </select>
+    </div>
+    <div style="min-width:80px;text-align:right;font-weight:700;color:var(--red);font-size:14px;padding-bottom:6px;">
+      $${fmt(cost)}
+    </div>
+    <button onclick="rmServiceCardItem(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;">×</button>
+  </div>`;
+}
+
+window.addServiceCardItem=()=>{
+  if(!S.modal.items)S.modal.items=[];
+  S.modal.items.push({productId:'',qty:1,unit:'g'});
+  refreshServiceCardItems();
+};
+
+window.rmServiceCardItem=(idx)=>{
+  collectServiceCardItems();
+  S.modal.items.splice(idx,1);
+  refreshServiceCardItems();
+};
+
+window.updateServiceCardItem=(idx)=>{
+  collectServiceCardItems();
+  refreshServiceCardItems();
+};
+
+function collectServiceCardItems(){
+  const els=document.querySelectorAll('.sc_item');
+  S.modal.items=Array.from(els).map(el=>({
+    productId:el.querySelector('.sci_pid')?.value||'',
+    qty:parseFloat(el.querySelector('.sci_qty')?.value)||0,
+    unit:el.querySelector('.sci_unit')?.value||'g'
+  }));
+}
+
+function refreshServiceCardItems(){
+  const wrap=$('m_sc_items');
+  if(!wrap)return;
+  const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+  wrap.innerHTML=S.modal.items.length===0?'<div class="empty" style="padding:20px;"><p class="tm">尚無材料，請點「+新增材料」</p></div>':
+    S.modal.items.map((it,i)=>renderServiceCardItem(it,i,allProds)).join('');
+  calcServiceCardLive();
+}
+
+window.calcServiceCardLive=()=>{
+  collectServiceCardItems();
+  const price=parseFloat($('m_sc_price')?.value)||0;
+  const commPercent=parseFloat($('m_sc_comm')?.value)||60;
+  const commRate=commPercent/100;
+  const card={
+    price,
+    commissionRate:commRate,
+    items:S.modal.items
+  };
+  // 固定攤分
+  const monthExp=getExp().filter(e=>['房租','水電','設備維修'].includes(e.category)).reduce((s,e)=>s+toN(e.amount),0);
+  const monthSvcCount=getSales().filter(s=>s.type==='service').length;
+  const fixedPerSvc=monthSvcCount>0?Math.round(monthExp/monthSvcCount):0;
+  const fin=calcServiceCardFinancials(card,fixedPerSvc);
+  const wrap=$('m_sc_summary');
+  if(!wrap)return;
+  const profitColor=fin.companyNet>=0?'var(--grn)':'var(--red)';
+  const marginColor=fin.netMargin>=20?'var(--grn)':fin.netMargin>=0?'var(--gold)':'var(--red)';
+  wrap.innerHTML=`
+    <div style="font-weight:700;margin-bottom:8px;">📊 即時試算</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:13px;">
+      <div>📦 材料成本：<b style="color:var(--red);">$${fmt(fin.materialCost)}</b></div>
+      <div>👩‍💼 老師抽成：<b style="color:var(--red);">$${fmt(fin.commission)}</b>　(${commPercent}%)</div>
+      <div>🏪 固定攤分：<b style="color:var(--red);">$${fmt(fin.fixed)}</b></div>
+      <div>💰 總成本：<b style="color:var(--red);">$${fmt(fin.totalCost)}</b></div>
+    </div>
+    <hr style="margin:10px 0;border:0;border-top:1px solid var(--bdr);">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:14px;">
+      <div>💎 公司淨利：<b style="color:${profitColor};font-size:16px;">$${fmt(fin.companyNet)}</b></div>
+      <div>📈 淨利率：<b style="color:${marginColor};font-size:16px;">${fin.netMargin}%</b></div>
+    </div>
+    ${fin.companyNet<0?`<div style="margin-top:10px;padding:10px;background:var(--redL);border-radius:6px;font-size:12px;color:var(--red);">
+      ⚠️ <b>虧錢！</b>建議售價：<b>$${fmt(fin.suggestedPrice30)}</b>（淨利 30%）　或 <b>$${fmt(fin.suggestedPrice20)}</b>（淨利 20%）
+    </div>`:fin.netMargin<10?`<div style="margin-top:10px;padding:10px;background:var(--goldL);border-radius:6px;font-size:12px;color:var(--goldDk);">
+      ⚠️ 淨利率偏低　建議售價：<b>$${fmt(fin.suggestedPrice30)}</b>（淨利 30%）
+    </div>`:`<div style="margin-top:10px;padding:10px;background:var(--grnL);border-radius:6px;font-size:12px;color:var(--grn);">
+      ✅ 盈利狀態良好（${fin.netMargin}%）
+    </div>`}
+  `;
+};
+
+window.saveServiceCost=async()=>{
+  try{
+    const name=$('m_sc_name')?.value?.trim();
+    if(!name){alert('請填服務名稱');return;}
+    collectServiceCardItems();
+    const card={
+      id:uid(),
+      name,
+      duration:parseFloat($('m_sc_dur')?.value)||0,
+      price:parseFloat($('m_sc_price')?.value)||0,
+      commissionRate:(parseFloat($('m_sc_comm')?.value)||60)/100,
+      items:S.modal.items.filter(it=>it.productId&&toN(it.qty)>0)
+    };
+    const cards=[...(S.data.serviceCosts||[]),card];
+    await saveMain({serviceCosts:cards});
+    toast('✅ 服務成本卡已新增');
+    closeMod();
+  }catch(err){
+    console.error('saveServiceCost 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
+window.updServiceCost=async(id)=>{
+  try{
+    const name=$('m_sc_name')?.value?.trim();
+    if(!name){alert('請填服務名稱');return;}
+    collectServiceCardItems();
+    const cards=(S.data.serviceCosts||[]).map(c=>c.id===id?{
+      ...c,
+      name,
+      duration:parseFloat($('m_sc_dur')?.value)||0,
+      price:parseFloat($('m_sc_price')?.value)||0,
+      commissionRate:(parseFloat($('m_sc_comm')?.value)||60)/100,
+      items:S.modal.items.filter(it=>it.productId&&toN(it.qty)>0)
+    }:c);
+    await saveMain({serviceCosts:cards});
+    toast('✅ 已更新');closeMod();
+  }catch(err){
+    console.error('updServiceCost 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
+window.delServiceCost=async(id)=>{
+  if(!confirm('確認刪除這張服務成本卡？'))return;
+  const cards=(S.data.serviceCosts||[]).filter(c=>c.id!==id);
+  await saveMain({serviceCosts:cards});
+  toast('已刪除');
+};
+
+// ─── 售價試算機 ───
+window.addPricerItem=()=>{
+  if(!S.modal.calcItems)S.modal.calcItems=[];
+  S.modal.calcItems.push({productId:'',qty:1,unit:'g'});
+  refreshPricerItems();
+};
+
+function collectPricerItems(){
+  const els=document.querySelectorAll('.pc_item');
+  S.modal.calcItems=Array.from(els).map(el=>({
+    productId:el.querySelector('.pci_pid')?.value||'',
+    qty:parseFloat(el.querySelector('.pci_qty')?.value)||0,
+    unit:el.querySelector('.pci_unit')?.value||'g'
+  }));
+}
+
+function refreshPricerItems(){
+  const wrap=$('m_pc_items');
+  if(!wrap)return;
+  const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+  wrap.innerHTML=S.modal.calcItems.length===0?'<div class="empty" style="padding:20px;"><p class="tm">點「+新增材料」開始</p></div>':
+    S.modal.calcItems.map((it,i)=>renderPricerItem(it,i,allProds)).join('');
+  calcPricerLive();
+}
+
+function renderPricerItem(it,idx,allProds){
+  const prod=allProds.find(p=>p.id===it.productId);
+  const cost=prod?Math.round(getAvgCost(prod.id)*toN(it.qty)):0;
+  return`<div class="pc_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
+    <div style="flex:2;min-width:140px;">
+      <select class="pci_pid" onchange="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="">-- 選擇產品 --</option>
+        ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}（$${fmt(getAvgCost(p.id))}）</option>`).join('')}
+      </select>
+    </div>
+    <div style="flex:1;min-width:70px;">
+      <input type="number" class="pci_qty" value="${it.qty||''}" placeholder="用量" step="0.1" oninput="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+    </div>
+    <div style="flex:1;min-width:60px;">
+      <select class="pci_unit" onchange="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="g"${it.unit==='g'?' selected':''}>g</option>
+        <option value="ml"${it.unit==='ml'?' selected':''}>ml</option>
+        <option value="片"${it.unit==='片'?' selected':''}>片</option>
+        <option value="瓶"${it.unit==='瓶'?' selected':''}>瓶</option>
+      </select>
+    </div>
+    <div style="min-width:80px;text-align:right;font-weight:700;color:var(--red);font-size:14px;padding-bottom:6px;">$${fmt(cost)}</div>
+    <button onclick="rmPricerItem(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+  </div>`;
+}
+
+window.updatePricerItem=(idx)=>{collectPricerItems();refreshPricerItems();};
+window.rmPricerItem=(idx)=>{collectPricerItems();S.modal.calcItems.splice(idx,1);refreshPricerItems();};
+
+window.calcPricerLive=()=>{
+  collectPricerItems();
+  const commPercent=parseFloat($('m_pc_comm')?.value)||60;
+  const commRate=commPercent/100;
+  const targetMargin=parseFloat($('m_pc_target')?.value)||30;
+  const targetRate=targetMargin/100;
+  const fixed=parseFloat($('m_pc_fixed')?.value)||0;
+  // 材料成本
+  const materialCost=S.modal.calcItems.reduce((s,it)=>s+Math.round(getAvgCost(it.productId)*toN(it.qty)),0);
+  // 倒推：售價 = (材料 + 攤分) / (1 - 抽成 - 期望淨利)
+  const denominator=1-commRate-targetRate;
+  const suggestedPrice=denominator>0?Math.ceil((materialCost+fixed)/denominator/100)*100:0;
+  // 模擬抽成、淨利
+  const commission=Math.round(suggestedPrice*commRate);
+  const netProfit=suggestedPrice-materialCost-commission-fixed;
+  const actualMargin=suggestedPrice>0?Math.round(netProfit/suggestedPrice*100):0;
+  const wrap=$('m_pc_result');
+  if(!wrap)return;
+  if(materialCost===0){
+    wrap.innerHTML='<div class="tm" style="text-align:center;padding:14px;">請先新增材料</div>';
+    return;
+  }
+  if(denominator<=0){
+    wrap.innerHTML=`<div style="color:var(--red);text-align:center;padding:14px;">⚠️ 抽成率 ${commPercent}% + 期望淨利率 ${targetMargin}% = ${commPercent+targetMargin}% 已超過 100%，無法達成。請降低抽成或淨利目標</div>`;
+    return;
+  }
+  wrap.innerHTML=`
+    <div style="font-weight:700;font-size:18px;color:var(--pur);margin-bottom:10px;">📐 建議售價：$${fmt(suggestedPrice)}</div>
+    <div class="tw"><table style="font-size:13px;">
+      <tbody>
+        <tr><td>📦 材料成本</td><td class="tm">${S.modal.calcItems.length} 項</td><td class="an">$${fmt(materialCost)}</td></tr>
+        <tr><td>👩‍💼 老師抽成（${commPercent}%）</td><td class="tm">$${fmt(suggestedPrice)} × ${commPercent}%</td><td class="an">$${fmt(commission)}</td></tr>
+        <tr><td>🏪 固定攤分</td><td class="tm">每筆攤分</td><td class="an">$${fmt(fixed)}</td></tr>
+        <tr style="background:var(--bg2);font-weight:700;"><td>總成本</td><td></td><td class="an">$${fmt(materialCost+commission+fixed)}</td></tr>
+        <tr style="background:var(--grnL);font-weight:700;"><td style="color:var(--grn);">公司淨利</td><td class="tm">${actualMargin}% 淨利率</td><td style="color:var(--grn);">$${fmt(netProfit)}</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tm" style="margin-top:8px;font-size:12px;">
+      💡 公式：建議售價 = (材料 $${fmt(materialCost)} + 攤分 $${fmt(fixed)}) ÷ (1 - 抽成 ${commPercent}% - 淨利 ${targetMargin}%)
+    </div>
+  `;
+};
+
+window.saveAsServiceCard=async()=>{
+  try{
+    collectPricerItems();
+    const name=$('m_pc_name')?.value?.trim();
+    if(!name){alert('請填服務名稱');return;}
+    const commPercent=parseFloat($('m_pc_comm')?.value)||60;
+    const targetMargin=parseFloat($('m_pc_target')?.value)||30;
+    const fixed=parseFloat($('m_pc_fixed')?.value)||0;
+    const materialCost=S.modal.calcItems.reduce((s,it)=>s+Math.round(getAvgCost(it.productId)*toN(it.qty)),0);
+    const commRate=commPercent/100;
+    const targetRate=targetMargin/100;
+    const denominator=1-commRate-targetRate;
+    if(denominator<=0){alert('抽成 + 淨利目標已超過 100%');return;}
+    const suggestedPrice=Math.ceil((materialCost+fixed)/denominator/100)*100;
+    const card={
+      id:uid(),
+      name,
+      duration:0,
+      price:suggestedPrice,
+      commissionRate:commRate,
+      items:S.modal.calcItems.filter(it=>it.productId&&toN(it.qty)>0)
+    };
+    const cards=[...(S.data.serviceCosts||[]),card];
+    await saveMain({serviceCosts:cards});
+    toast(`✅ 已存為服務成本卡，建議售價 $${fmt(suggestedPrice)}`);
+    closeMod();
+  }catch(err){
+    console.error('saveAsServiceCard 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
 };
 
 window.updPurchase=async(id)=>{
