@@ -2037,12 +2037,24 @@ function pgServiceCost(){
 }
 
 // 計算服務成本卡的財務數據
+// ─── 計算單位成本（每 1g/1ml/1片的成本）──
+// 邏輯：產品「整瓶/整盒」的進貨成本 ÷ 內含容量 = 單位成本
+function getUnitCost(productId){
+  const p=(S.data.products||[]).find(x=>x.id===productId);
+  if(!p)return 0;
+  const totalCost=getAvgCost(productId);  // 整瓶/整個的成本
+  const capacity=toN(p.capacity);  // 內含容量（如 400ml）
+  if(capacity>0)return totalCost/capacity;  // 每 1ml/1g 多少錢
+  return totalCost;  // 沒填容量 → 整瓶當一個單位
+}
+
 function calcServiceCardFinancials(card,fixedPerSvc){
   const products=S.data.products||[];
-  // 材料成本（用加權平均成本）
+  // 材料成本：用「單位成本」× 用量
+  // 例：HYGGE 乳霜 400ml $1,620 → 單位 $4.05/ml × 用量 20g = $81
   const materialCost=(card.items||[]).reduce((s,it)=>{
-    const cost=getAvgCost(it.productId);
-    return s+Math.round(cost*toN(it.qty));
+    const unitCost=getUnitCost(it.productId);
+    return s+Math.round(unitCost*toN(it.qty));
   },0);
   const price=toN(card.price);
   const commRate=card.commissionRate!==undefined?toN(card.commissionRate):0.6;
@@ -2051,11 +2063,8 @@ function calcServiceCardFinancials(card,fixedPerSvc){
   const totalCost=materialCost+commission+fixed;
   const companyNet=price-totalCost;
   const netMargin=price>0?Math.round(companyNet/price*100):0;
-  // 倒推：要 30% 淨利的建議售價
-  // 售價 = (材料 + 攤分) / (1 - 抽成率 - 0.30)
   const denominator30=1-commRate-0.30;
   const suggestedPrice30=denominator30>0?Math.ceil((materialCost+fixed)/denominator30/100)*100:0;
-  // 倒推：要 20% 淨利的建議售價
   const denominator20=1-commRate-0.20;
   const suggestedPrice20=denominator20>0?Math.ceil((materialCost+fixed)/denominator20/100)*100:0;
   return{materialCost,commission,fixed,totalCost,companyNet,netMargin,suggestedPrice30,suggestedPrice20};
@@ -3034,6 +3043,21 @@ function renderModal(){
       <div class="fgrp"><label>產品系列</label><input type="text" id="m_prSeries" placeholder="如：保濕系列、抗老系列（選填）"></div>
       <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" placeholder="0"></div>
       <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" placeholder="0"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
+        <label style="color:var(--blu);font-weight:700;">📏 容量／規格（重要！用於服務成本卡的單位成本計算）</label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <input type="number" id="m_prCap" placeholder="如：400" step="0.1" style="flex:2;">
+          <select id="m_prCapUnit" style="flex:1;">
+            <option value="ml">ml</option>
+            <option value="g">g</option>
+            <option value="片">片</option>
+            <option value="瓶">瓶</option>
+            <option value="次">次</option>
+            <option value="">無單位</option>
+          </select>
+        </div>
+        <div class="tm" style="font-size:11px;margin-top:4px;">例：HYGGE 乳霜 400ml → 容量填 400、單位選 ml。系統會自動算 $1,620÷400 = $4.05/ml</div>
+      </div>
       <div class="fgrp"><label>初始庫存</label><input type="number" id="m_pr4" placeholder="0"></div>
       <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="1" value="1"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註（選填）</label><input type="text" id="m_pr6" placeholder="如：適合敏感肌、規格 50ml"></div>
@@ -3056,6 +3080,18 @@ function renderModal(){
       <div class="fgrp"><label>產品系列（如：保濕系列、抗老系列）</label><input type="text" id="m_prSeries" value="${pr.series||''}" placeholder="選填，可以分組顯示"></div>
       <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" value="${pr.price||0}"></div>
       <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" value="${pr.cost||0}"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
+        <label style="color:var(--blu);font-weight:700;">📏 容量／規格（重要！用於服務成本卡的單位成本計算）</label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <input type="number" id="m_prCap" value="${pr.capacity||''}" placeholder="如：400" step="0.1" style="flex:2;">
+          <select id="m_prCapUnit" style="flex:1;">
+            ${['ml','g','片','瓶','次',''].map(u=>`<option value="${u}"${u===(pr.capacityUnit||'ml')?' selected':''}>${u||'無單位'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="tm" style="font-size:11px;margin-top:4px;">
+          ${toN(pr.capacity)>0?`目前單位成本：$${fmt(Math.round(getUnitCost(pr.id)*100)/100)}/${pr.capacityUnit||''}`:'尚未填容量，將以「整瓶/整個」為單位計算成本'}
+        </div>
+      </div>
       <div class="fgrp"><label>現有庫存</label><input type="number" id="m_pr4" value="${inv.qty||0}"></div>
       <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" value="${inv.minQty||1}"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_pr6" value="${pr.note||''}"></div>
@@ -4108,17 +4144,25 @@ window.delEquipment=async id=>{
 // ─── 服務成本卡：渲染單筆材料 ───
 function renderServiceCardItem(it,idx,allProds){
   const prod=allProds.find(p=>p.id===it.productId);
-  const cost=prod?Math.round(getAvgCost(prod.id)*toN(it.qty)):0;
+  const unitCost=prod?getUnitCost(prod.id):0;
+  const cost=Math.round(unitCost*toN(it.qty));
+  const capacityHint=prod&&toN(prod.capacity)>0?`（${prod.capacity}${prod.capacityUnit||''}）`:'';
   return`<div class="sc_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
     <div style="flex:2;min-width:140px;">
-      <label style="font-size:11px;color:var(--mut);">產品</label>
+      <label style="font-size:11px;color:var(--mut);">產品（顯示單位成本）</label>
       <select class="sci_pid" onchange="updateServiceCardItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
         <option value="">-- 選擇產品 --</option>
-        ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}（成本 $${fmt(getAvgCost(p.id))}）</option>`).join('')}
+        ${allProds.map(p=>{
+          const pUnit=getUnitCost(p.id);
+          const pCap=toN(p.capacity);
+          const pCapUnit=p.capacityUnit||'';
+          const lbl=pCap>0?`${p.name}（$${fmt(Math.round(pUnit*100)/100)}/${pCapUnit}）`:`${p.name}（成本 $${fmt(pUnit)}）`;
+          return`<option value="${p.id}"${it.productId===p.id?' selected':''}>${lbl}</option>`;
+        }).join('')}
       </select>
     </div>
     <div style="flex:1;min-width:80px;">
-      <label style="font-size:11px;color:var(--mut);">用量</label>
+      <label style="font-size:11px;color:var(--mut);">用量${capacityHint}</label>
       <input type="number" class="sci_qty" value="${it.qty||''}" placeholder="0" step="0.1" oninput="updateServiceCardItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
     </div>
     <div style="flex:1;min-width:60px;">
@@ -4293,16 +4337,24 @@ function refreshPricerItems(){
 
 function renderPricerItem(it,idx,allProds){
   const prod=allProds.find(p=>p.id===it.productId);
-  const cost=prod?Math.round(getAvgCost(prod.id)*toN(it.qty)):0;
+  const unitCost=prod?getUnitCost(prod.id):0;
+  const cost=Math.round(unitCost*toN(it.qty));
+  const capacityHint=prod&&toN(prod.capacity)>0?`（${prod.capacity}${prod.capacityUnit||''}）`:'';
   return`<div class="pc_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
     <div style="flex:2;min-width:140px;">
       <select class="pci_pid" onchange="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
         <option value="">-- 選擇產品 --</option>
-        ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}（$${fmt(getAvgCost(p.id))}）</option>`).join('')}
+        ${allProds.map(p=>{
+          const pUnit=getUnitCost(p.id);
+          const pCap=toN(p.capacity);
+          const pCapUnit=p.capacityUnit||'';
+          const lbl=pCap>0?`${p.name}（$${fmt(Math.round(pUnit*100)/100)}/${pCapUnit}）`:`${p.name}（$${fmt(pUnit)}）`;
+          return`<option value="${p.id}"${it.productId===p.id?' selected':''}>${lbl}</option>`;
+        }).join('')}
       </select>
     </div>
     <div style="flex:1;min-width:70px;">
-      <input type="number" class="pci_qty" value="${it.qty||''}" placeholder="用量" step="0.1" oninput="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+      <input type="number" class="pci_qty" value="${it.qty||''}" placeholder="用量${capacityHint}" step="0.1" oninput="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
     </div>
     <div style="flex:1;min-width:60px;">
       <select class="pci_unit" onchange="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
@@ -4327,8 +4379,8 @@ window.calcPricerLive=()=>{
   const targetMargin=parseFloat($('m_pc_target')?.value)||30;
   const targetRate=targetMargin/100;
   const fixed=parseFloat($('m_pc_fixed')?.value)||0;
-  // 材料成本
-  const materialCost=S.modal.calcItems.reduce((s,it)=>s+Math.round(getAvgCost(it.productId)*toN(it.qty)),0);
+  // 材料成本：用單位成本 × 用量
+  const materialCost=S.modal.calcItems.reduce((s,it)=>s+Math.round(getUnitCost(it.productId)*toN(it.qty)),0);
   // 倒推：售價 = (材料 + 攤分) / (1 - 抽成 - 期望淨利)
   const denominator=1-commRate-targetRate;
   const suggestedPrice=denominator>0?Math.ceil((materialCost+fixed)/denominator/100)*100:0;
@@ -4371,7 +4423,7 @@ window.saveAsServiceCard=async()=>{
     const commPercent=parseFloat($('m_pc_comm')?.value)||60;
     const targetMargin=parseFloat($('m_pc_target')?.value)||30;
     const fixed=parseFloat($('m_pc_fixed')?.value)||0;
-    const materialCost=S.modal.calcItems.reduce((s,it)=>s+Math.round(getAvgCost(it.productId)*toN(it.qty)),0);
+    const materialCost=S.modal.calcItems.reduce((s,it)=>s+Math.round(getUnitCost(it.productId)*toN(it.qty)),0);
     const commRate=commPercent/100;
     const targetRate=targetMargin/100;
     const denominator=1-commRate-targetRate;
@@ -4895,17 +4947,19 @@ window.saveProduct=async()=>{
   const pid=uid();
   const qty=parseFloat($('m_pr4')?.value)||0;
   const minQty=parseFloat($('m_pr5')?.value)||1;
-  // 廠商：選擇 __custom__ 時用自訂值
   const supSel=$('m_prSup')?.value;
   const supplier=supSel==='__custom__'?($('m_prSupC')?.value||'').trim():(supSel||'');
   const series=$('m_prSeries')?.value?.trim()||'';
   const cost=parseFloat($('m_pr3')?.value)||0;
+  const capacity=parseFloat($('m_prCap')?.value)||0;
+  const capacityUnit=$('m_prCapUnit')?.value||'';
   const prods=[...(S.data.products||[]),{
     id:pid,name,
     category:$('m_pr1')?.value,
     price:parseFloat($('m_pr2')?.value)||0,
     cost,
     supplier,series,
+    capacity,capacityUnit,
     note:$('m_pr6')?.value||''
   }];
   const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty,avgCost:cost}];
@@ -4915,19 +4969,20 @@ window.updProduct=async(id)=>{
   const name=$('m_pr0')?.value?.trim();if(!name){alert('請填產品名稱');return;}
   const qty=parseFloat($('m_pr4')?.value)||0;
   const minQty=parseFloat($('m_pr5')?.value)||1;
-  // 廠商：選擇 __custom__ 時用自訂值
   const supSel=$('m_prSup')?.value;
   const supplier=supSel==='__custom__'?($('m_prSupC')?.value||'').trim():(supSel||'');
   const series=$('m_prSeries')?.value?.trim()||'';
+  const capacity=parseFloat($('m_prCap')?.value)||0;
+  const capacityUnit=$('m_prCapUnit')?.value||'';
   const prods=(S.data.products||[]).map(p=>p.id===id?{
     ...p,name,
     category:$('m_pr1')?.value,
     price:parseFloat($('m_pr2')?.value)||0,
     cost:parseFloat($('m_pr3')?.value)||0,
     supplier,series,
+    capacity,capacityUnit,
     note:$('m_pr6')?.value||''
   }:p);
-  // 保留原有 avgCost / totalPurchaseCost
   const oldInv=getInv(id);
   const newInv=[...S.data.inventory.filter(i=>i.productId!==id),{...oldInv,productId:id,qty,minQty}];
   await saveMain({products:prods,inventory:newInv});toast('✅ 產品已更新');closeMod();
