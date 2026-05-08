@@ -4293,19 +4293,8 @@ window.saveCartOrder=async(continueInput)=>{
     toast(`✅ ${items.length} 件商品結帳完成 ${discountHint}${ownerHint}`);
     // 清空購物車
     S.cart=[];
-    // 先決定是否要開簽名 modal
-    if(treatmentId){
-      // 直接開簽名 modal（不重新 render 頁面，因為 modal 是獨立的）
-      // render 一次更新底部購物車狀態
-      if(continueInput){
-        renderCart();
-      }else{
-        const c=$('pg-content');if(c)c.innerHTML=renderPage();
-      }
-      // 立刻打開簽名 modal
-      openM('signTreatment',treatmentId);
-    }else{
-      // 沒簽名要求 → 正常處理
+    // 沒簽名要求 → 正常處理
+    if(!treatmentId){
       if(continueInput){
         ['m_pdNote'].forEach(id=>{if($(id))$(id).value='';});
         if($('m_pd5'))$('m_pd5').value='';
@@ -4316,7 +4305,13 @@ window.saveCartOrder=async(continueInput)=>{
       }else{
         const c=$('pg-content');if(c)c.innerHTML=renderPage();
       }
+      return;
     }
+    // 有簽名要求 → 完全照 startIPadTreatment 的成功模式
+    // 1. 關掉任何打開的 modal（沒有就沒有，安全）
+    closeMod();
+    // 2. 等下個 tick 再 openM（給瀏覽器時間清理）
+    setTimeout(()=>openM('signTreatment',treatmentId),100);
   }catch(err){
     console.error('saveCartOrder 失敗:',err);
     alert('結帳失敗：'+(err.message||err));
@@ -4998,6 +4993,10 @@ window.saveTreatmentSignature=async(id)=>{
     await saveMain({treatmentRecords:records});
     toast('✅ 簽名完成！感謝光臨 🌸');
     closeMod();
+    // 如果在銷售開單頁，刷新頁面顯示最新狀態
+    if(S.page==='order'){
+      const c=$('pg-content');if(c)c.innerHTML=renderPage();
+    }
     // 簽完後跳出「補充備註」提示，老師可選擇填寫或關閉
     setTimeout(()=>{
       if(confirm('客戶已完成簽名 ✓\n\n是否要立即補充服務備註？\n（皮膚狀況、客戶反饋、下次建議）')){
