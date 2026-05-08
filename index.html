@@ -4099,13 +4099,13 @@ window.addProductToCart=()=>{
   // 檢查是否已加過 → 數量 +1
   const existed=S.cart.find(it=>it.id===id&&!it.custom);
   if(existed){existed.qty++;}
-  else{S.cart.push({id,name,price,qty:1,custom:false});}
+  else{S.cart.push({id,name,price,qty:1,custom:false,type:'product'});}
   sel.value='';
   renderCart();
 };
 
 window.addCustomProductRow=()=>{
-  S.cart.push({id:'custom_'+Date.now(),name:'',price:0,qty:1,custom:true});
+  S.cart.push({id:'custom_'+Date.now(),name:'',price:0,qty:1,custom:true,type:'product'});
   renderCart();
 };
 
@@ -4149,8 +4149,10 @@ function renderCart(){
           <button class="bdel" onclick="removeCartItem(${i})">×</button>
         </div>`;
       }else{
-        // 正式產品
-        return`<div style="display:flex;gap:6px;align-items:center;background:var(--card);padding:8px;border-radius:6px;">
+        // 服務 / 正式產品
+        const isService=it.type==='service';
+        return`<div style="display:flex;gap:6px;align-items:center;background:var(--card);padding:8px;border-radius:6px;${isService?'border-left:3px solid var(--rose);':''}">
+          ${isService?`<span class="bdg" style="background:var(--roseL);color:var(--rose);flex-shrink:0;">🌸 服務</span>`:`<span class="bdg gold" style="flex-shrink:0;">📦 產品</span>`}
           <span style="flex:2;min-width:100px;font-weight:700;">${it.name}</span>
           <input type="number" value="${it.price}" oninput="updCartField(${i},'price',this.value)" style="width:80px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;" title="可改單價">
           <button class="btn btn-s btn-sm" onclick="updCartQty(${i},-1)" style="padding:2px 8px;">-</button>
@@ -4204,8 +4206,10 @@ window.saveCartOrder=async(continueInput)=>{
     for(const it of items){
       const subtotal=toN(it.price)*toN(it.qty);
       const realRev=Math.round(subtotal*realRevenueRate);
+      // 自動判斷服務/產品類型（從報價單帶入的有 type:'service'）
+      const itemType=it.type==='service'?'service':'product';
       const saleData={
-        date,type:'product',item:it.name,
+        date,type:itemType,item:it.name,
         subNote:note,
         amount:realRev,
         qty:it.qty,unitPrice:it.price,
@@ -4253,58 +4257,65 @@ window.saveCartOrder=async(continueInput)=>{
     const wantSign=$('cart_signOn')?.checked&&customer;
     let treatmentId=null;
     if(wantSign){
-      // 找服務類項目（產品銷售不建療程紀錄）
+      // 自動分類：如果購物車裡有 type==='service' 的項目就用它，沒有就把第一個項目當主項目
       const serviceItems=items.filter(it=>it.type==='service');
-      if(serviceItems.length>0){
-        // 用第一個服務項目作為療程紀錄主項目
-        const mainSvc=serviceItems[0];
-        // 從成本卡找對應的 duration / 用品
-        const card=(S.data.serviceCosts||[]).find(c=>c.name===mainSvc.name);
-        // 累積使用產品（包含購物車中的產品銷售）
-        const productItems=items.filter(it=>it.type==='product'&&it.id);
-        const productsUsed=[
-          ...(card?(card.items||[]).map(it=>({...it})):[]),
-          ...productItems.map(it=>({productId:it.id,qty:it.qty,unit:'瓶'}))
-        ];
-        const r={
-          id:uid(),
-          customer,
-          date,
-          serviceName:serviceItems.length>1?serviceItems.map(s=>s.name).join('、'):mainSvc.name,
-          duration:card?.duration||0,
-          staff,
-          skinCondition:'',
-          productsUsed,
-          feedback:'',
-          nextSuggestion:'',
-          signature:null,
-          totalAmount,
-          payMethod,
-          createdAt:new Date().toISOString()
-        };
-        treatmentId=r.id;
-        const records=[...(S.data.treatmentRecords||[]),r];
-        await saveMain({treatmentRecords:records});
-      }
+      const mainSvc=serviceItems.length>0?serviceItems[0]:items[0];
+      const allServiceNames=serviceItems.length>0?serviceItems.map(s=>s.name):[mainSvc.name];
+      // 從成本卡找對應的 duration / 用品
+      const card=(S.data.serviceCosts||[]).find(c=>c.name===mainSvc.name);
+      // 累積使用產品（包含購物車中的產品銷售）
+      const productItems=items.filter(it=>(it.type!=='service')&&it.id);
+      const productsUsed=[
+        ...(card?(card.items||[]).map(it=>({...it})):[]),
+        ...productItems.map(it=>({productId:it.id,qty:it.qty,unit:'瓶'}))
+      ];
+      const r={
+        id:uid(),
+        customer,
+        date,
+        serviceName:allServiceNames.join('、'),
+        duration:card?.duration||mainSvc.duration||0,
+        staff,
+        skinCondition:'',
+        productsUsed,
+        feedback:'',
+        nextSuggestion:'',
+        signature:null,
+        totalAmount,
+        payMethod,
+        createdAt:new Date().toISOString()
+      };
+      treatmentId=r.id;
+      const records=[...(S.data.treatmentRecords||[]),r];
+      await saveMain({treatmentRecords:records});
     }
 
     toast(`✅ ${items.length} 件商品結帳完成 ${discountHint}${ownerHint}`);
     // 清空購物車
     S.cart=[];
-    if(continueInput){
-      ['m_pdNote'].forEach(id=>{if($(id))$(id).value='';});
-      if($('m_pd5'))$('m_pd5').value='';
-      if($('m_pd5_new')){$('m_pd5_new').value='';$('m_pd5_new').style.display='none';}
-      if($('m_pd_hint'))$('m_pd_hint').innerHTML='';
-      if($('m_pd_owner_wrap'))$('m_pd_owner_wrap').style.display='none';
-      renderCart();
-    }else{
-      const c=$('pg-content');if(c)c.innerHTML=renderPage();
-    }
-
-    // 開啟簽名 modal（如果有建立療程紀錄）
+    // 先決定是否要開簽名 modal
     if(treatmentId){
-      setTimeout(()=>openM('signTreatment',treatmentId),300);
+      // 直接開簽名 modal（不重新 render 頁面，因為 modal 是獨立的）
+      // render 一次更新底部購物車狀態
+      if(continueInput){
+        renderCart();
+      }else{
+        const c=$('pg-content');if(c)c.innerHTML=renderPage();
+      }
+      // 立刻打開簽名 modal
+      openM('signTreatment',treatmentId);
+    }else{
+      // 沒簽名要求 → 正常處理
+      if(continueInput){
+        ['m_pdNote'].forEach(id=>{if($(id))$(id).value='';});
+        if($('m_pd5'))$('m_pd5').value='';
+        if($('m_pd5_new')){$('m_pd5_new').value='';$('m_pd5_new').style.display='none';}
+        if($('m_pd_hint'))$('m_pd_hint').innerHTML='';
+        if($('m_pd_owner_wrap'))$('m_pd_owner_wrap').style.display='none';
+        renderCart();
+      }else{
+        const c=$('pg-content');if(c)c.innerHTML=renderPage();
+      }
     }
   }catch(err){
     console.error('saveCartOrder 失敗:',err);
