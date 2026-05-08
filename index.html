@@ -1922,7 +1922,9 @@ function pgEquipment(){
 function pgServiceCost(){
   const cards=S.data.serviceCosts||[];
   const products=S.data.products||[];
-  // 統計：本月平均每筆服務分攤多少固定成本（房租水電）
+  // 床位每小時成本（從基本設定）
+  const hourlyRate=toN(S.data.settings?.bedHourlyRate);
+  // fallback：本月房租÷月服務數
   const monthExp=getExp().filter(e=>['房租','水電','設備維修'].includes(e.category)).reduce((s,e)=>s+toN(e.amount),0);
   const monthSvcCount=getSales().filter(s=>s.type==='service').length;
   const fixedPerSvc=monthSvcCount>0?Math.round(monthExp/monthSvcCount):0;
@@ -1935,41 +1937,41 @@ function pgServiceCost(){
     💡 <b>會計概念：</b><br>
     • <b>材料成本</b>：服務需要的產品（從庫存抓加權平均成本）<br>
     • <b>老師抽成</b>：售價 × 抽成率（預設 60%）<br>
-    • <b>固定攤分</b>：本月房租水電 ÷ 本月服務筆數（自動算）<br>
+    • <b>固定攤分</b>：${hourlyRate>0?`床位每小時成本 $${fmt(hourlyRate)} × 服務時長`:'本月房租水電 ÷ 本月服務筆數（建議改用「床位/小時」設定）'}<br>
     • <b>公司淨利</b>：售價 - 材料成本 - 老師抽成 - 固定攤分
   </div>
 
+  ${hourlyRate<=0?`<div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);">
+    ⚠️ <b>還沒設定「床位每小時成本」！</b>現在用「房租÷月服務數」計算，月初時數字會爆炸不準。<br>
+    👉 點 <button class="btn btn-y btn-sm" onclick="openM('bedCostSetting')">🛏️ 立即設定床位成本</button> 讓計算穩定可預測
+  </div>`:''}
+
   <div class="sg sg3">
     <div class="sc gold">
-      <div class="sl">本月固定成本</div>
-      <div class="sv gold sm">$${fmt(monthExp)}</div>
-      <div class="ss">房租+水電+維修</div>
+      <div class="sl">床位每小時成本</div>
+      <div class="sv gold sm">$${fmt(hourlyRate)}</div>
+      <div class="ss">${hourlyRate>0?'已設定，計算穩定':'尚未設定'}</div>
     </div>
     <div class="sc rose">
       <div class="sl">本月服務筆數</div>
       <div class="sv rose">${monthSvcCount}</div>
-      <div class="ss">用於攤分計算</div>
+      <div class="ss">參考用</div>
     </div>
     <div class="sc">
-      <div class="sl">每筆攤分</div>
-      <div class="sv sm" style="color:var(--blu);">$${fmt(fixedPerSvc)}</div>
-      <div class="ss">本月實際攤分數</div>
+      <div class="sl">本月實際房租水電</div>
+      <div class="sv sm" style="color:var(--blu);">$${fmt(monthExp)}</div>
+      <div class="ss">用於核對是否覆蓋</div>
     </div>
   </div>
 
-  <div class="sec-hd">
-    <span class="sec-ttl">🧮 售價試算機</span>
-    <button class="btn btn-y btn-sm" onclick="openM('priceCalculator')">📐 開始試算</button>
-  </div>
-  <div class="card">
-    <div class="card-bd">
-      <div class="tm">輸入服務內容、預期毛利率，系統自動推算「建議售價」與盈虧分析。<br>例：30 分鐘 SPA + HYGGE 精油 30g + 抽成 60% + 想賺 30% → 建議售價 $X,XXX</div>
-    </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <button class="btn btn-y btn-sm" onclick="openM('bedCostSetting')">🛏️ 床位成本設定</button>
+    <button class="btn btn-y btn-sm" onclick="openM('priceCalculator')">📐 售價試算機</button>
+    <button class="btn btn-p btn-sm" onclick="openM('addServiceCost')">＋ 新增成本卡</button>
   </div>
 
   <div class="sec-hd">
     <span class="sec-ttl">📋 已建立的服務成本卡（${cards.length} 項）</span>
-    <button class="btn btn-p btn-sm" onclick="openM('addServiceCost')">＋ 新增成本卡</button>
   </div>
 
   ${cards.length===0?`<div class="card"><div class="empty"><div class="empty-ico">💎</div><p>尚未建立任何服務成本卡</p><p class="tm">點「+新增成本卡」開始為每項服務建立成本配方</p></div></div>`:
@@ -2009,8 +2011,8 @@ function pgServiceCost(){
                 <td class="an">$${fmt(fin.commission)}</td>
               </tr>
               <tr><td><b>🏪 固定攤分</b></td>
-                <td class="tm">本月房租水電 ÷ 月服務數</td>
-                <td class="an">$${fmt(fixedPerSvc)}</td>
+                <td class="tm">${fin.fixedSource==='custom'?'此服務自訂金額':fin.fixedSource==='hourly'?`床位成本 $${fmt(toN(S.data.settings?.bedHourlyRate))}/小時 × ${card.duration||0} 分鐘`:'本月房租水電 ÷ 月服務數（建議改設床位成本）'}</td>
+                <td class="an">$${fmt(fin.fixed)}</td>
               </tr>
               <tr style="background:var(--bg2);font-weight:700;">
                 <td>總成本</td><td></td>
@@ -2051,7 +2053,6 @@ function getUnitCost(productId){
 function calcServiceCardFinancials(card,fixedPerSvc){
   const products=S.data.products||[];
   // 材料成本：用「單位成本」× 用量
-  // 例：HYGGE 乳霜 400ml $1,620 → 單位 $4.05/ml × 用量 20g = $81
   const materialCost=(card.items||[]).reduce((s,it)=>{
     const unitCost=getUnitCost(it.productId);
     return s+Math.round(unitCost*toN(it.qty));
@@ -2059,7 +2060,28 @@ function calcServiceCardFinancials(card,fixedPerSvc){
   const price=toN(card.price);
   const commRate=card.commissionRate!==undefined?toN(card.commissionRate):0.6;
   const commission=Math.round(price*commRate);
-  const fixed=toN(fixedPerSvc);
+  // 固定攤分：優先順序
+  // 1. 服務卡自訂金額（card.fixedOverride）
+  // 2. 床位每小時成本 × 服務時長
+  // 3. fallback fixedPerSvc（房租÷月服務數，舊邏輯）
+  let fixed=0;
+  let fixedSource='';
+  if(card.fixedOverride!==undefined&&card.fixedOverride!==''){
+    fixed=toN(card.fixedOverride);
+    fixedSource='custom';
+  }else if(toN(card.duration)>0){
+    const hourlyRate=toN(S.data.settings?.bedHourlyRate);
+    if(hourlyRate>0){
+      fixed=Math.round(hourlyRate*toN(card.duration)/60);
+      fixedSource='hourly';
+    }else{
+      fixed=toN(fixedPerSvc);
+      fixedSource='fallback';
+    }
+  }else{
+    fixed=toN(fixedPerSvc);
+    fixedSource='fallback';
+  }
   const totalCost=materialCost+commission+fixed;
   const companyNet=price-totalCost;
   const netMargin=price>0?Math.round(companyNet/price*100):0;
@@ -2067,7 +2089,7 @@ function calcServiceCardFinancials(card,fixedPerSvc){
   const suggestedPrice30=denominator30>0?Math.ceil((materialCost+fixed)/denominator30/100)*100:0;
   const denominator20=1-commRate-0.20;
   const suggestedPrice20=denominator20>0?Math.ceil((materialCost+fixed)/denominator20/100)*100:0;
-  return{materialCost,commission,fixed,totalCost,companyNet,netMargin,suggestedPrice30,suggestedPrice20};
+  return{materialCost,commission,fixed,fixedSource,totalCost,companyNet,netMargin,suggestedPrice30,suggestedPrice20};
 }
 
 // ─── COURSES ───────────────────────────────────────────────
@@ -2954,18 +2976,33 @@ function renderModal(){
     const card=editing?(S.data.serviceCosts||[]).find(x=>x.id===m.x)||{}:{};
     const items=editing?(card.items||[]):(S.modal.items||[]);
     const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    const hourlyRate=toN(S.data.settings?.bedHourlyRate);
     c=`<div class="mttl">${editing?'✏️ 編輯服務成本卡':'💎 新增服務成本卡'}</div>
     <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
       💡 設定此服務需要的<b>材料用量</b>，系統會用「加權平均成本」自動算每筆服務的材料成本
     </div>
     <div class="fg fg2">
       <div class="fgrp"><label>服務名稱 *</label><input type="text" id="m_sc_name" value="${card.name||''}" placeholder="如：精油 SPA 90 分鐘"></div>
-      <div class="fgrp"><label>時長（分鐘）</label><input type="number" id="m_sc_dur" value="${card.duration||''}" placeholder="如：90"></div>
+      <div class="fgrp"><label>時長（分鐘）*</label><input type="number" id="m_sc_dur" value="${card.duration||''}" placeholder="如：90" oninput="calcServiceCardLive()"></div>
       <div class="fgrp"><label>售價 *</label><input type="number" id="m_sc_price" value="${card.price||''}" placeholder="如：3800" oninput="calcServiceCardLive()"></div>
       <div class="fgrp"><label>抽成率（%）</label><input type="number" id="m_sc_comm" value="${(card.commissionRate||0.6)*100}" min="0" max="100" step="5" oninput="calcServiceCardLive()"></div>
     </div>
 
-    <div style="background:var(--purL);padding:12px;border-radius:8px;margin-top:14px;">
+    <div style="background:var(--goldL);padding:12px;border-radius:8px;margin-top:10px;border-left:3px solid var(--gold);">
+      <label style="color:var(--goldDk);font-weight:700;">🏪 固定攤分（床位/水電）</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+        <div>
+          <div class="tm" style="font-size:11px;">自動計算（依時長）</div>
+          ${hourlyRate>0?`<div style="font-weight:700;color:var(--blu);font-size:14px;">床位 $${fmt(hourlyRate)}/小時 × <span id="m_sc_hourly_calc">${card.duration||0}</span>分 = <span id="m_sc_hourly_amt">$${fmt(Math.round(hourlyRate*toN(card.duration)/60))}</span></div>`:`<div class="tm" style="color:var(--red);">⚠️ 尚未設定床位成本</div>`}
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--mut);">自訂金額（覆蓋自動計算）</label>
+          <input type="number" id="m_sc_fixedOverride" value="${card.fixedOverride!==undefined?card.fixedOverride:''}" placeholder="留空=用自動計算" oninput="calcServiceCardLive()" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--purL);padding:12px;border-radius:8px;margin-top:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <b style="color:var(--pur);">📦 此服務需要的材料</b>
         <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="addServiceCardItem()">＋ 新增材料</button>
@@ -2991,7 +3028,69 @@ function renderModal(){
     setTimeout(calcServiceCardLive,50);
   }
 
-  // ─── 售價試算機 modal ───
+  // ─── 床位成本設定 modal ───
+  if(m.t==='bedCostSetting'){
+    const cur=toN(S.data.settings?.bedHourlyRate);
+    // 自動推算建議值
+    const monthExp=getExp().filter(e=>['房租','水電','設備維修'].includes(e.category)).reduce((s,e)=>s+toN(e.amount),0);
+    // 假設每天 8 小時、一個月 26 天 = 208 小時可用
+    // 但利用率約 60% → 實際 125 小時
+    const suggestedRate=monthExp>0?Math.ceil(monthExp/125/50)*50:0;
+    c=`<div class="mttl">🛏️ 床位每小時成本設定</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 <b>什麼是床位每小時成本？</b><br>
+      把「房租 + 水電 + 設備折舊」這些固定支出，攤分到「每張床每小時」，方便定價。<br><br>
+      例：<br>
+      • 房租 $25,000 + 水電 $3,000 = $28,000/月<br>
+      • 假設工作室每月可服務 125 小時（每天 5 小時 × 25 天）<br>
+      • 床位成本 = $28,000 ÷ 125 = <b>$224/小時</b><br>
+      • 90 分鐘服務的固定攤分 = $224 × 1.5 = <b>$336</b>
+    </div>
+
+    <div style="background:var(--goldL);padding:14px;border-radius:8px;margin:14px 0;">
+      <div style="font-weight:700;color:var(--goldDk);margin-bottom:8px;">💵 你的本月固定支出</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:13px;">
+        <div>本月房租水電維修：<b>$${fmt(monthExp)}</b></div>
+        ${suggestedRate>0?`<div>建議床位成本：<b style="color:var(--gold);">$${fmt(suggestedRate)}/小時</b><br><span class="tm" style="font-size:11px;">（假設每月可服務 125 小時）</span></div>`:''}
+      </div>
+    </div>
+
+    <div class="fg fg2">
+      <div class="fgrp" style="grid-column:1/-1">
+        <label style="font-weight:700;">⏰ 設定床位每小時成本（NT$）</label>
+        <input type="number" id="m_bed_rate" value="${cur||suggestedRate||300}" placeholder="如：300" step="10" style="font-size:18px;font-weight:700;color:var(--gold);">
+        <div class="tm" style="font-size:11px;margin-top:4px;">
+          建議範圍：$200-500/小時（依工作室規模調整）
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg2);padding:12px;border-radius:8px;margin-top:14px;">
+      <div style="font-weight:700;margin-bottom:6px;">📊 試算（依不同時長）</div>
+      <table style="width:100%;font-size:13px;">
+        <thead><tr><th style="text-align:left;">服務時長</th><th>固定攤分</th></tr></thead>
+        <tbody id="m_bed_preview">
+          <!-- 會由 JS 填入 -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="saveBedCost()">✓ 儲存</button>
+    </div>`;
+    setTimeout(()=>{
+      const i=$('m_bed_rate');
+      if(i)i.oninput=()=>{
+        const r=toN(i.value);
+        const tbody=$('m_bed_preview');
+        if(tbody)tbody.innerHTML=[30,60,90,120].map(min=>`<tr><td>${min} 分鐘</td><td>$${fmt(Math.round(r*min/60))}</td></tr>`).join('');
+      };
+      i.dispatchEvent(new Event('input'));
+    },50);
+  }
+
+
   if(m.t==='priceCalculator'){
     const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
     if(!S.modal.calcItems)S.modal.calcItems=[];
@@ -4217,17 +4316,40 @@ function refreshServiceCardItems(){
   calcServiceCardLive();
 }
 
+// ─── 床位每小時成本：儲存到設定 ───
+window.saveBedCost=async()=>{
+  try{
+    const r=parseFloat($('m_bed_rate')?.value)||0;
+    if(r<=0){alert('請輸入大於 0 的金額');return;}
+    const settings={...(S.data.settings||{}),bedHourlyRate:r};
+    await saveMain({settings});
+    toast(`✅ 床位成本已設定 $${fmt(r)}/小時`);
+    closeMod();
+  }catch(err){
+    console.error('saveBedCost 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
 window.calcServiceCardLive=()=>{
   collectServiceCardItems();
   const price=parseFloat($('m_sc_price')?.value)||0;
   const commPercent=parseFloat($('m_sc_comm')?.value)||60;
   const commRate=commPercent/100;
+  const duration=parseFloat($('m_sc_dur')?.value)||0;
+  const fixedOverrideVal=$('m_sc_fixedOverride')?.value;
   const card={
     price,
+    duration,
     commissionRate:commRate,
-    items:S.modal.items
+    items:S.modal.items,
+    fixedOverride:fixedOverrideVal!==''?parseFloat(fixedOverrideVal)||0:undefined
   };
-  // 固定攤分
+  // 即時更新「床位 X 分鐘 = 多少」的顯示
+  const hourlyRate=toN(S.data.settings?.bedHourlyRate);
+  if($('m_sc_hourly_calc'))$('m_sc_hourly_calc').textContent=duration;
+  if($('m_sc_hourly_amt'))$('m_sc_hourly_amt').textContent='$'+fmt(Math.round(hourlyRate*duration/60));
+  // 固定攤分（fallback）
   const monthExp=getExp().filter(e=>['房租','水電','設備維修'].includes(e.category)).reduce((s,e)=>s+toN(e.amount),0);
   const monthSvcCount=getSales().filter(s=>s.type==='service').length;
   const fixedPerSvc=monthSvcCount>0?Math.round(monthExp/monthSvcCount):0;
@@ -4236,12 +4358,13 @@ window.calcServiceCardLive=()=>{
   if(!wrap)return;
   const profitColor=fin.companyNet>=0?'var(--grn)':'var(--red)';
   const marginColor=fin.netMargin>=20?'var(--grn)':fin.netMargin>=0?'var(--gold)':'var(--red)';
+  const sourceLabel=fin.fixedSource==='custom'?'（自訂金額）':fin.fixedSource==='hourly'?`（床位 $${fmt(hourlyRate)}/小時 × ${duration}分）`:'（房租÷月服務數，建議改用床位成本）';
   wrap.innerHTML=`
     <div style="font-weight:700;margin-bottom:8px;">📊 即時試算</div>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:13px;">
       <div>📦 材料成本：<b style="color:var(--red);">$${fmt(fin.materialCost)}</b></div>
       <div>👩‍💼 老師抽成：<b style="color:var(--red);">$${fmt(fin.commission)}</b>　(${commPercent}%)</div>
-      <div>🏪 固定攤分：<b style="color:var(--red);">$${fmt(fin.fixed)}</b></div>
+      <div>🏪 固定攤分：<b style="color:var(--red);">$${fmt(fin.fixed)}</b><br><span class="tm" style="font-size:11px;">${sourceLabel}</span></div>
       <div>💰 總成本：<b style="color:var(--red);">$${fmt(fin.totalCost)}</b></div>
     </div>
     <hr style="margin:10px 0;border:0;border-top:1px solid var(--bdr);">
@@ -4264,12 +4387,14 @@ window.saveServiceCost=async()=>{
     const name=$('m_sc_name')?.value?.trim();
     if(!name){alert('請填服務名稱');return;}
     collectServiceCardItems();
+    const fixedOverrideVal=$('m_sc_fixedOverride')?.value;
     const card={
       id:uid(),
       name,
       duration:parseFloat($('m_sc_dur')?.value)||0,
       price:parseFloat($('m_sc_price')?.value)||0,
       commissionRate:(parseFloat($('m_sc_comm')?.value)||60)/100,
+      fixedOverride:fixedOverrideVal!==''?parseFloat(fixedOverrideVal)||0:undefined,
       items:S.modal.items.filter(it=>it.productId&&toN(it.qty)>0)
     };
     const cards=[...(S.data.serviceCosts||[]),card];
@@ -4287,12 +4412,14 @@ window.updServiceCost=async(id)=>{
     const name=$('m_sc_name')?.value?.trim();
     if(!name){alert('請填服務名稱');return;}
     collectServiceCardItems();
+    const fixedOverrideVal=$('m_sc_fixedOverride')?.value;
     const cards=(S.data.serviceCosts||[]).map(c=>c.id===id?{
       ...c,
       name,
       duration:parseFloat($('m_sc_dur')?.value)||0,
       price:parseFloat($('m_sc_price')?.value)||0,
       commissionRate:(parseFloat($('m_sc_comm')?.value)||60)/100,
+      fixedOverride:fixedOverrideVal!==''?parseFloat(fixedOverrideVal)||0:undefined,
       items:S.modal.items.filter(it=>it.productId&&toN(it.qty)>0)
     }:c);
     await saveMain({serviceCosts:cards});
