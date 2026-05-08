@@ -3340,7 +3340,16 @@ function renderModal(){
 
   // ─── 諮詢報價單 第一步：選客戶 ───
   if(m.t==='quoteCustomer'){
-    if(!S.modal.quoteItems)S.modal.quoteItems=[];
+    // 如果有暫存（從 quoteShow 返回），還原項目
+    if(S.quoteItemsBackup){
+      S.modal.quoteItems=S.quoteItemsBackup.slice();
+    }else if(!S.modal.quoteItems){
+      S.modal.quoteItems=[];
+    }
+    // 如果有暫存資料，恢復客戶與老師
+    const savedCustomer=S.quoteData?.customer||'';
+    const savedStaff=S.quoteData?.staff||'';
+    const savedDate=S.quoteData?.date||today();
     c=`<div class="mttl">📋 諮詢報價單　·　Step 1/2</div>
     <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
       💡 客戶來諮詢時使用，幫助客戶確認本次想做的服務與費用。<br>
@@ -3351,16 +3360,16 @@ function renderModal(){
         <label>客戶 *</label>
         <select id="m_q_customer" onchange="onQuoteCustomerChange()">
           <option value="">-- 選擇客戶 --</option>
-          ${getAllCustomerNames().map(n=>`<option value="${n}">${n}（餘額 $${fmt(getCustomerBalance(n))}）</option>`).join('')}
-          <option value="__new__">＋ 新客戶</option>
+          ${getAllCustomerNames().map(n=>`<option value="${n}"${n===savedCustomer?' selected':''}>${n}（餘額 $${fmt(getCustomerBalance(n))}）</option>`).join('')}
+          <option value="__new__"${savedCustomer&&!getAllCustomerNames().includes(savedCustomer)?' selected':''}>＋ 新客戶</option>
         </select>
-        <input type="text" id="m_q_customer_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+        <input type="text" id="m_q_customer_new" placeholder="新客戶姓名" value="${savedCustomer&&!getAllCustomerNames().includes(savedCustomer)?savedCustomer:''}" style="display:${savedCustomer&&!getAllCustomerNames().includes(savedCustomer)?'block':'none'};margin-top:6px;">
         <div id="m_q_customer_hint" class="tm" style="margin-top:6px;"></div>
       </div>
       <div class="fgrp"><label>負責老師</label>
-        <select id="m_q_staff">${TEACHERS.map(t=>`<option>${t}</option>`).join('')}</select>
+        <select id="m_q_staff">${TEACHERS.map(t=>`<option${t===savedStaff?' selected':''}>${t}</option>`).join('')}</select>
       </div>
-      <div class="fgrp"><label>日期</label><input type="date" id="m_q_date" value="${today()}"></div>
+      <div class="fgrp"><label>日期</label><input type="date" id="m_q_date" value="${savedDate}"></div>
     </div>
 
     <div style="background:var(--goldL);padding:12px;border-radius:8px;margin-top:14px;">
@@ -3385,7 +3394,7 @@ function renderModal(){
 
   // ─── 諮詢報價單 第二步：客戶確認 ───
   if(m.t==='quoteShow'){
-    const q=S.modal.quoteData||{};
+    const q=S.quoteData||{};
     const cards=S.data.serviceCosts||[];
     const products=S.data.products||[];
     const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
@@ -4004,7 +4013,13 @@ window.openM=(t,x)=>{
     bindEvents();
   }
 };
-window.closeMod=()=>{S.modal=null;const bg=$('modal-bg');if(bg)bg.className='modal-bg';};
+window.closeMod=()=>{
+  S.modal=null;
+  // 清空報價單暫存（避免取消後下次開殘留）
+  S.quoteData=null;
+  S.quoteItemsBackup=null;
+  const bg=$('modal-bg');if(bg)bg.className='modal-bg';
+};
 window.setP=p=>{
   // 離開銷售開單頁時清空購物車
   if(S.page==='order'&&p!=='order')S.cart=[];
@@ -5129,19 +5144,20 @@ window.showQuoteForCustomer=()=>{
   if(S.modal.quoteItems.length===0){alert('請至少新增一項服務');return;}
   const valid=S.modal.quoteItems.filter(it=>it.name&&toN(it.price)>0);
   if(valid.length===0){alert('請填寫服務名稱與金額');return;}
-  // 存到 modal 狀態 → 切到客戶確認頁
-  S.modal.quoteData={
+  // 存到 S（而非 S.modal，因為 openM 會重設 S.modal）
+  S.quoteData={
     customer,
     date:$('m_q_date')?.value||today(),
     staff:$('m_q_staff')?.value||'',
     items:valid
   };
-  // 不清空 quoteItems，讓「返回修改」可以保留
+  // 也保留 quoteItems 給「返回修改」使用
+  S.quoteItemsBackup=S.modal.quoteItems.slice();
   openM('quoteShow');
 };
 
 window.acceptQuote=()=>{
-  const q=S.modal.quoteData;
+  const q=S.quoteData;
   if(!q){alert('找不到報價資料');return;}
   // 把報價單內容轉成購物車
   S.cart=q.items.map(it=>{
@@ -5156,12 +5172,13 @@ window.acceptQuote=()=>{
     };
   });
   // 自動把客戶與老師帶入銷售開單
+  S.modal=S.modal||{};
   S.modal.cartCustomer=q.customer;
   S.modal.cartStaff=q.staff;
   S.modal.cartDate=q.date;
   // 清空報價暫存
-  S.modal.quoteItems=[];
-  S.modal.quoteData=null;
+  S.quoteData=null;
+  S.quoteItemsBackup=null;
   closeMod();
   toast('✅ 客戶已接受報價，可以開始服務了！結束後到下方「購物車」結帳');
   // 切換到 order 頁
