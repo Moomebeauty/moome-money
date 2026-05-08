@@ -244,7 +244,9 @@ let S={
     // 設備（含折舊）
     equipment:[],
     // 服務成本卡（BOM）— 每個服務需要的產品與用量
-    serviceCosts:[]
+    serviceCosts:[],
+    // 療程紀錄（含客戶簽名）— 每筆對應一次服務
+    treatmentRecords:[]
   }
 };
 
@@ -273,6 +275,7 @@ function startSync(){
     S.data.assets=d.assets||[];
     S.data.equipment=d.equipment||[];  // 設備（每月折舊）
     S.data.serviceCosts=d.serviceCosts||[];  // 服務成本卡
+    S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
     if(Array.isArray(d.customers)&&d.customers.length>0){
@@ -1395,7 +1398,91 @@ function pgCustomerDetail(c){
         <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
       </tr>`).join('')}</tbody>
     </table></div>
-  </div>`:''}`;
+  </div>`:''}
+
+  ${pgTreatmentRecords(c)}`;
+}
+
+// ─── 療程紀錄區塊（客戶詳情頁專用）───
+function pgTreatmentRecords(c){
+  const records=(S.data.treatmentRecords||[]).filter(r=>(r.customer||'').trim()===(c.name||'').trim()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return`
+  <div class="sec-hd" style="margin-top:24px;">
+    <span class="sec-ttl">📋 療程紀錄（共 ${records.length} 筆）</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('iPadSign','${c.name}')">📱 iPad 簽到模式</button>
+      <button class="btn btn-p btn-sm" onclick="openM('addTreatment','${c.name}')">＋ 新增療程紀錄</button>
+    </div>
+  </div>
+
+  ${records.length===0?`<div class="card"><div class="empty"><div class="empty-ico">📋</div><p>${c.name} 尚無療程紀錄</p><p class="tm">點「+新增療程紀錄」建立首筆，或使用「📱 iPad 簽到模式」讓客戶簽名</p></div></div>`:
+    records.map(r=>{
+      const products=(S.data.products||[]);
+      return`<div class="card" style="margin-bottom:12px;${r.signature?'border-left:4px solid var(--pur);':'border-left:4px solid var(--gold);'}">
+        <div class="card-hd" style="background:${r.signature?'linear-gradient(90deg,var(--purL),transparent)':'linear-gradient(90deg,var(--goldL),transparent)'};">
+          <span class="card-ttl">📋 ${r.date||''}　·　${r.serviceName||'未填項目'}　${r.duration?`<span class="bdg">${r.duration} 分</span>`:''}</span>
+          <div style="display:flex;gap:6px;align-items:center;">
+            ${r.signature?`<span class="bdg pur">✓ 已簽名</span>`:`<span class="bdg gold">⏳ 未簽名</span>`}
+            <button class="btn btn-s btn-sm" onclick="openM('editTreatment','${r.id}')">✏️</button>
+            <button class="bdel" onclick="delTreatment('${r.id}')">×</button>
+          </div>
+        </div>
+        <div class="card-bd">
+          <div class="sg sg2" style="margin-bottom:10px;">
+            <div>
+              <div class="tm" style="font-size:11px;">負責老師</div>
+              <div><b>${r.staff||'-'}</b></div>
+            </div>
+            <div>
+              <div class="tm" style="font-size:11px;">服務時長</div>
+              <div><b>${r.duration||'-'} 分鐘</b></div>
+            </div>
+          </div>
+
+          ${r.skinCondition?`<div style="margin-bottom:8px;padding:8px;background:var(--bg2);border-radius:6px;">
+            <div class="tm" style="font-size:11px;">🧴 客戶當天皮膚/身體狀況</div>
+            <div>${r.skinCondition}</div>
+          </div>`:''}
+
+          ${r.productsUsed&&r.productsUsed.length>0?`<div style="margin-bottom:8px;padding:8px;background:var(--purL);border-radius:6px;">
+            <div class="tm" style="font-size:11px;">📦 本次使用產品</div>
+            <div>${r.productsUsed.map(it=>{
+              const p=products.find(x=>x.id===it.productId);
+              return`${p?.name||it.name||''} ${it.qty||''}${it.unit||''}`;
+            }).join('　·　')}</div>
+          </div>`:''}
+
+          ${r.feedback?`<div style="margin-bottom:8px;padding:8px;background:var(--grnL);border-radius:6px;">
+            <div class="tm" style="font-size:11px;">💬 客戶反饋</div>
+            <div>${r.feedback}</div>
+          </div>`:''}
+
+          ${r.nextSuggestion?`<div style="margin-bottom:8px;padding:8px;background:var(--bluL);border-radius:6px;">
+            <div class="tm" style="font-size:11px;">📝 下次建議（內部備註）</div>
+            <div>${r.nextSuggestion}</div>
+          </div>`:''}
+
+          ${r.signature?`<div style="margin-top:10px;padding:12px;background:linear-gradient(135deg,#fff,#fefaf3);border:2px solid var(--pur);border-radius:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div class="tm" style="font-size:11px;">✓ 已同意服務條款並簽名確認</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                  <span class="tm">客戶簽名：</span>
+                  <img src="${r.signature}" style="max-height:50px;max-width:180px;background:#fff;border-radius:4px;padding:2px;">
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div class="tm" style="font-size:11px;">簽名時間</div>
+                <div style="font-size:12px;">${r.signedAt||r.date}</div>
+                ${r.termsSnapshot?`<button class="btn btn-s btn-sm" style="font-size:11px;margin-top:4px;" onclick="alert(\`【簽名當下的同意條款】\\n\\n${(r.termsSnapshot||'').replace(/`/g,'').replace(/'/g,'').replace(/\n/g,'\\n').replace(/"/g,'\\"').slice(0,500)}\`)">📜 看條款內容</button>`:''}
+              </div>
+            </div>
+          </div>`:`<div style="margin-top:10px;padding:8px;background:var(--goldL);border-radius:6px;text-align:center;">
+            <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('signTreatment','${r.id}')">📱 補簽名</button>
+          </div>`}
+        </div>
+      </div>`;
+    }).join('')}`;
 }
 
 
@@ -2365,9 +2452,31 @@ function pgSettings(){
   const svcs=S.data.services||[];
   const prods=S.data.products||[];
   const sups=S.data.suppliers||[];
+  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const serviceTerms=S.data.settings?.serviceTerms||'';
   return`
   <div class="pg-ttl">⚙️ 基本設定</div>
   <div class="pg-sub">服務項目、產品清單、供應商管理（已預設常用項目）</div>
+
+  <!-- 工作室基本資料與服務條款 -->
+  <div class="card" style="background:linear-gradient(135deg,var(--goldL),var(--purL));border:1px solid var(--gold);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--goldDk);">✨ 工作室資訊與服務條款</span>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">設定工作室名稱與「客戶簽名同意條款」內容（會顯示在 iPad 簽到畫面上）。</div>
+      <div class="fg fg2">
+        <div class="fgrp" style="grid-column:1/-1"><label>工作室名稱（顯示在簽到畫面）</label>
+          <input type="text" id="m_set_studio" value="${studioName}" placeholder="例：沐蜜美容工作室">
+        </div>
+        <div class="fgrp" style="grid-column:1/-1"><label>📜 服務同意條款（客戶簽名前會看到此內容）</label>
+          <textarea id="m_set_terms" rows="10" placeholder="留空會顯示預設條款" style="width:100%;font-family:inherit;font-size:13px;line-height:1.6;">${serviceTerms}</textarea>
+          <div class="tm" style="font-size:11px;margin-top:4px;">建議內容：服務項目確認、健康聲明、權益保障、個資同意。換行時自動保留段落格式。</div>
+        </div>
+      </div>
+      <button class="btn btn-p" onclick="saveStudioSettings()" style="margin-top:10px;">✓ 儲存工作室設定</button>
+    </div>
+  </div>
 
   <div class="card" style="background:var(--bluL);border:1px solid var(--blu);">
     <div class="card-hd" style="background:transparent;border:none;">
@@ -2969,6 +3078,216 @@ function renderModal(){
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_eq6" value="${e.note||''}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updEquipment('${e.id}')">✓ 更新</button></div>`;}
+
+  // ─── 療程紀錄 modal（新增 / 編輯）───
+  if(m.t==='addTreatment'||m.t==='editTreatment'){
+    const editing=m.t==='editTreatment';
+    const r=editing?(S.data.treatmentRecords||[]).find(x=>x.id===m.x)||{}:{customer:m.x};
+    const cards=(S.data.serviceCosts||[]);
+    const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    const customerOptions=getAllCustomerNames().map(n=>`<option value="${n}"${r.customer===n?' selected':''}>${n}</option>`).join('');
+    if(!editing&&!S.modal._initTreat){
+      S.modal.treatItems=r.productsUsed||[];
+      S.modal._initTreat=true;
+    }else if(editing&&!S.modal._editTreatLoaded){
+      S.modal.treatItems=(r.productsUsed||[]).slice();
+      S.modal._editTreatLoaded=true;
+    }
+    const items=S.modal.treatItems||[];
+    c=`<div class="mttl">${editing?'✏️ 編輯療程紀錄':'📋 新增療程紀錄'}</div>
+    <div class="fg fg2">
+      <div class="fgrp"><label>客戶 *</label>
+        <select id="m_tr_customer">${customerOptions}</select>
+      </div>
+      <div class="fgrp"><label>日期 *</label><input type="date" id="m_tr_date" value="${r.date||today()}"></div>
+      <div class="fgrp"><label>服務項目 *</label>
+        <input type="text" id="m_tr_service" value="${r.serviceName||''}" placeholder="如：精油 SPA 90 分鐘" list="m_tr_serviceList">
+        <datalist id="m_tr_serviceList">
+          ${cards.map(c=>`<option value="${c.name}">`).join('')}
+          ${SERVICE_PRESETS.map(s=>`<option value="${s}">`).join('')}
+        </datalist>
+      </div>
+      <div class="fgrp"><label>時長（分鐘）</label><input type="number" id="m_tr_duration" value="${r.duration||''}" placeholder="如：90"></div>
+      <div class="fgrp"><label>負責老師</label>
+        <select id="m_tr_staff">
+          ${TEACHERS.map(t=>`<option value="${t}"${r.staff===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp"><label>套用成本卡（選填，自動帶入用品）</label>
+        <select id="m_tr_card" onchange="applyServiceCardToTreatment(this)">
+          <option value="">-- 不套用 --</option>
+          ${cards.map(card=>`<option value="${card.id}">${card.name}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div style="background:var(--bg2);padding:10px;border-radius:8px;margin-top:14px;">
+      <label style="font-weight:700;">🧴 客戶當天皮膚/身體狀況</label>
+      <textarea id="m_tr_skin" rows="2" placeholder="如：T字部位略油、兩頰乾燥、有壓痘痕跡" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">${r.skinCondition||''}</textarea>
+    </div>
+
+    <div style="background:var(--purL);padding:10px;border-radius:8px;margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <b style="color:var(--pur);">📦 本次使用產品</b>
+        <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="addTreatItem()">＋ 新增</button>
+      </div>
+      <div id="m_tr_items">
+        ${items.length===0?'<div class="tm" style="text-align:center;padding:14px;">尚未填寫，可從上方「套用成本卡」自動帶入</div>':
+          items.map((it,i)=>renderTreatItem(it,i,allProds)).join('')}
+      </div>
+    </div>
+
+    <div style="background:var(--grnL);padding:10px;border-radius:8px;margin-top:10px;">
+      <label style="font-weight:700;color:var(--grn);">💬 客戶反饋</label>
+      <textarea id="m_tr_feedback" rows="2" placeholder="如：覺得手法很舒服、希望加強肩頸放鬆" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">${r.feedback||''}</textarea>
+    </div>
+
+    <div style="background:var(--bluL);padding:10px;border-radius:8px;margin-top:10px;">
+      <label style="font-weight:700;color:var(--blu);">📝 下次建議（內部備註，客戶看不到）</label>
+      <textarea id="m_tr_next" rows="2" placeholder="如：下次嘗試加強保濕導入、推薦 HYGGE 乳霜" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">${r.nextSuggestion||''}</textarea>
+    </div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      ${editing?`<button class="btn btn-pur" style="background:var(--pur);color:#fff;" onclick="openM('signTreatment','${r.id}')">📱 客戶簽名</button>`:''}
+      <button class="btn btn-p" onclick="${editing?`updTreatment('${r.id}')`:'saveTreatment()'}">✓ ${editing?'更新':'新增'}</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 療程簽名 modal（升級版：含同意條款）───
+  if(m.t==='signTreatment'){
+    const r=(S.data.treatmentRecords||[]).find(x=>x.id===m.x)||{};
+    const products=(S.data.products||[]);
+    const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+    // 自訂同意條款（從設定讀取，否則用預設）
+    const customTerms=S.data.settings?.serviceTerms||`【服務項目確認】
+本人已知悉並同意接受以下服務內容，包含使用之產品與用量。
+
+【健康聲明】
+本人於接受服務前已主動告知工作室任何過敏史、皮膚狀況、健康問題或正在服用之藥物。
+
+【權益保障】
+本人已了解此次服務之內容、效果與可能反應。如有不適會立即告知服務人員。
+
+【個資同意】
+本人同意工作室為服務目的紀錄此次療程內容，並同意此資料用於後續療程參考，工作室承諾不外流個資。`;
+    c=`<div class="mttl">✨ ${studioName}　·　療程確認與簽名</div>
+
+    <!-- 高級感頂部資訊卡 -->
+    <div style="background:linear-gradient(135deg,var(--rose) 0%,var(--gold) 100%);padding:18px 20px;border-radius:12px;margin-bottom:14px;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.1);">
+      <div style="font-size:22px;font-weight:700;margin-bottom:4px;">${r.customer||''} 親愛的</div>
+      <div style="font-size:14px;opacity:0.9;">感謝您選擇 ${studioName}　${r.date||''}</div>
+    </div>
+
+    <!-- 本次療程詳情 -->
+    <div style="background:var(--card);padding:14px;border-radius:10px;border:1px solid var(--bdr);margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px;">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--rose);">${r.serviceName||'未填項目'}</div>
+          <div class="tm" style="font-size:12px;margin-top:2px;">${r.duration?`時長 ${r.duration} 分鐘　·　`:''}負責老師：${r.staff||'-'}</div>
+        </div>
+      </div>
+      ${r.skinCondition?`<div style="margin-top:8px;padding:8px 10px;background:var(--bg2);border-radius:6px;font-size:13px;">
+        <b>📋 服務前狀況：</b>${r.skinCondition}
+      </div>`:''}
+      ${r.productsUsed&&r.productsUsed.length>0?`<div style="margin-top:8px;padding:8px 10px;background:var(--purL);border-radius:6px;font-size:13px;">
+        <b>📦 本次使用產品：</b>${r.productsUsed.map(it=>{
+          const p=products.find(x=>x.id===it.productId);
+          return`${p?.name||it.name||''}${it.qty?` ${it.qty}${it.unit||''}`:''}`;
+        }).join('、')}
+      </div>`:''}
+    </div>
+
+    <!-- 服務同意條款 -->
+    <div style="background:var(--bluL);padding:14px;border-radius:10px;border-left:4px solid var(--blu);margin-bottom:14px;max-height:160px;overflow-y:auto;">
+      <div style="font-weight:700;color:var(--blu);margin-bottom:6px;font-size:14px;">📜 服務同意聲明</div>
+      <div style="font-size:13px;line-height:1.7;white-space:pre-wrap;">${customTerms}</div>
+    </div>
+
+    <!-- 確認框 -->
+    <div style="background:var(--goldL);padding:12px 14px;border-radius:10px;margin-bottom:14px;border:2px solid var(--gold);">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+        <input type="checkbox" id="m_sign_agree" style="width:18px;height:18px;cursor:pointer;">
+        <span><b style="color:var(--goldDk);">本人 ${r.customer||''} 已詳閱並同意上述條款</b></span>
+      </label>
+    </div>
+
+    <!-- 簽名區 -->
+    <div style="text-align:center;margin-bottom:8px;">
+      <b style="font-size:16px;color:var(--rose);">✍️ 請於下方簽名</b>
+      <div class="tm" style="font-size:12px;">用手指或 Apple Pencil 簽名都可以</div>
+    </div>
+    <div style="background:linear-gradient(180deg,#fff 0%,#fffaf3 100%);border:3px dashed var(--gold);border-radius:12px;padding:10px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.05);">
+      <canvas id="m_sign_canvas" width="600" height="200" style="width:100%;height:200px;cursor:crosshair;touch-action:none;display:block;background:#fff;border-radius:8px;"></canvas>
+    </div>
+    <div style="text-align:right;margin-top:6px;">
+      <span class="tm" style="font-size:11px;">簽名時間：${new Date().toISOString().slice(0,16).replace('T',' ')}</span>
+    </div>
+
+    <div class="mbtns" style="margin-top:14px;">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-y" onclick="clearSignature()">🗑️ 清除重簽</button>
+      <button class="btn btn-pur" style="background:linear-gradient(135deg,var(--pur),var(--rose));color:#fff;font-size:16px;font-weight:700;padding:12px 24px;" onclick="saveTreatmentSignature('${r.id}')">✓ 完成簽名</button>
+    </div>`;
+    S.modal.lg=true;
+    setTimeout(initSignatureCanvas,100);
+  }
+
+  // ─── iPad 簽到模式（大字版本，給客戶用）───
+  if(m.t==='iPadSign'){
+    const customerName=m.x;
+    const records=(S.data.treatmentRecords||[]).filter(r=>(r.customer||'').trim()===customerName.trim()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const cards=(S.data.serviceCosts||[]);
+    c=`<div class="mttl" style="font-size:24px;">📱 ${customerName} 簽到</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:14px;">
+      ✨ 歡迎光臨！請選擇本次的服務項目，或查看歷次紀錄
+    </div>
+
+    <div class="sec-hd">
+      <span class="sec-ttl" style="font-size:18px;">📋 歷次療程紀錄（${records.length} 筆）</span>
+    </div>
+    <div style="max-height:280px;overflow-y:auto;background:var(--bg2);padding:8px;border-radius:8px;">
+      ${records.length===0?'<div class="empty"><p>本次為首次造訪，期待為您服務 🌸</p></div>':
+        records.slice(0,8).map(r=>`<div style="background:var(--card);padding:10px 14px;border-radius:8px;margin-bottom:6px;${r.signature?'border-left:3px solid var(--pur);':''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <b>${r.date}　·　${r.serviceName}</b>
+              <div class="tm" style="font-size:12px;">老師：${r.staff||'-'}　${r.signature?'✓ 已簽名':'⏳ 未簽名'}</div>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec-hd" style="margin-top:14px;">
+      <span class="sec-ttl" style="font-size:18px;">✨ 開始本次服務</span>
+    </div>
+    <div style="background:var(--goldL);padding:14px;border-radius:8px;">
+      <div class="fg fg2">
+        <div class="fgrp"><label style="font-size:14px;">服務項目 *</label>
+          <input type="text" id="m_ipad_service" placeholder="如：精油 SPA 90 分鐘" list="m_ipad_list" style="font-size:16px;padding:10px;">
+          <datalist id="m_ipad_list">
+            ${cards.map(c=>`<option value="${c.name}">`).join('')}
+            ${SERVICE_PRESETS.map(s=>`<option value="${s}">`).join('')}
+          </datalist>
+        </div>
+        <div class="fgrp"><label style="font-size:14px;">負責老師</label>
+          <select id="m_ipad_staff" style="font-size:16px;padding:10px;">
+            ${TEACHERS.map(t=>`<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-pur" style="background:var(--pur);color:#fff;width:100%;font-size:16px;padding:14px;margin-top:10px;" onclick="startIPadTreatment('${customerName}')">
+        ✍️ 開始記錄並簽到
+      </button>
+    </div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
 
   // ─── 服務成本卡 modal ───
   if(m.t==='addServiceCost'||m.t==='editServiceCost'){
@@ -4240,6 +4559,249 @@ window.delEquipment=async id=>{
   toast('已刪除');
 };
 
+// ─── 療程紀錄相關函式 ──────────────────────────────
+function renderTreatItem(it,idx,allProds){
+  const prod=allProds.find(p=>p.id===it.productId);
+  return`<div class="tr_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
+    <div style="flex:2;min-width:140px;">
+      <select class="tri_pid" style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="">-- 選產品 --</option>
+        ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}</option>`).join('')}
+      </select>
+    </div>
+    <div style="flex:1;min-width:60px;">
+      <input type="number" class="tri_qty" value="${it.qty||''}" placeholder="用量" step="0.1" style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+    </div>
+    <div style="flex:1;min-width:60px;">
+      <select class="tri_unit" style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        ${['g','ml','片','瓶','次'].map(u=>`<option value="${u}"${it.unit===u?' selected':''}>${u}</option>`).join('')}
+      </select>
+    </div>
+    <button onclick="rmTreatItem(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+  </div>`;
+}
+
+function collectTreatItems(){
+  const els=document.querySelectorAll('.tr_item');
+  S.modal.treatItems=Array.from(els).map(el=>({
+    productId:el.querySelector('.tri_pid')?.value||'',
+    qty:parseFloat(el.querySelector('.tri_qty')?.value)||0,
+    unit:el.querySelector('.tri_unit')?.value||'g'
+  }));
+}
+
+function refreshTreatItems(){
+  const wrap=$('m_tr_items');
+  if(!wrap)return;
+  const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+  wrap.innerHTML=S.modal.treatItems.length===0?'<div class="tm" style="text-align:center;padding:14px;">尚未填寫</div>':
+    S.modal.treatItems.map((it,i)=>renderTreatItem(it,i,allProds)).join('');
+}
+
+window.addTreatItem=()=>{
+  collectTreatItems();
+  S.modal.treatItems.push({productId:'',qty:1,unit:'g'});
+  refreshTreatItems();
+};
+
+window.rmTreatItem=(idx)=>{
+  collectTreatItems();
+  S.modal.treatItems.splice(idx,1);
+  refreshTreatItems();
+};
+
+window.applyServiceCardToTreatment=(sel)=>{
+  if(!sel.value)return;
+  const card=(S.data.serviceCosts||[]).find(c=>c.id===sel.value);
+  if(!card)return;
+  if($('m_tr_service'))$('m_tr_service').value=card.name||'';
+  if($('m_tr_duration'))$('m_tr_duration').value=card.duration||'';
+  S.modal.treatItems=(card.items||[]).map(it=>({...it}));
+  refreshTreatItems();
+  toast('✅ 已從成本卡帶入');
+};
+
+window.saveTreatment=async()=>{
+  try{
+    const customer=$('m_tr_customer')?.value?.trim();
+    const date=$('m_tr_date')?.value;
+    const serviceName=$('m_tr_service')?.value?.trim();
+    if(!customer||!date||!serviceName){alert('請填客戶、日期、服務項目');return;}
+    collectTreatItems();
+    const r={
+      id:uid(),
+      customer,date,serviceName,
+      duration:parseFloat($('m_tr_duration')?.value)||0,
+      staff:$('m_tr_staff')?.value||'',
+      skinCondition:$('m_tr_skin')?.value||'',
+      productsUsed:S.modal.treatItems.filter(it=>it.productId&&toN(it.qty)>0),
+      feedback:$('m_tr_feedback')?.value||'',
+      nextSuggestion:$('m_tr_next')?.value||'',
+      signature:null,
+      createdAt:new Date().toISOString()
+    };
+    const records=[...(S.data.treatmentRecords||[]),r];
+    await saveMain({treatmentRecords:records});
+    toast('✅ 療程紀錄已新增');
+    closeMod();
+  }catch(err){
+    console.error('saveTreatment 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
+window.updTreatment=async(id)=>{
+  try{
+    collectTreatItems();
+    const records=(S.data.treatmentRecords||[]).map(r=>r.id===id?{
+      ...r,
+      customer:$('m_tr_customer')?.value?.trim()||r.customer,
+      date:$('m_tr_date')?.value||r.date,
+      serviceName:$('m_tr_service')?.value?.trim()||r.serviceName,
+      duration:parseFloat($('m_tr_duration')?.value)||0,
+      staff:$('m_tr_staff')?.value||'',
+      skinCondition:$('m_tr_skin')?.value||'',
+      productsUsed:S.modal.treatItems.filter(it=>it.productId&&toN(it.qty)>0),
+      feedback:$('m_tr_feedback')?.value||'',
+      nextSuggestion:$('m_tr_next')?.value||''
+    }:r);
+    await saveMain({treatmentRecords:records});
+    toast('✅ 已更新');closeMod();
+  }catch(err){
+    console.error('updTreatment 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
+window.delTreatment=async(id)=>{
+  if(!confirm('確認刪除這筆療程紀錄？\n（含客戶簽名）'))return;
+  const records=(S.data.treatmentRecords||[]).filter(r=>r.id!==id);
+  await saveMain({treatmentRecords:records});
+  toast('已刪除');
+};
+
+// ─── 簽名功能（Canvas）───────────────────
+let _sigCanvas=null,_sigCtx=null,_sigDrawing=false,_sigHasContent=false;
+
+window.initSignatureCanvas=()=>{
+  const canvas=$('m_sign_canvas');
+  if(!canvas)return;
+  _sigCanvas=canvas;
+  // 設定高解析度
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.getBoundingClientRect();
+  canvas.width=rect.width*dpr;
+  canvas.height=rect.height*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.lineWidth=2.5;
+  ctx.lineCap='round';
+  ctx.strokeStyle='#000';
+  _sigCtx=ctx;
+  _sigHasContent=false;
+
+  function getPos(e){
+    const rect=canvas.getBoundingClientRect();
+    if(e.touches&&e.touches[0]){
+      return{x:e.touches[0].clientX-rect.left,y:e.touches[0].clientY-rect.top};
+    }
+    return{x:e.clientX-rect.left,y:e.clientY-rect.top};
+  }
+
+  function start(e){
+    e.preventDefault();
+    _sigDrawing=true;
+    const p=getPos(e);
+    _sigCtx.beginPath();
+    _sigCtx.moveTo(p.x,p.y);
+  }
+  function move(e){
+    if(!_sigDrawing)return;
+    e.preventDefault();
+    const p=getPos(e);
+    _sigCtx.lineTo(p.x,p.y);
+    _sigCtx.stroke();
+    _sigHasContent=true;
+  }
+  function end(e){
+    e.preventDefault();
+    _sigDrawing=false;
+  }
+
+  canvas.addEventListener('mousedown',start);
+  canvas.addEventListener('mousemove',move);
+  canvas.addEventListener('mouseup',end);
+  canvas.addEventListener('mouseleave',end);
+  canvas.addEventListener('touchstart',start,{passive:false});
+  canvas.addEventListener('touchmove',move,{passive:false});
+  canvas.addEventListener('touchend',end,{passive:false});
+};
+
+window.clearSignature=()=>{
+  if(!_sigCanvas||!_sigCtx)return;
+  _sigCtx.clearRect(0,0,_sigCanvas.width,_sigCanvas.height);
+  _sigHasContent=false;
+};
+
+window.saveTreatmentSignature=async(id)=>{
+  try{
+    const agreed=$('m_sign_agree')?.checked;
+    if(!agreed){alert('⚠️ 請勾選「已詳閱並同意上述條款」');return;}
+    if(!_sigCanvas||!_sigHasContent){alert('⚠️ 請先簽名');return;}
+    const dataURL=_sigCanvas.toDataURL('image/png');
+    const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+    const termsSnapshot=S.data.settings?.serviceTerms||'';
+    const records=(S.data.treatmentRecords||[]).map(r=>r.id===id?{
+      ...r,
+      signature:dataURL,
+      signedAt:new Date().toISOString().slice(0,16).replace('T',' '),
+      agreed:true,
+      agreedAt:new Date().toISOString(),
+      termsSnapshot,  // 簽名當下的條款內容（存證用，避免日後條款修改失去證明力）
+      studioSnapshot:studioName
+    }:r);
+    await saveMain({treatmentRecords:records});
+    toast('✅ 簽名完成！感謝光臨 🌸');
+    closeMod();
+  }catch(err){
+    console.error('saveTreatmentSignature 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
+// ─── iPad 簽到模式：開始一筆療程 ───
+window.startIPadTreatment=async(customerName)=>{
+  try{
+    const serviceName=$('m_ipad_service')?.value?.trim();
+    const staff=$('m_ipad_staff')?.value||'';
+    if(!serviceName){alert('請選擇服務項目');return;}
+    // 找對應的成本卡（如果有的話自動帶入時長/用品）
+    const card=(S.data.serviceCosts||[]).find(c=>c.name===serviceName);
+    const r={
+      id:uid(),
+      customer:customerName,
+      date:today(),
+      serviceName,
+      duration:card?.duration||0,
+      staff,
+      skinCondition:'',
+      productsUsed:card?(card.items||[]).map(it=>({...it})):[],
+      feedback:'',
+      nextSuggestion:'',
+      signature:null,
+      createdAt:new Date().toISOString()
+    };
+    const records=[...(S.data.treatmentRecords||[]),r];
+    await saveMain({treatmentRecords:records});
+    // 直接打開簽名 modal
+    closeMod();
+    setTimeout(()=>openM('signTreatment',r.id),100);
+  }catch(err){
+    console.error('startIPadTreatment 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
+
 // ─── 服務成本卡：渲染單筆材料 ───
 function renderServiceCardItem(it,idx,allProds){
   const prod=allProds.find(p=>p.id===it.productId);
@@ -4315,6 +4877,20 @@ function refreshServiceCardItems(){
     S.modal.items.map((it,i)=>renderServiceCardItem(it,i,allProds)).join('');
   calcServiceCardLive();
 }
+
+// ─── 工作室基本資料與服務條款設定 ───
+window.saveStudioSettings=async()=>{
+  try{
+    const studioName=$('m_set_studio')?.value?.trim()||'沐蜜美容工作室';
+    const serviceTerms=$('m_set_terms')?.value||'';
+    const settings={...(S.data.settings||{}),studioName,serviceTerms};
+    await saveMain({settings});
+    toast('✅ 工作室設定已儲存');
+  }catch(err){
+    console.error('saveStudioSettings 失敗:',err);
+    alert('失敗：'+(err.message||err));
+  }
+};
 
 // ─── 床位每小時成本：儲存到設定 ───
 window.saveBedCost=async()=>{
