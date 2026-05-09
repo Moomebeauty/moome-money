@@ -219,6 +219,99 @@ const EXP_CATS=['房租','水電','材料耗材','薪資','行銷廣告','平台
 const PAY=['轉帳','現金','儲值扣款']; // 付款方式
 const MOS=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
+// ── 預設首次建檔健康問卷（完整版） ───────────────────────────
+// 題型：text(單行) / textarea(多行) / radio(單選) / checkbox_group(複選)
+//      section(章節標題)
+const DEFAULT_HEALTH_QUESTIONS=[
+  // 第一部分：基本資料
+  {type:'section',label:'第一部分　基本資料'},
+  {key:'birthYear',label:'出生年',type:'text',placeholder:'例：1990'},
+  {key:'occupation',label:'職業',type:'text',placeholder:'例：上班族、教師、行銷'},
+  {key:'contactPhone',label:'緊急聯絡電話',type:'text',placeholder:'例：0912-345-678'},
+  {key:'contactRelation',label:'緊急聯絡人關係',type:'text',placeholder:'例：母親、配偶、朋友'},
+  {key:'referralSource',label:'如何得知本工作室',type:'checkbox_group',options:['朋友介紹','IG','FB','Google','路過','其他']},
+
+  // 第二部分：慢性病與身體狀況
+  {type:'section',label:'第二部分　慢性病與身體狀況'},
+  {key:'cardio',label:'心血管系統',type:'checkbox_group',options:['高血壓','低血壓','心臟病','心律不整','中風病史']},
+  {key:'metabolic',label:'代謝／內分泌',type:'checkbox_group',options:['糖尿病','甲狀腺疾病（亢進/低下）','高血脂']},
+  {key:'immune',label:'凝血／免疫',type:'checkbox_group',options:['凝血功能異常','血友病','自體免疫疾病（紅斑性狼瘡、乾燥症等）','免疫缺乏疾病（HIV等）']},
+  {key:'skin',label:'皮膚相關',type:'checkbox_group',options:['蟹足腫體質','異位性皮膚炎','乾癬','酒糟性皮膚炎','濕疹／脂漏性皮膚炎','單純皰疹（口唇／生殖器）病史','帶狀皰疹病史','黑色素瘤或皮膚癌病史']},
+  {key:'neuro',label:'神經系統',type:'checkbox_group',options:['癲癇','偏頭痛','三叉神經痛']},
+  {key:'cancer',label:'癌症（治療中或病史）',type:'textarea',placeholder:'若有請說明病情、治療階段。沒有請寫「無」'},
+  {key:'organ',label:'器官／骨骼',type:'checkbox_group',options:['肝臟疾病','腎臟疾病','骨質疏鬆症']},
+  {key:'fracture',label:'骨折／手術病史（部位、時間）',type:'textarea',placeholder:'例：5年前左膝韌帶手術。沒有請寫「無」'},
+  {key:'vein',label:'循環系統',type:'checkbox_group',options:['靜脈曲張','深層靜脈栓塞病史']},
+  {key:'infectious',label:'傳染性疾病（B肝、C肝、梅毒等）',type:'textarea',placeholder:'若有請註明。沒有請寫「無」'},
+  {key:'otherDisease',label:'其他未列出之疾病或健康狀況',type:'textarea',placeholder:'若有請說明。沒有請寫「無」'},
+
+  // 第三部分：用藥與療程史
+  {type:'section',label:'第三部分　用藥與療程史'},
+  {key:'medRegular',label:'目前是否規律服用藥物',type:'radio',options:['否','是']},
+  {key:'medList',label:'服用藥物清單（藥物名稱／用途／服用期間）',type:'textarea',placeholder:'例：降血壓藥（高血壓，3年）。若無請留空或寫「無」'},
+  {key:'recentMed',label:'近三個月內使用以下藥物或產品（可複選）',type:'checkbox_group',options:['抗凝血劑（阿斯匹靈、Warfarin等）','類固醇（口服／外用／注射）','抗生素（特別是四環黴素類）','A酸（口服／外用）','果酸／水楊酸／杜鵑花酸（換膚產品）','退斑藥（對苯二酚、傳明酸等）','光敏感藥物','中藥／健康食品','以上皆無']},
+  {key:'aRetinolStop',label:'若有使用 A 酸，停藥日期',type:'text',placeholder:'例：2025/12/01。沒使用過請留空'},
+  {key:'recentLaser',label:'近一年內醫美／美容療程紀錄',type:'checkbox_group',options:['雷射（淨膚／除斑／除毛）','脈衝光／IPL','電波拉皮／音波拉皮','微整注射（肉毒／玻尿酸／晶亮瓷）','美白點滴／注射','整形手術','紋繡／紋眼線／紋唇','其他','以上皆無']},
+  {key:'recentLaserDetail',label:'醫美療程詳情（部位／時間）',type:'textarea',placeholder:'例：3個月前做臉部雷射、半年前打玻尿酸（鼻、下巴）'},
+  {key:'badReaction',label:'是否曾接受美容服務後出現不良反應',type:'radio',options:['否','是']},
+  {key:'badReactionDetail',label:'若曾有不良反應，狀況說明',type:'textarea',placeholder:'例：去年做臉後紅腫3天、敷某品牌面膜過敏'},
+
+  // 第四部分：過敏史
+  {type:'section',label:'第四部分　過敏史'},
+  {key:'hasAllergy',label:'是否有過敏體質',type:'radio',options:['否','是']},
+  {key:'allergyDrug',label:'過敏原 - 藥物（可複選）',type:'checkbox_group',options:['麻醉藥','抗生素','止痛藥','其他']},
+  {key:'allergyDrugOther',label:'其他藥物過敏（請說明）',type:'text',placeholder:''},
+  {key:'allergyFood',label:'過敏原 - 食物（可複選）',type:'checkbox_group',options:['海鮮','堅果','蛋奶','其他']},
+  {key:'allergyFoodOther',label:'其他食物過敏（請說明）',type:'text',placeholder:''},
+  {key:'allergyContact',label:'過敏原 - 接觸性（可複選）',type:'checkbox_group',options:['金屬（鎳、鉻等）','乳膠／橡膠','香精／香料','酒精','防腐劑','染料／色料','松香（蜂蠟成分）','精油','以上皆無']},
+  {key:'allergyCosmetic',label:'特定保養品成分過敏',type:'text',placeholder:'例：對水楊酸、A醇過敏'},
+  {key:'allergyOther',label:'其他過敏（可複選）',type:'checkbox_group',options:['花粉','灰塵','動物毛','季節性過敏','以上皆無']},
+  {key:'allergySymptom',label:'過敏發作時的症狀',type:'checkbox_group',options:['起疹／紅腫','搔癢','呼吸困難','過敏性休克病史','其他']},
+  {key:'allergySymptomOther',label:'其他過敏症狀（請說明）',type:'text',placeholder:''},
+
+  // 第五部分：女性健康
+  {type:'section',label:'第五部分　女性健康（如不適用請填「無」）'},
+  {key:'pregnant',label:'目前是否懷孕',type:'radio',options:['否','是','備孕中','不適用']},
+  {key:'pregnantWeeks',label:'若懷孕，週數',type:'text',placeholder:'例：12週'},
+  {key:'breastfeeding',label:'是否哺乳中',type:'radio',options:['否','是','不適用']},
+  {key:'menstrualStatus',label:'月經狀況',type:'radio',options:['規律','不規律','已停經','不適用']},
+  {key:'menstrualCycle',label:'生理期週期說明',type:'text',placeholder:'例：約每28天一次，每次持續約5天'},
+  {key:'menstrualSkin',label:'生理期是否會有皮膚／身體狀況變化',type:'checkbox_group',options:['否','皮膚較敏感','長痘痘','疼痛感增強','其他']},
+  {key:'menstrualSkinOther',label:'其他生理期皮膚狀況（請說明）',type:'text',placeholder:''},
+  {key:'hormone',label:'是否使用避孕藥／賀爾蒙藥物',type:'radio',options:['否','是']},
+  {key:'hormoneDetail',label:'若有使用賀爾蒙藥物，請說明',type:'text',placeholder:'例：避孕藥已服用2年'},
+
+  // 第六部分：皮膚／身體現況評估
+  {type:'section',label:'第六部分　皮膚／身體現況評估'},
+  {key:'skinType',label:'皮膚類型',type:'radio',options:['乾性','油性','混合性','中性','敏感性']},
+  {key:'skinIssues',label:'主要皮膚困擾（可複選）',type:'checkbox_group',options:['痘痘／粉刺','暗沉','斑點／色素沉澱','細紋／皺紋','鬆弛','毛孔粗大','泛紅','乾燥脫屑','出油','黑眼圈','其他']},
+  {key:'bodyIssues',label:'身體狀況（可複選）',type:'checkbox_group',options:['經常肩頸僵硬','下背痠痛','失眠','水腫','手腳冰冷','經常疲勞','消化不良']},
+  {key:'dailyCleanser',label:'日常保養品 - 潔面',type:'text',placeholder:'品牌或產品名'},
+  {key:'dailyToner',label:'日常保養品 - 化妝水',type:'text',placeholder:''},
+  {key:'dailySerum',label:'日常保養品 - 精華',type:'text',placeholder:''},
+  {key:'dailyCream',label:'日常保養品 - 乳液／面霜',type:'text',placeholder:''},
+  {key:'dailySunscreen',label:'日常保養品 - 防曬',type:'text',placeholder:''},
+  {key:'specialCare',label:'特殊保養（眼霜／面膜等）',type:'text',placeholder:''},
+
+  // 第七部分：生活作息
+  {type:'section',label:'第七部分　生活作息'},
+  {key:'sleepHours',label:'睡眠時數（小時／天）',type:'text',placeholder:'例：7'},
+  {key:'exerciseFreq',label:'運動頻率（次／週）',type:'text',placeholder:'例：3'},
+  {key:'smoking',label:'抽菸',type:'radio',options:['否','是']},
+  {key:'smokingDetail',label:'若抽菸（年數／包數/週）',type:'text',placeholder:'例：5年／3包/週'},
+  {key:'drinking',label:'飲酒',type:'radio',options:['否','偶爾','經常']},
+  {key:'waterIntake',label:'飲水量（ml／天）',type:'text',placeholder:'例：2000'},
+
+  // 第八部分：本次服務目標
+  {type:'section',label:'第八部分　本次服務目標'},
+  {key:'concerns',label:'本次最想改善的問題',type:'textarea',placeholder:'例：黑眼圈、痘痘、暗沉、緊繃感'},
+  {key:'expectation',label:'對本次服務的期待',type:'textarea',placeholder:'例：放鬆、改善膚況、學會正確保養方法'},
+
+  // 第九部分：聲明（不需問題，僅顯示說明）
+  {type:'section',label:'第九部分　客戶聲明（請於下方勾選同意）'},
+  {key:'declaration',label:'本人聲明',type:'declaration',content:'本人已就以上各項據實填寫，並了解：\n\n1. 真實告知義務：所填寫資料為本人真實狀況。若因隱瞞或不實告知而導致服務時產生不良反應或損害，由本人自行承擔責任。\n\n2. 資料更新義務：如健康狀況、用藥、過敏等資料有變動，本人將主動告知工作室更新。\n\n3. 個資使用同意：依《個人資料保護法》規定，同意工作室於提供服務之必要範圍內蒐集、處理及利用本人個人資料。本人得隨時請求查閱、更正或刪除。\n\n4. 資料保存期間：本檔案保存期間為最後一次服務後 2 年，期滿後銷毀，但法令另有規定者依其規定。\n\n5. 服務同意條款：本人了解每次接受不同服務時，將另行簽署該項服務之專屬同意書。'}
+];
+
 // ── STATE ──────────────────────────────────────────────────
 let S={
   auth:false,page:'overview',month:new Date().getMonth()+1,
@@ -2737,17 +2830,7 @@ function pgTreatmentNewCustomerView(t){
   const totalProducts=t.products.reduce((s,p)=>s+toN(p.price)*toN(p.qty||1),0);
   const totalAmount=totalServices+totalProducts;
   // 健康問卷題目（從設定載入或用預設）
-  const healthQuestions=S.data.settings?.healthQuestions||[
-    {key:'age',label:'年齡',type:'text',placeholder:'例：35'},
-    {key:'occupation',label:'職業',type:'text',placeholder:'例：上班族'},
-    {key:'allergy',label:'過敏史（食物/藥物/化妝品等）',type:'textarea',placeholder:'例：花生過敏、酒精類過敏。沒有請寫「無」'},
-    {key:'disease',label:'目前疾病或慢性病',type:'textarea',placeholder:'例：高血壓、糖尿病、甲狀腺。沒有請寫「無」'},
-    {key:'medication',label:'目前服用藥物',type:'textarea',placeholder:'例：降血壓藥、避孕藥。沒有請寫「無」'},
-    {key:'pregnancy',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不確定']},
-    {key:'surgery',label:'近半年內是否有手術或醫美療程',type:'textarea',placeholder:'例：3個月前做過雷射。沒有請寫「無」'},
-    {key:'skinSensitive',label:'皮膚敏感狀況',type:'textarea',placeholder:'例：對 A 酸過敏、易紅腫。沒有請寫「無」'},
-    {key:'concerns',label:'本次最想改善的問題',type:'textarea',placeholder:'例：黑眼圈、痘痘、暗沉、緊繃感'}
-  ];
+  const healthQuestions=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
 
   // 找對應的服務同意書（依服務名稱）
   const termsMap=S.data.settings?.termsMap||{};
@@ -2786,12 +2869,37 @@ function pgTreatmentNewCustomerView(t){
       <div class="tm" style="font-size:12px;margin-bottom:14px;">您的資訊我們會嚴格保密，僅用於提供安全合適的服務</div>
       <div class="fg">
         ${healthQuestions.map(q=>{
+          // section 章節標題
+          if(q.type==='section'){
+            return`<div style="margin-top:18px;margin-bottom:8px;padding:10px 14px;background:linear-gradient(90deg,var(--purL),transparent);border-left:4px solid var(--pur);border-radius:6px;">
+              <b style="color:var(--pur);font-size:15px;letter-spacing:0.04em;">${q.label}</b>
+            </div>`;
+          }
+          // declaration 聲明文字（不需輸入欄位）
+          if(q.type==='declaration'){
+            return`<div style="margin:10px 0;padding:14px;background:var(--bg2);border-radius:8px;font-size:13px;line-height:1.8;white-space:pre-wrap;border-left:3px solid var(--blu);">${q.content||''}</div>`;
+          }
+          // checkbox_group 複選題
+          if(q.type==='checkbox_group'){
+            const arr=Array.isArray(t.healthForm?.[q.key])?t.healthForm[q.key]:[];
+            return`<div class="fgrp"><label>${q.label}</label>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;background:${arr.includes(opt)?'var(--purL)':'var(--bg2)'};border-radius:18px;font-size:13px;">
+                  <input type="checkbox" ${arr.includes(opt)?'checked':''} onchange="toggleHealthFormCheckbox('${q.key}','${opt.replace(/'/g,"\\'")}',this.checked)" style="cursor:pointer;">
+                  <span>${opt}</span>
+                </label>`).join('')}
+              </div>
+            </div>`;
+          }
+          // textarea 多行
           const val=t.healthForm?.[q.key]||'';
           if(q.type==='textarea'){
             return`<div class="fgrp"><label>${q.label}</label>
               <textarea rows="2" placeholder="${q.placeholder||''}" oninput="updateHealthForm('${q.key}',this.value)" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">${val}</textarea>
             </div>`;
-          }else if(q.type==='radio'){
+          }
+          // radio 單選
+          if(q.type==='radio'){
             return`<div class="fgrp"><label>${q.label}</label>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
                 ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;background:${val===opt?'var(--purL)':'var(--bg2)'};border-radius:20px;font-size:13px;">
@@ -2800,11 +2908,11 @@ function pgTreatmentNewCustomerView(t){
                 </label>`).join('')}
               </div>
             </div>`;
-          }else{
-            return`<div class="fgrp"><label>${q.label}</label>
-              <input type="text" placeholder="${q.placeholder||''}" oninput="updateHealthForm('${q.key}',this.value)" value="${val}" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">
-            </div>`;
           }
+          // text 單行（預設）
+          return`<div class="fgrp"><label>${q.label}</label>
+            <input type="text" placeholder="${q.placeholder||''}" oninput="updateHealthForm('${q.key}',this.value)" value="${val}" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">
+          </div>`;
         }).join('')}
       </div>
     </div>
@@ -3264,11 +3372,13 @@ function pgSettings(){
       <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('editHealthQuestions')">✏️ 編輯題目</button>
     </div>
     <div class="card-bd">
-      <div class="tm" style="margin-bottom:10px;">當客戶首次來訪走「🆕 首次建檔模式」時，會顯示這些題目讓客戶填寫。</div>
+      <div class="tm" style="margin-bottom:10px;">當客戶首次來訪走「🆕 首次建檔模式」時，會顯示這些題目讓客戶填寫。<b style="color:var(--pur);">已內建 9 大部分專業健康問卷</b>（基本資料／慢性病／用藥療程／過敏史／女性健康／皮膚評估／生活作息／服務目標／聲明）。</div>
       ${(()=>{
-        const qs=S.data.settings?.healthQuestions;
-        const count=qs?qs.length:9;
-        return`<div class="tm">目前共 <b>${count}</b> 題${qs?'（已自訂）':'（使用預設）'}</div>`;
+        const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+        const sections=qs.filter(q=>q.type==='section').length;
+        const realQs=qs.filter(q=>q.type!=='section'&&q.type!=='declaration').length;
+        const isCustom=!!S.data.settings?.healthQuestions;
+        return`<div class="tm">目前共 <b>${sections}</b> 個章節、<b>${realQs}</b> 道題目${isCustom?'（已自訂）':'（使用預設完整版）'}</div>`;
       })()}
     </div>
   </div>
@@ -3983,39 +4093,81 @@ function renderModal(){
 
   // ─── 編輯首次建檔健康問卷 modal ───
   if(m.t==='editHealthQuestions'){
-    const qs=S.data.settings?.healthQuestions||[
-      {key:'age',label:'年齡',type:'text',placeholder:'例：35'},
-      {key:'occupation',label:'職業',type:'text',placeholder:'例：上班族'},
-      {key:'allergy',label:'過敏史（食物/藥物/化妝品等）',type:'textarea',placeholder:'例：花生過敏。沒有請寫「無」'},
-      {key:'disease',label:'目前疾病或慢性病',type:'textarea',placeholder:'例：高血壓。沒有請寫「無」'},
-      {key:'medication',label:'目前服用藥物',type:'textarea',placeholder:'例：避孕藥。沒有請寫「無」'},
-      {key:'pregnancy',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不確定']},
-      {key:'surgery',label:'近半年內是否有手術或醫美療程',type:'textarea',placeholder:'例：3個月前做雷射。沒有請寫「無」'},
-      {key:'skinSensitive',label:'皮膚敏感狀況',type:'textarea',placeholder:'例：對 A 酸過敏。沒有請寫「無」'},
-      {key:'concerns',label:'本次最想改善的問題',type:'textarea',placeholder:'例：黑眼圈、痘痘、暗沉'}
-    ];
-    c=`<div class="mttl">📋 編輯首次建檔健康問卷</div>
-    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
-      💡 客戶首次走「🆕 首次建檔模式」時看到這些題目。可以新增、刪除或調整題目。
-    </div>
-    <div id="hq_list">
-      ${qs.map((q,i)=>`<div class="hq_item" data-idx="${i}" style="background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--pur);">
+    const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+    const renderHqItem=(q,i)=>{
+      const t=q.type||'text';
+      // section 章節標題
+      if(t==='section'){
+        return`<div class="hq_item" data-idx="${i}" style="background:linear-gradient(90deg,var(--purL),transparent);padding:10px 12px;border-radius:8px;margin-bottom:8px;border-left:4px solid var(--pur);">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span style="background:var(--pur);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">章節</span>
+            <input type="text" class="hqi_label" value="${q.label||''}" placeholder="章節標題" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;font-weight:700;">
+            <select class="hqi_type" style="width:110px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+              <option value="section" selected>章節標題</option>
+              <option value="text">單行</option>
+              <option value="textarea">多行</option>
+              <option value="radio">單選</option>
+              <option value="checkbox_group">複選</option>
+              <option value="declaration">聲明文字</option>
+            </select>
+            <button onclick="rmHealthQuestion(${i})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+          </div>
+          <input type="hidden" class="hqi_key" value="${q.key||'sec'+i}">
+        </div>`;
+      }
+      // declaration 聲明文字
+      if(t==='declaration'){
+        return`<div class="hq_item" data-idx="${i}" style="background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--blu);">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+            <span style="background:var(--blu);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">聲明</span>
+            <input type="text" class="hqi_label" value="${q.label||''}" placeholder="聲明標題" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+            <select class="hqi_type" style="width:110px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+              <option value="declaration" selected>聲明文字</option>
+              <option value="section">章節標題</option>
+              <option value="text">單行</option>
+              <option value="textarea">多行</option>
+              <option value="radio">單選</option>
+              <option value="checkbox_group">複選</option>
+            </select>
+            <button onclick="rmHealthQuestion(${i})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+          </div>
+          <textarea class="hqi_content" rows="4" placeholder="聲明內容" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;line-height:1.6;">${q.content||''}</textarea>
+          <input type="hidden" class="hqi_key" value="${q.key||'dec'+i}">
+        </div>`;
+      }
+      // 一般題目（text / textarea / radio / checkbox_group）
+      const isOpts=t==='radio'||t==='checkbox_group';
+      return`<div class="hq_item" data-idx="${i}" style="background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--pur);">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-          <b style="color:var(--pur);">第 ${i+1} 題</b>
-          <input type="text" class="hqi_label" value="${q.label||''}" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-          <select class="hqi_type" style="width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-            <option value="text"${q.type==='text'?' selected':''}>單行</option>
-            <option value="textarea"${q.type==='textarea'?' selected':''}>多行</option>
-            <option value="radio"${q.type==='radio'?' selected':''}>選項</option>
+          <b style="color:var(--pur);min-width:50px;">第 ${i+1} 題</b>
+          <input type="text" class="hqi_label" value="${(q.label||'').replace(/"/g,'&quot;')}" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+          <select class="hqi_type" style="width:110px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+            <option value="text"${t==='text'?' selected':''}>單行</option>
+            <option value="textarea"${t==='textarea'?' selected':''}>多行</option>
+            <option value="radio"${t==='radio'?' selected':''}>單選</option>
+            <option value="checkbox_group"${t==='checkbox_group'?' selected':''}>複選</option>
+            <option value="section">章節標題</option>
+            <option value="declaration">聲明文字</option>
           </select>
           <button onclick="rmHealthQuestion(${i})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
         </div>
-        <input type="text" class="hqi_placeholder" value="${q.placeholder||''}" placeholder="提示文字（選填）" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
-        ${q.type==='radio'?`<input type="text" class="hqi_options" value="${(q.options||[]).join(',')}" placeholder="選項用逗號分隔，如：是,否,不確定" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">`:''}
+        <input type="text" class="hqi_placeholder" value="${(q.placeholder||'').replace(/"/g,'&quot;')}" placeholder="提示文字（選填）" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+        ${isOpts?`<input type="text" class="hqi_options" value="${(q.options||[]).join(',')}" placeholder="選項用逗號分隔，如：是,否,不確定" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">`:''}
         <input type="hidden" class="hqi_key" value="${q.key||'q'+i}">
-      </div>`).join('')}
+      </div>`;
+    };
+    c=`<div class="mttl">📋 編輯首次建檔健康問卷</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      💡 客戶首次走「🆕 首次建檔模式」時看到這些題目。支援題型：<b>單行/多行/單選/複選/章節標題/聲明文字</b>
     </div>
-    <button class="btn btn-y btn-sm" style="width:100%;margin-top:8px;" onclick="addHealthQuestion()">＋ 新增題目</button>
+    <div id="hq_list">
+      ${qs.map((q,i)=>renderHqItem(q,i)).join('')}
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn btn-y btn-sm" style="flex:1;" onclick="addHealthQuestion('text')">＋ 新增題目</button>
+      <button class="btn btn-pur btn-sm" style="flex:1;background:var(--pur);color:#fff;" onclick="addHealthQuestion('section')">＋ 新增章節</button>
+      <button class="btn btn-s btn-sm" style="flex:1;" onclick="addHealthQuestion('declaration')">＋ 新增聲明</button>
+    </div>
     <div class="mbtns">
       <button class="btn btn-s" onclick="closeMod()">取消</button>
       <button class="btn btn-y" onclick="resetHealthQuestions()">🔄 還原預設</button>
@@ -6069,27 +6221,66 @@ window.resetScripts=async()=>{
 };
 
 // ─── 健康問卷題目管理 ───
-window.addHealthQuestion=()=>{
+window.addHealthQuestion=(type)=>{
   const list=document.getElementById('hq_list');
   if(!list)return;
   const idx=document.querySelectorAll('.hq_item').length;
   const div=document.createElement('div');
   div.className='hq_item';
   div.dataset.idx=idx;
-  div.style.cssText='background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--pur);';
-  div.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-    <b style="color:var(--pur);">第 ${idx+1} 題</b>
-    <input type="text" class="hqi_label" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-    <select class="hqi_type" style="width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-      <option value="text">單行</option>
-      <option value="textarea">多行</option>
-      <option value="radio">選項</option>
-    </select>
-    <button onclick="rmHealthQuestion(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
-  </div>
-  <input type="text" class="hqi_placeholder" placeholder="提示文字（選填）" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
-  <input type="text" class="hqi_options" placeholder="選項用逗號分隔（僅選項型用）" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;display:none;">
-  <input type="hidden" class="hqi_key" value="q${idx}_${Date.now()}">`;
+  const t=type||'text';
+  if(t==='section'){
+    div.style.cssText='background:linear-gradient(90deg,var(--purL),transparent);padding:10px 12px;border-radius:8px;margin-bottom:8px;border-left:4px solid var(--pur);';
+    div.innerHTML=`<div style="display:flex;gap:8px;align-items:center;">
+      <span style="background:var(--pur);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">章節</span>
+      <input type="text" class="hqi_label" placeholder="章節標題" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;font-weight:700;">
+      <select class="hqi_type" style="width:110px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="section" selected>章節標題</option>
+        <option value="text">單行</option>
+        <option value="textarea">多行</option>
+        <option value="radio">單選</option>
+        <option value="checkbox_group">複選</option>
+        <option value="declaration">聲明文字</option>
+      </select>
+      <button onclick="rmHealthQuestion(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+    </div>
+    <input type="hidden" class="hqi_key" value="sec${idx}_${Date.now()}">`;
+  }else if(t==='declaration'){
+    div.style.cssText='background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--blu);';
+    div.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+      <span style="background:var(--blu);color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">聲明</span>
+      <input type="text" class="hqi_label" placeholder="聲明標題" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+      <select class="hqi_type" style="width:110px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="declaration" selected>聲明文字</option>
+        <option value="section">章節標題</option>
+        <option value="text">單行</option>
+        <option value="textarea">多行</option>
+        <option value="radio">單選</option>
+        <option value="checkbox_group">複選</option>
+      </select>
+      <button onclick="rmHealthQuestion(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+    </div>
+    <textarea class="hqi_content" rows="4" placeholder="聲明內容" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;line-height:1.6;"></textarea>
+    <input type="hidden" class="hqi_key" value="dec${idx}_${Date.now()}">`;
+  }else{
+    div.style.cssText='background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--pur);';
+    div.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+      <b style="color:var(--pur);min-width:50px;">第 ${idx+1} 題</b>
+      <input type="text" class="hqi_label" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+      <select class="hqi_type" style="width:110px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+        <option value="text" selected>單行</option>
+        <option value="textarea">多行</option>
+        <option value="radio">單選</option>
+        <option value="checkbox_group">複選</option>
+        <option value="section">章節標題</option>
+        <option value="declaration">聲明文字</option>
+      </select>
+      <button onclick="rmHealthQuestion(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+    </div>
+    <input type="text" class="hqi_placeholder" placeholder="提示文字（選填）" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+    <input type="text" class="hqi_options" placeholder="選項用逗號分隔（單選/複選用）" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+    <input type="hidden" class="hqi_key" value="q${idx}_${Date.now()}">`;
+  }
   list.appendChild(div);
 };
 
@@ -6106,10 +6297,20 @@ window.saveHealthQuestions=async()=>{
       const q={
         key:el.querySelector('.hqi_key')?.value||'q'+Date.now(),
         label:el.querySelector('.hqi_label')?.value?.trim()||'',
-        type,
-        placeholder:el.querySelector('.hqi_placeholder')?.value||''
+        type
       };
-      if(type==='radio'){
+      if(type==='section'){
+        // 章節只需要 label
+        return q;
+      }
+      if(type==='declaration'){
+        q.content=el.querySelector('.hqi_content')?.value||'';
+        return q;
+      }
+      // 一般題目
+      const ph=el.querySelector('.hqi_placeholder')?.value||'';
+      if(ph)q.placeholder=ph;
+      if(type==='radio'||type==='checkbox_group'){
         const opts=el.querySelector('.hqi_options')?.value||'';
         q.options=opts.split(',').map(s=>s.trim()).filter(Boolean);
       }
@@ -6293,6 +6494,20 @@ window.updateHealthForm=(key,value)=>{
   S.treatment.healthForm[key]=value;
 };
 
+// 健康問卷複選題切換
+window.toggleHealthFormCheckbox=(key,opt,checked)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.healthForm)S.treatment.healthForm={};
+  let arr=S.treatment.healthForm[key]||[];
+  if(!Array.isArray(arr))arr=[];
+  if(checked&&!arr.includes(opt))arr.push(opt);
+  if(!checked)arr=arr.filter(x=>x!==opt);
+  S.treatment.healthForm[key]=arr;
+  // 重新渲染（更新背景色）
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(initSignatureCanvasInline,100);
+};
+
 // 服務專屬健康確認更新
 window.updateServiceHealth=(key,value)=>{
   if(!S.treatment)return;
@@ -6307,13 +6522,34 @@ window.updateServiceHealth=(key,value)=>{
 window.showHealthForm=(id)=>{
   const r=(S.data.treatmentRecords||[]).find(x=>x.id===id);
   if(!r||!r.healthForm){alert('查無健康問卷資料');return;}
-  const labelMap={
-    age:'年齡',occupation:'職業',allergy:'過敏史',disease:'目前疾病或慢性病',
-    medication:'目前服用藥物',pregnancy:'是否懷孕或哺乳中',surgery:'近半年手術或醫美',
-    skinSensitive:'皮膚敏感狀況',concerns:'本次最想改善的問題'
-  };
-  const text=Object.entries(r.healthForm).map(([k,v])=>`${labelMap[k]||k}：${v||'（未填）'}`).join('\n\n');
-  alert('【健康問卷】\n\n'+text+'\n\n填寫日期：'+(r.signedAt||r.date));
+  // 用設定（或預設）對照題目來顯示完整 label
+  const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const labelMap={};
+  qs.forEach(q=>{if(q.key&&q.label)labelMap[q.key]=q.label;});
+  // 依設定的順序顯示，方便閱讀
+  let text='';
+  let lastSection='';
+  for(const q of qs){
+    if(q.type==='section'){
+      lastSection=q.label;
+      text+=`\n━━━ ${q.label} ━━━\n`;
+      continue;
+    }
+    if(q.type==='declaration')continue;
+    const v=r.healthForm[q.key];
+    if(v===undefined||v===null||v==='')continue;
+    const display=Array.isArray(v)?v.join('、'):v;
+    text+=`• ${q.label}：${display}\n`;
+  }
+  // 補上設定外的多餘 key
+  const handledKeys=new Set(qs.filter(q=>q.key).map(q=>q.key));
+  for(const [k,v] of Object.entries(r.healthForm)){
+    if(handledKeys.has(k))continue;
+    if(v===undefined||v===null||v==='')continue;
+    const display=Array.isArray(v)?v.join('、'):v;
+    text+=`• ${labelMap[k]||k}：${display}\n`;
+  }
+  alert('【首次建檔健康問卷】\n'+text+'\n填寫日期：'+(r.signedAt||r.date));
 };
 
 // 顯示服務專屬健康確認答案
