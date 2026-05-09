@@ -1574,7 +1574,7 @@ function pgTreatmentRecords(c){
                 <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
                   ${r.isFirstVisit?`<span class="bdg" style="background:var(--goldL);color:var(--goldDk);font-size:11px;">🆕 首次建檔</span>`:''}
                   ${r.publishAuthorized?`<span class="bdg" style="background:var(--roseL);color:var(--rose);font-size:11px;">🌐 已授權網路公開使用</span>`:`<span class="bdg" style="background:var(--bg2);color:var(--mut);font-size:11px;">🔒 僅內部使用（未授權公開）</span>`}
-                  ${r.skinCheck?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='alert("【膚況確認】\\n"+JSON.stringify(${JSON.stringify(JSON.stringify(r.skinCheck))},null,2))'>🩺 看膚況</button>`:''}
+                  ${r.skinCheck&&Object.keys(r.skinCheck).length>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='showSkinCheck("${r.id}")'>🩺 看膚況</button>`:''}
                   ${r.serviceHealthAnswers&&Object.keys(r.serviceHealthAnswers).length>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='showServiceHealth("${r.id}")'>🔹 看專屬健康確認</button>`:''}
                   ${r.healthForm&&Object.keys(r.healthForm).length>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='showHealthForm("${r.id}")'>📋 看健康問卷</button>`:''}
                 </div>
@@ -6553,6 +6553,31 @@ window.showHealthForm=(id)=>{
 };
 
 // 顯示服務專屬健康確認答案
+// 顯示膚況快速確認單（中文格式化）
+window.showSkinCheck=(id)=>{
+  const r=(S.data.treatmentRecords||[]).find(x=>x.id===id);
+  if(!r||!r.skinCheck||Object.keys(r.skinCheck).length===0){alert('查無膚況確認紀錄');return;}
+  const sc=r.skinCheck;
+  let text='【今日身體狀況確認】\n';
+  // 今天身體狀況
+  if(sc.normal)text+='\n✓ 一切正常，與既有紀錄相同';
+  else if(sc.changed){
+    text+='\n⚠️ 有變化';
+    if(sc.changeNote)text+='：'+sc.changeNote;
+  }
+  // 近兩週狀況
+  const recent=[];
+  if(sc.newDisease)recent.push('新的疾病/不適');
+  if(sc.newMed)recent.push('新服用藥物');
+  if(sc.beauty)recent.push('醫美療程');
+  if(sc.injury)recent.push('受傷瘀青');
+  if(sc.allClear)recent.push('以上皆無');
+  if(recent.length>0)text+='\n\n近兩週狀況：\n• '+recent.join('\n• ');
+  if(sc.supplement)text+='\n\n補充說明：'+sc.supplement;
+  text+='\n\n填寫日期：'+(r.signedAt||r.date);
+  alert(text);
+};
+
 window.showServiceHealth=(id)=>{
   const r=(S.data.treatmentRecords||[]).find(x=>x.id===id);
   if(!r||!r.serviceHealthAnswers){alert('查無資料');return;}
