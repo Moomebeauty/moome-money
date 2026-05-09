@@ -6388,7 +6388,7 @@ function initSignatureCanvasInline(){
 window.resetTreatment=()=>{
   if(!confirm('確認清空目前所有資料，重新開始？'))return;
   S.treatment=null;
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  render();
 };
 
 window.switchTreatmentMode=(mode)=>{
@@ -6663,7 +6663,7 @@ window.finalizeTreatment=async()=>{
     toast(`✅ 療程完成！總額 $${fmt(totalAmount)}　感謝光臨 🌸`);
     // 5. 清空 treatment 狀態
     S.treatment=null;
-    const c=$('pg-content');if(c)c.innerHTML=renderPage();
+    render();
   }catch(err){
     console.error('finalizeTreatment 失敗:',err);
     alert('失敗：'+(err.message||err));
