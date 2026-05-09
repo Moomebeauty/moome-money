@@ -6403,7 +6403,8 @@ window.switchTreatmentMode=(mode)=>{
     if(invalid){alert('請完整填寫服務名稱與金額');return;}
   }
   S.treatment.mode=mode;
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  // 整頁重畫（讓 appHTML 重新判斷 isCustomerMode → 隱藏/顯示側邊欄與頂部欄）
+  render();
   // 切到客戶或首次建檔模式時，初始化簽名 canvas
   if(mode==='customer'||mode==='newCustomer'){
     setTimeout(initSignatureCanvasInline,100);
