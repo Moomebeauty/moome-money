@@ -2882,11 +2882,11 @@ function pgTreatmentNewCustomerView(t){
           // checkbox_group 複選題
           if(q.type==='checkbox_group'){
             const arr=Array.isArray(t.healthForm?.[q.key])?t.healthForm[q.key]:[];
-            return`<div class="fgrp"><label>${q.label}</label>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
-                ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;background:${arr.includes(opt)?'var(--purL)':'var(--bg2)'};border-radius:18px;font-size:13px;">
-                  <input type="checkbox" ${arr.includes(opt)?'checked':''} onchange="toggleHealthFormCheckbox('${q.key}','${opt.replace(/'/g,"\\'")}',this.checked)" style="cursor:pointer;">
-                  <span>${opt}</span>
+            return`<div class="fgrp" style="margin-bottom:14px;"><label style="font-size:14px;color:var(--txt);font-weight:600;">${q.label}</label>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px;">
+                ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:${arr.includes(opt)?'var(--purL)':'#fafafa'};border:1.5px solid ${arr.includes(opt)?'var(--pur)':'var(--bdr)'};border-radius:8px;font-size:13px;line-height:1.4;transition:all 0.15s;min-height:44px;">
+                  <input type="checkbox" ${arr.includes(opt)?'checked':''} onchange="toggleHealthFormCheckbox('${q.key}','${opt.replace(/'/g,"\\'")}',this.checked)" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;accent-color:var(--pur);">
+                  <span style="flex:1;${arr.includes(opt)?'color:var(--pur);font-weight:600;':'color:var(--txt);'}">${opt}</span>
                 </label>`).join('')}
               </div>
             </div>`;
@@ -2900,11 +2900,11 @@ function pgTreatmentNewCustomerView(t){
           }
           // radio 單選
           if(q.type==='radio'){
-            return`<div class="fgrp"><label>${q.label}</label>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-                ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;background:${val===opt?'var(--purL)':'var(--bg2)'};border-radius:20px;font-size:13px;">
-                  <input type="radio" name="hf_${q.key}" ${val===opt?'checked':''} onchange="updateHealthForm('${q.key}','${opt}')" style="cursor:pointer;">
-                  <span>${opt}</span>
+            return`<div class="fgrp" style="margin-bottom:14px;"><label style="font-size:14px;color:var(--txt);font-weight:600;">${q.label}</label>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:8px;">
+                ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:${val===opt?'var(--purL)':'#fafafa'};border:1.5px solid ${val===opt?'var(--pur)':'var(--bdr)'};border-radius:8px;font-size:13px;min-height:44px;transition:all 0.15s;">
+                  <input type="radio" name="hf_${q.key}" ${val===opt?'checked':''} onchange="updateHealthForm('${q.key}','${opt}')" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;accent-color:var(--pur);">
+                  <span style="flex:1;${val===opt?'color:var(--pur);font-weight:600;':'color:var(--txt);'}">${opt}</span>
                 </label>`).join('')}
               </div>
             </div>`;
