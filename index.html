@@ -366,7 +366,7 @@ function appHTML(){
     {id:'customers',ico:'👤',lbl:'客戶管理'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
-    {id:'treatment',ico:'📱',lbl:'療程確認與簽名'},
+    {id:'treatment',ico:'📱',lbl:'服務確認與簽名'},
     {id:'expenses',ico:'💸',lbl:'支出記帳'},
     {id:'purchase',ico:'📦',lbl:'進貨管理'},
     {id:'inventory',ico:'🗂️',lbl:'庫存盤點'},
@@ -1472,6 +1472,12 @@ function pgTreatmentRecords(c){
                   <span class="tm">客戶簽名：</span>
                   <img src="${r.signature}" style="max-height:50px;max-width:180px;background:#fff;border-radius:4px;padding:2px;">
                 </div>
+                <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+                  ${r.isFirstVisit?`<span class="bdg" style="background:var(--goldL);color:var(--goldDk);font-size:11px;">🆕 首次建檔</span>`:''}
+                  ${r.publishAuthorized?`<span class="bdg" style="background:var(--roseL);color:var(--rose);font-size:11px;">🌐 已授權網路公開使用</span>`:`<span class="bdg" style="background:var(--bg2);color:var(--mut);font-size:11px;">🔒 僅內部使用（未授權公開）</span>`}
+                  ${r.skinCheck?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='alert("【膚況確認】\\n"+JSON.stringify(${JSON.stringify(JSON.stringify(r.skinCheck))},null,2))'>🩺 看膚況</button>`:''}
+                  ${r.healthForm&&Object.keys(r.healthForm).length>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='showHealthForm("${r.id}")'>📋 看健康問卷</button>`:''}
+                </div>
               </div>
               <div style="text-align:right;">
                 <div class="tm" style="font-size:11px;">簽名時間</div>
@@ -2187,23 +2193,37 @@ function pgTreatment(){
   // 初始化暫存
   if(!S.treatment){
     S.treatment={
-      mode:'staff',  // 'staff'=老師設定模式  'customer'=客戶顯示簽名模式
+      mode:'staff',     // 'staff'=老師設定 / 'customer'=客戶顯示簽名 / 'newCustomer'=首次建檔
       customer:'',
       date:today(),
       staff:TEACHERS[0]||'珞熙',
-      services:[],   // [{cardId, name, price, duration, productsUsed:[]}]
-      products:[],   // [{productId, name, price, qty}]
+      services:[],
+      products:[],
       skinCondition:'',
       feedback:'',
       nextSuggestion:'',
       payMethod:'轉帳',
       agreed:false,
-      signature:null
+      signature:null,
+      // 首次建檔資料
+      isFirstVisit:false,
+      healthForm:{},  // 健康問卷答案
+      healthAgreed:false,
+      // 膚況快速確認
+      skinCheck:{}  // 勾選答案
     };
   }
   const t=S.treatment;
   if(t.mode==='customer')return pgTreatmentCustomerView(t);
+  if(t.mode==='newCustomer')return pgTreatmentNewCustomerView(t);
   return pgTreatmentStaffView(t);
+}
+
+// 判斷客戶是否為首次（沒有任何療程紀錄就是首次）
+function isFirstVisitCustomer(name){
+  if(!name)return false;
+  const records=(S.data.treatmentRecords||[]).filter(r=>(r.customer||'').trim()===name.trim());
+  return records.length===0;
 }
 
 // ───── 老師設定模式 ─────
@@ -2217,8 +2237,46 @@ function pgTreatmentStaffView(t){
   const totalProducts=t.products.reduce((s,p)=>s+toN(p.price)*toN(p.qty||1),0);
   const totalAmount=totalServices+totalProducts;
   return`
-  <div class="pg-ttl">📱 療程確認與簽名（老師設定模式）</div>
-  <div class="pg-sub">設定本次療程細節 → 切到「客戶顯示模式」給客戶確認簽名</div>
+  <div class="pg-ttl">📱 服務確認與簽名（老師設定模式）</div>
+  <div class="pg-sub">設定本次服務細節 → 切到「客戶顯示模式」給客戶確認簽名</div>
+
+  <!-- 員工話術範例（教育模組）-->
+  ${(()=>{
+    const userScripts=S.data.settings?.scripts||{};
+    const sc={
+      enter:userScripts.enter||'○○姐今天感覺怎麼樣？有沒有哪裡特別緊或痠？最近身體有什麼新狀況嗎？我幫妳記一下，等等服務時會特別注意～',
+      handIpad:userScripts.handIpad||'來，這個確認一下今天的狀況，我才知道力道怎麼幫妳調最舒服。',
+      preService:userScripts.preService||'我等等會從____開始，妳今天有沒有哪邊不能壓的？',
+      sign:userScripts.sign||'這邊跟妳確認一下今天的服務內容，沒問題的話幫我簽個名～',
+      firstVisit:userScripts.firstVisit||'○○姐第一次來，我們這邊有個小問卷，主要是想多了解妳，這樣我才知道哪些可以做、哪些要避開。簡單填一下就好，大概兩分鐘～'
+    };
+    return`<div class="card" style="background:linear-gradient(135deg,#fff5e6,#fff0f6);border:1px solid var(--gold);margin-bottom:14px;">
+    <div class="card-hd" style="background:transparent;border:none;cursor:pointer;" onclick="toggleScriptHelp()">
+      <span class="card-ttl" style="color:var(--goldDk);">🎓 員工話術範例（讓客人覺得是關心，不是法律程序）<span class="tm" style="font-size:11px;font-weight:normal;">　${S.treatment.showScript?'點擊收起 ▲':'點擊展開 ▼'}</span></span>
+    </div>
+    ${S.treatment.showScript?`<div class="card-bd">
+      <div style="font-size:13px;line-height:1.8;">
+        <div style="background:var(--redL);padding:8px 12px;border-radius:6px;margin-bottom:10px;color:var(--red);">
+          ❌ 不要說：「請妳填一下健康同意書」（聽起來很冰冷、像法律程序）
+        </div>
+        <div style="background:var(--grnL);padding:10px 14px;border-radius:8px;">
+          ✅ 改說（這樣客人會覺得你很專業、很在意她）：<br><br>
+          <b>💬 進場時：</b><br>「${sc.enter}」<br><br>
+          <b>💬 遞 iPad 時：</b><br>「${sc.handIpad}」<br><br>
+          <b>💬 服務前再確認一次：</b><br>「${sc.preService}」<br><br>
+          <b>💬 簽名時：</b><br>「${sc.sign}」<br><br>
+          <b>💬 首次客戶：</b><br>「${sc.firstVisit}」
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--bluL);border-radius:6px;color:var(--blu);font-size:12px;">
+          💡 <b>核心心法：</b>把「法律程序」說成「我關心妳」、把「填表」說成「了解你」、把「簽名」說成「確認沒問題」
+        </div>
+        <div style="text-align:right;margin-top:8px;">
+          <button class="btn btn-s btn-sm" onclick="openScriptEdit()">✏️ 編輯話術範例（基本設定）</button>
+        </div>
+      </div>
+    </div>`:''}
+  </div>`;
+  })()}
 
   <div style="background:linear-gradient(135deg,var(--bluL),var(--purL));padding:14px 18px;border-radius:10px;margin-bottom:14px;border-left:4px solid var(--blu);">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -2228,9 +2286,14 @@ function pgTreatmentStaffView(t){
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-y btn-sm" onclick="resetTreatment()">🗑️ 清空重新開始</button>
+        ${t.customer&&isFirstVisitCustomer(t.customer)?`<button class="btn btn-pur" style="background:linear-gradient(135deg,var(--gold),var(--rose));color:#fff;font-weight:700;" onclick="switchTreatmentMode('newCustomer')">🆕 首次建檔模式 →</button>`:''}
         <button class="btn btn-pur" style="background:linear-gradient(135deg,var(--pur),var(--rose));color:#fff;font-weight:700;" onclick="switchTreatmentMode('customer')">📱 切到客戶模式 →</button>
       </div>
     </div>
+    ${t.customer&&isFirstVisitCustomer(t.customer)?`<div style="margin-top:10px;padding:10px;background:var(--goldL);border-radius:8px;border:2px solid var(--gold);">
+      <b style="color:var(--goldDk);">⚠️ 首次來訪客戶</b>
+      <div class="tm" style="font-size:12px;margin-top:4px;">${t.customer} 還沒有任何療程紀錄，建議走「🆕 首次建檔模式」收集完整健康問卷與基本同意書，之後回診才走「📱 客戶模式」（簡化版）</div>
+    </div>`:''}
   </div>
 
   <!-- 客戶與基本資訊 -->
@@ -2326,6 +2389,21 @@ function pgTreatmentStaffView(t){
           <textarea id="t_next" rows="2" oninput="updateTreatment('nextSuggestion',this.value)" placeholder="如：下次嘗試加強保濕導入、推薦 HYGGE 乳霜">${t.nextSuggestion}</textarea>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 網路公開授權開關（老師預先決定是否要請客戶簽授權）-->
+  <div class="card" style="border:1px dashed var(--rose);background:var(--bg2);">
+    <div class="card-bd">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;">
+        <input type="checkbox" id="t_publish_toggle" ${t.publishOptIn?'checked':''} onchange="updateTreatment('publishOptIn',this.checked)" style="width:18px;height:18px;cursor:pointer;">
+        <div style="flex:1;">
+          <b style="color:var(--rose);">🌐 本次需要請客戶簽「網路公開使用授權」</b>
+          <div class="tm" style="font-size:12px;margin-top:2px;">
+            少數客人需要時才打開（例如：拍攝前後對比照、用於 IG/FB/教學示範）。打開後客戶端會多出一個獨立的勾選同意區。
+          </div>
+        </div>
+      </label>
     </div>
   </div>
 
@@ -2475,6 +2553,52 @@ function pgTreatmentCustomerView(t){
     </div>
   </div>
 
+  <!-- 膚況/身體狀況快速確認單 -->
+  <div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
+    <div class="card-hd" style="background:var(--goldL);"><span class="card-ttl" style="color:var(--goldDk);">🩺 今日身體狀況確認</span></div>
+    <div class="card-bd">
+      <div class="tm" style="font-size:12px;margin-bottom:10px;">請花一分鐘確認今日狀況，幫助我們提供更貼心的服務</div>
+
+      <div style="margin-bottom:14px;">
+        <b style="font-size:14px;">今天身體狀況：</b>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:${t.skinCheck&&t.skinCheck.normal?'var(--grnL)':'var(--bg2)'};border-radius:6px;">
+            <input type="radio" name="skin_status" ${t.skinCheck&&t.skinCheck.normal?'checked':''} onchange="updateSkinCheck('normal',true)" style="width:18px;height:18px;cursor:pointer;">
+            <span>✓ 一切正常，與既有紀錄相同</span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:8px 10px;background:${t.skinCheck&&t.skinCheck.changed?'var(--goldL)':'var(--bg2)'};border-radius:6px;">
+            <input type="radio" name="skin_status" ${t.skinCheck&&t.skinCheck.changed?'checked':''} onchange="updateSkinCheck('changed',true)" style="width:18px;height:18px;cursor:pointer;margin-top:2px;">
+            <div style="flex:1;">
+              <div>⚠️ 有以下變化（請說明）：</div>
+              ${t.skinCheck&&t.skinCheck.changed?`<textarea id="t_skin_changeNote" rows="2" placeholder="例：感冒、生理期、皮膚過敏、手術後..." oninput="updateSkinCheckNote(this.value)" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">${t.skinCheck.changeNote||''}</textarea>`:''}
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <b style="font-size:14px;">近兩週是否有：</b>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">
+          ${[
+            {key:'newDisease',label:'新的疾病/不適'},
+            {key:'newMed',label:'新服用藥物'},
+            {key:'beauty',label:'醫美療程'},
+            {key:'injury',label:'受傷瘀青'},
+            {key:'allClear',label:'以上皆無'}
+          ].map(it=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;background:${t.skinCheck&&t.skinCheck[it.key]?(it.key==='allClear'?'var(--grnL)':'var(--goldL)'):'var(--bg2)'};border-radius:20px;font-size:13px;">
+            <input type="checkbox" ${t.skinCheck&&t.skinCheck[it.key]?'checked':''} onchange="updateSkinCheck('${it.key}',this.checked)" style="width:16px;height:16px;cursor:pointer;">
+            <span>${it.key==='allClear'?'✓':'☐'} ${it.label}</span>
+          </label>`).join('')}
+        </div>
+      </div>
+
+      ${(t.skinCheck&&(t.skinCheck.newDisease||t.skinCheck.newMed||t.skinCheck.beauty||t.skinCheck.injury))?`<div style="margin-top:10px;">
+        <label style="font-size:13px;">補充說明（選填）：</label>
+        <textarea rows="2" placeholder="如：服用感冒藥、上週做了雷射..." oninput="updateSkinCheckSupp(this.value)" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">${t.skinCheck&&t.skinCheck.supplement||''}</textarea>
+      </div>`:''}
+    </div>
+  </div>
+
   <!-- 同意條款 -->
   <div class="card" style="margin-bottom:14px;">
     <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">📜 服務同意聲明</span></div>
@@ -2485,6 +2609,39 @@ function pgTreatmentCustomerView(t){
         <span><b style="color:var(--goldDk);">本人 ${t.customer||''} 已詳閱並同意上述條款</b></span>
       </label>
     </div>
+  </div>
+
+  <!-- 影像紀錄說明（必告知，依個資法不需特別同意但需告知）-->
+  <div class="card" style="margin-bottom:14px;background:var(--bg2);">
+    <div class="card-hd" style="background:transparent;"><span class="card-ttl" style="color:var(--mut);font-size:14px;">📷 服務紀錄影像說明</span></div>
+    <div class="card-bd">
+      <div style="font-size:13px;line-height:1.7;color:var(--txt);">
+        為確保服務品質、追蹤療程效果及提供後續諮詢參考，本工作室於服務過程中可能拍攝<b>服務紀錄影像</b>（含照片、影片）。<br><br>
+        此影像紀錄屬於提供服務之必要範圍內利用，依《個人資料保護法》第19條第1項第2款「與當事人有契約或類似契約之關係」之規定，本工作室得於服務目的範圍內蒐集、處理及利用，<b>並僅作為內部紀錄與服務品質管理使用，絕不外流</b>。
+      </div>
+    </div>
+  </div>
+
+  <!-- 網路公開授權（可選，預設關閉）-->
+  <div class="card" style="margin-bottom:14px;border:1px dashed var(--rose);">
+    <div class="card-hd" style="background:linear-gradient(90deg,var(--roseL),transparent);">
+      <span class="card-ttl" style="color:var(--rose);font-size:14px;">🌐 網路公開使用授權（選填）</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+        <input type="checkbox" id="t_publishToggle" ${t.publishOptIn?'checked':''} onchange="togglePublishOption(this.checked)" style="width:16px;height:16px;cursor:pointer;">
+        <span class="tm">需要客戶授權時請打開</span>
+      </label>
+    </div>
+    ${t.publishOptIn?`<div class="card-bd">
+      <div style="font-size:13px;line-height:1.7;padding:10px;background:var(--roseL);border-radius:6px;margin-bottom:10px;">
+        本工作室未來如欲將前述影像作為<b>網路宣傳、社群平台分享、教學示範</b>或其他公開用途使用時，將事先個別徵求客戶書面同意。<br>
+        <b style="color:var(--rose);">未經同意絕不公開使用。</b><br><br>
+        如您願意授權，本工作室將珍惜並僅於合理範圍內使用您的影像，您也可以隨時撤回此授權。
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;background:var(--roseL);padding:10px;border-radius:8px;">
+        <input type="checkbox" id="t_publishAgree" ${t.publishAgreed?'checked':''} onchange="updateTreatment('publishAgreed',this.checked)" style="width:18px;height:18px;cursor:pointer;">
+        <span><b style="color:var(--rose);">本人 ${t.customer||''} 同意工作室於上述用途公開使用本次服務影像</b></span>
+      </label>
+    </div>`:'<div class="card-bd"><div class="tm" style="text-align:center;font-size:12px;padding:8px;">勾選右上角「需要客戶授權時請打開」即可顯示授權同意區（少數客人需要時才用）</div></div>'}
   </div>
 
   <!-- 簽名 -->
@@ -2504,6 +2661,202 @@ function pgTreatmentCustomerView(t){
   <div style="text-align:center;margin:20px 0;">
     <button class="btn btn-pur" style="background:linear-gradient(135deg,var(--rose),var(--gold));color:#fff;font-size:18px;font-weight:700;padding:16px 40px;border-radius:30px;box-shadow:0 4px 16px rgba(217,154,87,0.3);" onclick="finalizeTreatment()">
       ✓ 確認簽名並完成結帳 ✨
+    </button>
+  </div>
+  `;
+}
+
+// ───── 首次建檔模式（健康問卷 + 服務同意書）─────
+function pgTreatmentNewCustomerView(t){
+  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const products=S.data.products||[];
+  const totalServices=t.services.reduce((s,sv)=>s+toN(sv.price),0);
+  const totalProducts=t.products.reduce((s,p)=>s+toN(p.price)*toN(p.qty||1),0);
+  const totalAmount=totalServices+totalProducts;
+  // 健康問卷題目（從設定載入或用預設）
+  const healthQuestions=S.data.settings?.healthQuestions||[
+    {key:'age',label:'年齡',type:'text',placeholder:'例：35'},
+    {key:'occupation',label:'職業',type:'text',placeholder:'例：上班族'},
+    {key:'allergy',label:'過敏史（食物/藥物/化妝品等）',type:'textarea',placeholder:'例：花生過敏、酒精類過敏。沒有請寫「無」'},
+    {key:'disease',label:'目前疾病或慢性病',type:'textarea',placeholder:'例：高血壓、糖尿病、甲狀腺。沒有請寫「無」'},
+    {key:'medication',label:'目前服用藥物',type:'textarea',placeholder:'例：降血壓藥、避孕藥。沒有請寫「無」'},
+    {key:'pregnancy',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不確定']},
+    {key:'surgery',label:'近半年內是否有手術或醫美療程',type:'textarea',placeholder:'例：3個月前做過雷射。沒有請寫「無」'},
+    {key:'skinSensitive',label:'皮膚敏感狀況',type:'textarea',placeholder:'例：對 A 酸過敏、易紅腫。沒有請寫「無」'},
+    {key:'concerns',label:'本次最想改善的問題',type:'textarea',placeholder:'例：黑眼圈、痘痘、暗沉、緊繃感'}
+  ];
+
+  // 找對應的服務同意書（依服務名稱）
+  const termsMap=S.data.settings?.termsMap||{};
+  const matchedTerms=[];
+  if(t.services.length>0){
+    for(const sv of t.services){
+      let matched=null;
+      for(const k of Object.keys(termsMap)){
+        if(k==='預設（通用）')continue;
+        const kw=k.substring(0,2);
+        if((sv.name||'').includes(kw)||(sv.name||'').includes(k)){matched=k;break;}
+      }
+      if(!matched)matched='預設（通用）';
+      if(!matchedTerms.find(mt=>mt.key===matched))matchedTerms.push({key:matched,content:termsMap[matched]||''});
+    }
+  }
+  if(matchedTerms.length===0&&termsMap['預設（通用）']){
+    matchedTerms.push({key:'預設（通用）',content:termsMap['預設（通用）']});
+  }
+  return`
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:8px;">
+    <button class="btn btn-s btn-sm" onclick="switchTreatmentMode('staff')">← 返回老師模式</button>
+  </div>
+
+  <div style="background:linear-gradient(135deg,var(--gold) 0%,var(--rose) 100%);padding:24px;border-radius:14px;margin-bottom:14px;color:#fff;text-align:center;">
+    <div style="font-size:13px;opacity:0.9;margin-bottom:4px;">${studioName}</div>
+    <div style="font-size:26px;font-weight:700;">🆕 首次建檔</div>
+    <div style="font-size:14px;opacity:0.95;margin-top:6px;">${t.customer||''} 親愛的，歡迎您！為了提供最貼心的服務，請花幾分鐘填寫以下資料</div>
+  </div>
+
+  <!-- 健康問卷 -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">📋 健康狀況問卷</span></div>
+    <div class="card-bd">
+      <div class="tm" style="font-size:12px;margin-bottom:14px;">您的資訊我們會嚴格保密，僅用於提供安全合適的服務</div>
+      <div class="fg">
+        ${healthQuestions.map(q=>{
+          const val=t.healthForm?.[q.key]||'';
+          if(q.type==='textarea'){
+            return`<div class="fgrp"><label>${q.label}</label>
+              <textarea rows="2" placeholder="${q.placeholder||''}" oninput="updateHealthForm('${q.key}',this.value)" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">${val}</textarea>
+            </div>`;
+          }else if(q.type==='radio'){
+            return`<div class="fgrp"><label>${q.label}</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                ${(q.options||[]).map(opt=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;background:${val===opt?'var(--purL)':'var(--bg2)'};border-radius:20px;font-size:13px;">
+                  <input type="radio" name="hf_${q.key}" ${val===opt?'checked':''} onchange="updateHealthForm('${q.key}','${opt}')" style="cursor:pointer;">
+                  <span>${opt}</span>
+                </label>`).join('')}
+              </div>
+            </div>`;
+          }else{
+            return`<div class="fgrp"><label>${q.label}</label>
+              <input type="text" placeholder="${q.placeholder||''}" oninput="updateHealthForm('${q.key}',this.value)" value="${val}" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:14px;">
+            </div>`;
+          }
+        }).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- 健康聲明同意 -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">📜 健康狀況真實聲明</span></div>
+    <div class="card-bd">
+      <div style="font-size:13px;line-height:1.7;padding:10px;background:var(--bg2);border-radius:6px;">
+        本人 <b>${t.customer||'____'}</b> 聲明：<br>
+        1. 上述填寫之健康問卷資料皆為真實無虛偽。<br>
+        2. 本人理解，提供不實或隱匿健康資訊可能造成自身傷害，後果由本人自行負責。<br>
+        3. 若日後身體狀況有重大變化，本人會主動告知工作室。<br>
+        4. 本人同意工作室基於提供服務之必要，蒐集、處理及利用上述個人資料。
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;margin-top:10px;background:var(--goldL);padding:10px;border-radius:8px;">
+        <input type="checkbox" ${t.healthAgreed?'checked':''} onchange="updateTreatment('healthAgreed',this.checked)" style="width:18px;height:18px;cursor:pointer;">
+        <span><b style="color:var(--goldDk);">本人確認以上資訊真實並同意聲明</b></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 服務內容 -->
+  ${t.services.length>0?`<div class="card" style="margin-bottom:14px;">
+    <div class="card-hd"><span class="card-ttl">🌸 本次服務內容</span></div>
+    <div class="card-bd" style="padding:0;">
+      ${t.services.map(sv=>{
+        const productsUsed=sv.productsUsed||[];
+        return`<div style="padding:12px 16px;border-bottom:1px solid var(--bdr);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <b style="color:var(--rose);">${sv.name}</b>
+              <div class="tm" style="font-size:12px;">${sv.duration?`時長 ${sv.duration} 分鐘`:''}</div>
+            </div>
+            <div style="font-weight:700;color:var(--gold);">$${fmt(sv.price)}</div>
+          </div>
+          ${productsUsed.length>0?`<div style="margin-top:6px;font-size:12px;color:var(--mut);">使用：${productsUsed.map(pu=>{
+            const p=products.find(x=>x.id===pu.productId);
+            return p?`${p.name}${p.capacity?'（'+p.capacity+(p.capacityUnit||'')+'）':''}`:'';
+          }).filter(Boolean).join('、')}</div>`:''}
+        </div>`;
+      }).join('')}
+      <div style="padding:12px 16px;background:var(--goldL);display:flex;justify-content:space-between;">
+        <b>總計</b>
+        <b style="font-size:20px;color:var(--rose);">$${fmt(totalAmount)}</b>
+      </div>
+    </div>
+  </div>`:''}
+
+  <!-- 各項服務同意書 -->
+  ${matchedTerms.map((mt,idx)=>`<div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">📜 ${mt.key} 同意書</span></div>
+    <div class="card-bd">
+      <div style="max-height:200px;overflow-y:auto;font-size:13px;line-height:1.7;white-space:pre-wrap;padding:8px;background:var(--bg2);border-radius:6px;">${mt.content||'尚未設定此分類條款，請至「⚙️ 基本設定」設定'}</div>
+    </div>
+  </div>`).join('')}
+
+  <!-- 影像紀錄說明 -->
+  <div class="card" style="margin-bottom:14px;background:var(--bg2);">
+    <div class="card-hd" style="background:transparent;"><span class="card-ttl" style="color:var(--mut);font-size:14px;">📷 服務紀錄影像說明</span></div>
+    <div class="card-bd">
+      <div style="font-size:13px;line-height:1.7;">
+        為確保服務品質、追蹤療程效果及提供後續諮詢參考，本工作室於服務過程中可能拍攝<b>服務紀錄影像</b>（含照片、影片）。<br><br>
+        此影像紀錄屬於提供服務之必要範圍內利用，依《個人資料保護法》第19條第1項第2款「與當事人有契約或類似契約之關係」之規定，本工作室得於服務目的範圍內蒐集、處理及利用，<b>並僅作為內部紀錄與服務品質管理使用，絕不外流</b>。
+      </div>
+    </div>
+  </div>
+
+  <!-- 網路公開授權（選填）-->
+  <div class="card" style="margin-bottom:14px;border:1px dashed var(--rose);">
+    <div class="card-hd" style="background:linear-gradient(90deg,var(--roseL),transparent);">
+      <span class="card-ttl" style="color:var(--rose);font-size:14px;">🌐 網路公開使用授權（選填）</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+        <input type="checkbox" ${t.publishOptIn?'checked':''} onchange="togglePublishOption(this.checked)" style="width:16px;height:16px;cursor:pointer;">
+        <span class="tm">需要客戶授權時請打開</span>
+      </label>
+    </div>
+    ${t.publishOptIn?`<div class="card-bd">
+      <div style="font-size:13px;line-height:1.7;padding:10px;background:var(--roseL);border-radius:6px;margin-bottom:10px;">
+        本工作室未來如欲將前述影像作為<b>網路宣傳、社群平台分享、教學示範</b>或其他公開用途使用時，將事先個別徵求客戶書面同意。<b style="color:var(--rose);">未經同意絕不公開使用。</b>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;background:var(--roseL);padding:10px;border-radius:8px;">
+        <input type="checkbox" ${t.publishAgreed?'checked':''} onchange="updateTreatment('publishAgreed',this.checked)" style="width:18px;height:18px;cursor:pointer;">
+        <span><b style="color:var(--rose);">本人 ${t.customer||''} 同意工作室於上述用途公開使用本次服務影像</b></span>
+      </label>
+    </div>`:''}
+  </div>
+
+  <!-- 整體同意聲明 -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-bd">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;background:var(--goldL);padding:12px;border-radius:8px;">
+        <input type="checkbox" ${t.agreed?'checked':''} onchange="updateTreatment('agreed',this.checked)" style="width:18px;height:18px;cursor:pointer;">
+        <span><b style="color:var(--goldDk);">本人 ${t.customer||''} 已詳閱以上所有同意書內容並同意</b></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 簽名 -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">✍️ 客戶簽名</span></div>
+    <div class="card-bd">
+      <div class="tm" style="text-align:center;margin-bottom:8px;font-size:13px;">用手指或 Apple Pencil 簽名</div>
+      <div style="background:linear-gradient(180deg,#fff 0%,#fffaf3 100%);border:3px dashed var(--gold);border-radius:12px;padding:10px;">
+        <canvas id="t_sign_canvas" width="600" height="200" style="width:100%;height:200px;cursor:crosshair;touch-action:none;display:block;background:#fff;border-radius:8px;"></canvas>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+        <button class="btn btn-y" onclick="clearSignature()">🗑️ 清除重簽</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin:20px 0;">
+    <button class="btn btn-pur" style="background:linear-gradient(135deg,var(--gold),var(--rose));color:#fff;font-size:18px;font-weight:700;padding:16px 40px;border-radius:30px;box-shadow:0 4px 16px rgba(217,154,87,0.3);" onclick="finalizeTreatment()">
+      ✓ 完成首次建檔並結帳 ✨
     </button>
   </div>
   `;
@@ -2821,6 +3174,38 @@ function pgSettings(){
         `).join('')}
         <button class="btn btn-sm btn-y" onclick="openM('editTerms','__custom__')">＋ 新增分類</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 員工話術範例管理 -->
+  <div class="card" data-section="scriptHelp" style="background:linear-gradient(135deg,#fff5e6,#fff0f6);border:1px solid var(--gold);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--goldDk);">🎓 員工話術範例（培訓教材）</span>
+      <button class="btn btn-y btn-sm" onclick="openM('editScripts')">✏️ 編輯話術</button>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">員工開「📱 服務確認與簽名」頁面時，會看到展開式話術範例。讓員工知道每個情境該怎麼說，把法律程序變成關心關懷。</div>
+      ${(()=>{
+        const scripts=S.data.settings?.scripts;
+        const hasCustom=scripts&&Object.keys(scripts).length>0;
+        return hasCustom?'<div class="tm" style="color:var(--grn);">✓ 已自訂話術範例</div>':'<div class="tm" style="color:var(--mut);">尚未自訂，使用預設話術範例</div>';
+      })()}
+    </div>
+  </div>
+
+  <!-- 首次建檔健康問卷題目管理 -->
+  <div class="card" style="background:linear-gradient(135deg,var(--purL),var(--bluL));border:1px solid var(--pur);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--pur);">📋 首次建檔健康問卷題目</span>
+      <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('editHealthQuestions')">✏️ 編輯題目</button>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">當客戶首次來訪走「🆕 首次建檔模式」時，會顯示這些題目讓客戶填寫。</div>
+      ${(()=>{
+        const qs=S.data.settings?.healthQuestions;
+        const count=qs?qs.length:9;  // 預設 9 題
+        return`<div class="tm">目前共 <b>${count}</b> 題${qs?'（已自訂）':'（使用預設）'}</div>`;
+      })()}
     </div>
   </div>
 
@@ -3463,6 +3848,88 @@ function renderModal(){
     <div class="mbtns">
       <button class="btn btn-s" onclick="closeMod()">取消</button>
       <button class="btn btn-p" onclick="saveTermsCategory('${cat}')">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯員工話術範例 modal ───
+  if(m.t==='editScripts'){
+    const scripts=S.data.settings?.scripts||{};
+    const defaults={
+      enter:'○○姐今天感覺怎麼樣？有沒有哪裡特別緊或痠？最近身體有什麼新狀況嗎？我幫妳記一下，等等服務時會特別注意～',
+      handIpad:'來，這個確認一下今天的狀況，我才知道力道怎麼幫妳調最舒服。',
+      preService:'我等等會從____開始，妳今天有沒有哪邊不能壓的？',
+      sign:'這邊跟妳確認一下今天的服務內容，沒問題的話幫我簽個名～',
+      firstVisit:'○○姐第一次來，我們這邊有個小問卷，主要是想多了解妳，這樣我才知道哪些可以做、哪些要避開。簡單填一下就好，大概兩分鐘～'
+    };
+    c=`<div class="mttl">🎓 編輯員工話術範例</div>
+    <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;">
+      💡 把法律程序說成「關心」，把填表說成「了解你」。讓員工跟著說，自然又專業！
+    </div>
+    <div class="fg">
+      <div class="fgrp"><label>💬 進場時（客人剛到）</label>
+        <textarea id="m_sc_enter" rows="3" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;line-height:1.6;">${scripts.enter||defaults.enter}</textarea>
+      </div>
+      <div class="fgrp"><label>💬 遞 iPad 時</label>
+        <textarea id="m_sc_handIpad" rows="2" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;line-height:1.6;">${scripts.handIpad||defaults.handIpad}</textarea>
+      </div>
+      <div class="fgrp"><label>💬 服務前再確認</label>
+        <textarea id="m_sc_preService" rows="2" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;line-height:1.6;">${scripts.preService||defaults.preService}</textarea>
+      </div>
+      <div class="fgrp"><label>💬 請客戶簽名時</label>
+        <textarea id="m_sc_sign" rows="2" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;line-height:1.6;">${scripts.sign||defaults.sign}</textarea>
+      </div>
+      <div class="fgrp"><label>💬 首次客戶</label>
+        <textarea id="m_sc_firstVisit" rows="3" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;line-height:1.6;">${scripts.firstVisit||defaults.firstVisit}</textarea>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-y" onclick="resetScripts()">🔄 還原預設</button>
+      <button class="btn btn-p" onclick="saveScripts()">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯首次建檔健康問卷 modal ───
+  if(m.t==='editHealthQuestions'){
+    const qs=S.data.settings?.healthQuestions||[
+      {key:'age',label:'年齡',type:'text',placeholder:'例：35'},
+      {key:'occupation',label:'職業',type:'text',placeholder:'例：上班族'},
+      {key:'allergy',label:'過敏史（食物/藥物/化妝品等）',type:'textarea',placeholder:'例：花生過敏。沒有請寫「無」'},
+      {key:'disease',label:'目前疾病或慢性病',type:'textarea',placeholder:'例：高血壓。沒有請寫「無」'},
+      {key:'medication',label:'目前服用藥物',type:'textarea',placeholder:'例：避孕藥。沒有請寫「無」'},
+      {key:'pregnancy',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不確定']},
+      {key:'surgery',label:'近半年內是否有手術或醫美療程',type:'textarea',placeholder:'例：3個月前做雷射。沒有請寫「無」'},
+      {key:'skinSensitive',label:'皮膚敏感狀況',type:'textarea',placeholder:'例：對 A 酸過敏。沒有請寫「無」'},
+      {key:'concerns',label:'本次最想改善的問題',type:'textarea',placeholder:'例：黑眼圈、痘痘、暗沉'}
+    ];
+    c=`<div class="mttl">📋 編輯首次建檔健康問卷</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      💡 客戶首次走「🆕 首次建檔模式」時看到這些題目。可以新增、刪除或調整題目。
+    </div>
+    <div id="hq_list">
+      ${qs.map((q,i)=>`<div class="hq_item" data-idx="${i}" style="background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--pur);">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <b style="color:var(--pur);">第 ${i+1} 題</b>
+          <input type="text" class="hqi_label" value="${q.label||''}" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+          <select class="hqi_type" style="width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+            <option value="text"${q.type==='text'?' selected':''}>單行</option>
+            <option value="textarea"${q.type==='textarea'?' selected':''}>多行</option>
+            <option value="radio"${q.type==='radio'?' selected':''}>選項</option>
+          </select>
+          <button onclick="rmHealthQuestion(${i})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+        </div>
+        <input type="text" class="hqi_placeholder" value="${q.placeholder||''}" placeholder="提示文字（選填）" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+        ${q.type==='radio'?`<input type="text" class="hqi_options" value="${(q.options||[]).join(',')}" placeholder="選項用逗號分隔，如：是,否,不確定" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">`:''}
+        <input type="hidden" class="hqi_key" value="${q.key||'q'+i}">
+      </div>`).join('')}
+    </div>
+    <button class="btn btn-y btn-sm" style="width:100%;margin-top:8px;" onclick="addHealthQuestion()">＋ 新增題目</button>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-y" onclick="resetHealthQuestions()">🔄 還原預設</button>
+      <button class="btn btn-p" onclick="saveHealthQuestions()">✓ 儲存</button>
     </div>`;
     S.modal.lg=true;
   }
@@ -5399,6 +5866,100 @@ window.delTermsCategory=async(cat)=>{
 // 兼容
 window.saveStudioSettings=window.saveStudioName;
 
+// ─── 員工話術範例儲存 ───
+window.saveScripts=async()=>{
+  try{
+    const scripts={
+      enter:$('m_sc_enter')?.value||'',
+      handIpad:$('m_sc_handIpad')?.value||'',
+      preService:$('m_sc_preService')?.value||'',
+      sign:$('m_sc_sign')?.value||'',
+      firstVisit:$('m_sc_firstVisit')?.value||''
+    };
+    const settings={...(S.data.settings||{}),scripts};
+    await saveMain({settings});
+    toast('✅ 話術範例已儲存');
+    closeMod();
+  }catch(err){console.error(err);alert('失敗：'+err.message);}
+};
+
+window.resetScripts=async()=>{
+  if(!confirm('確認還原為預設話術範例？'))return;
+  try{
+    const settings={...(S.data.settings||{})};
+    delete settings.scripts;
+    await saveMain({settings});
+    toast('✅ 已還原預設');
+    closeMod();
+  }catch(err){console.error(err);alert('失敗：'+err.message);}
+};
+
+// ─── 健康問卷題目管理 ───
+window.addHealthQuestion=()=>{
+  const list=document.getElementById('hq_list');
+  if(!list)return;
+  const idx=document.querySelectorAll('.hq_item').length;
+  const div=document.createElement('div');
+  div.className='hq_item';
+  div.dataset.idx=idx;
+  div.style.cssText='background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--pur);';
+  div.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+    <b style="color:var(--pur);">第 ${idx+1} 題</b>
+    <input type="text" class="hqi_label" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+    <select class="hqi_type" style="width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+      <option value="text">單行</option>
+      <option value="textarea">多行</option>
+      <option value="radio">選項</option>
+    </select>
+    <button onclick="rmHealthQuestion(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+  </div>
+  <input type="text" class="hqi_placeholder" placeholder="提示文字（選填）" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+  <input type="text" class="hqi_options" placeholder="選項用逗號分隔（僅選項型用）" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;display:none;">
+  <input type="hidden" class="hqi_key" value="q${idx}_${Date.now()}">`;
+  list.appendChild(div);
+};
+
+window.rmHealthQuestion=(i)=>{
+  const items=document.querySelectorAll('.hq_item');
+  if(items[i])items[i].remove();
+};
+
+window.saveHealthQuestions=async()=>{
+  try{
+    const items=document.querySelectorAll('.hq_item');
+    const qs=Array.from(items).map(el=>{
+      const type=el.querySelector('.hqi_type')?.value||'text';
+      const q={
+        key:el.querySelector('.hqi_key')?.value||'q'+Date.now(),
+        label:el.querySelector('.hqi_label')?.value?.trim()||'',
+        type,
+        placeholder:el.querySelector('.hqi_placeholder')?.value||''
+      };
+      if(type==='radio'){
+        const opts=el.querySelector('.hqi_options')?.value||'';
+        q.options=opts.split(',').map(s=>s.trim()).filter(Boolean);
+      }
+      return q;
+    }).filter(q=>q.label);
+    if(qs.length===0){alert('至少需要一題');return;}
+    const settings={...(S.data.settings||{}),healthQuestions:qs};
+    await saveMain({settings});
+    toast('✅ 健康問卷已儲存');
+    closeMod();
+  }catch(err){console.error(err);alert('失敗：'+err.message);}
+};
+
+window.resetHealthQuestions=async()=>{
+  if(!confirm('確認還原為預設題目？'))return;
+  try{
+    const settings={...(S.data.settings||{})};
+    delete settings.healthQuestions;
+    await saveMain({settings});
+    toast('✅ 已還原預設');
+    closeMod();
+  }catch(err){console.error(err);alert('失敗：'+err.message);}
+};
+
 // ─── 床位每小時成本：儲存到設定 ───
 // ─── 療程確認與簽名相關函式 ─────────────────────────────
 window.updateTreatment=(field,value)=>{
@@ -5414,7 +5975,125 @@ window.updateTreatment=(field,value)=>{
   if(field==='customer'&&S.treatment.mode==='staff'){
     const c=$('pg-content');if(c)c.innerHTML=renderPage();
   }
+  // 老師模式切換「網路公開授權」開關 → 不需重新渲染（不影響其他 UI）
+  // 但客戶模式切換 publishOptIn → 需重新渲染（要顯示/隱藏授權區）
+  if(field==='publishOptIn'&&S.treatment.mode==='customer'){
+    const c=$('pg-content');if(c)c.innerHTML=renderPage();
+    setTimeout(initSignatureCanvasInline,100);
+  }
 };
+
+// 客戶模式：切換網路公開授權顯示
+window.togglePublishOption=(checked)=>{
+  if(!S.treatment)return;
+  S.treatment.publishOptIn=checked;
+  if(!checked)S.treatment.publishAgreed=false;  // 關閉時自動清掉同意狀態
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(initSignatureCanvasInline,100);
+};
+
+// 切換話術範例展開/收合
+window.toggleScriptHelp=()=>{
+  if(!S.treatment)return;
+  S.treatment.showScript=!S.treatment.showScript;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// 開啟話術範例編輯（前往基本設定）
+window.openScriptEdit=()=>{
+  S.page='settings';
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// 膚況確認單更新
+window.updateSkinCheck=(key,value)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.skinCheck)S.treatment.skinCheck={};
+  // 互斥處理
+  if(key==='normal'&&value){
+    S.treatment.skinCheck={normal:true};
+  }else if(key==='changed'&&value){
+    S.treatment.skinCheck={changed:true,changeNote:S.treatment.skinCheck.changeNote||''};
+  }else if(key==='allClear'&&value){
+    const sc=S.treatment.skinCheck;
+    S.treatment.skinCheck={...sc,allClear:true,newDisease:false,newMed:false,beauty:false,injury:false};
+  }else if(['newDisease','newMed','beauty','injury'].includes(key)&&value){
+    S.treatment.skinCheck[key]=value;
+    S.treatment.skinCheck.allClear=false;
+  }else{
+    S.treatment.skinCheck[key]=value;
+  }
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(initSignatureCanvasInline,100);
+};
+
+window.updateSkinCheckNote=(value)=>{
+  if(!S.treatment||!S.treatment.skinCheck)return;
+  S.treatment.skinCheck.changeNote=value;
+};
+
+window.updateSkinCheckSupp=(value)=>{
+  if(!S.treatment||!S.treatment.skinCheck)return;
+  S.treatment.skinCheck.supplement=value;
+};
+
+// 健康問卷更新
+window.updateHealthForm=(key,value)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.healthForm)S.treatment.healthForm={};
+  S.treatment.healthForm[key]=value;
+};
+
+// 顯示健康問卷
+window.showHealthForm=(id)=>{
+  const r=(S.data.treatmentRecords||[]).find(x=>x.id===id);
+  if(!r||!r.healthForm){alert('查無健康問卷資料');return;}
+  const labelMap={
+    age:'年齡',occupation:'職業',allergy:'過敏史',disease:'目前疾病或慢性病',
+    medication:'目前服用藥物',pregnancy:'是否懷孕或哺乳中',surgery:'近半年手術或醫美',
+    skinSensitive:'皮膚敏感狀況',concerns:'本次最想改善的問題'
+  };
+  const text=Object.entries(r.healthForm).map(([k,v])=>`${labelMap[k]||k}：${v||'（未填）'}`).join('\n\n');
+  alert('【健康問卷】\n\n'+text+'\n\n填寫日期：'+(r.signedAt||r.date));
+};
+
+// 重新渲染後重新初始化簽名 canvas
+function initSignatureCanvasInline(){
+  const canvas=$('t_sign_canvas');
+  if(!canvas)return;
+  _sigCanvas=canvas;
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.getBoundingClientRect();
+  canvas.width=rect.width*dpr;
+  canvas.height=rect.height*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.lineWidth=2.5;
+  ctx.lineCap='round';
+  ctx.strokeStyle='#000';
+  _sigCtx=ctx;
+  _sigHasContent=false;
+  if(S.treatment&&S.treatment.signature){
+    const img=new Image();
+    img.onload=()=>{ctx.drawImage(img,0,0,rect.width,rect.height);_sigHasContent=true;};
+    img.src=S.treatment.signature;
+  }
+  function getPos(e){
+    const r=canvas.getBoundingClientRect();
+    if(e.touches&&e.touches[0])return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};
+    return{x:e.clientX-r.left,y:e.clientY-r.top};
+  }
+  function start(e){e.preventDefault();_sigDrawing=true;const p=getPos(e);_sigCtx.beginPath();_sigCtx.moveTo(p.x,p.y);}
+  function move(e){if(!_sigDrawing)return;e.preventDefault();const p=getPos(e);_sigCtx.lineTo(p.x,p.y);_sigCtx.stroke();_sigHasContent=true;}
+  function end(e){e.preventDefault();_sigDrawing=false;}
+  canvas.addEventListener('mousedown',start);
+  canvas.addEventListener('mousemove',move);
+  canvas.addEventListener('mouseup',end);
+  canvas.addEventListener('mouseleave',end);
+  canvas.addEventListener('touchstart',start,{passive:false});
+  canvas.addEventListener('touchmove',move,{passive:false});
+  canvas.addEventListener('touchend',end,{passive:false});
+}
 
 window.resetTreatment=()=>{
   if(!confirm('確認清空目前所有資料，重新開始？'))return;
@@ -5424,59 +6103,20 @@ window.resetTreatment=()=>{
 
 window.switchTreatmentMode=(mode)=>{
   if(!S.treatment)return;
-  // 切到客戶模式前，先檢查必填欄位
-  if(mode==='customer'){
+  // 切到客戶/首次建檔模式前，檢查必填
+  if(mode==='customer'||mode==='newCustomer'){
     if(!S.treatment.customer){alert('請先選擇客戶');return;}
     if(S.treatment.services.length===0&&S.treatment.products.length===0){
       alert('請至少新增一項服務或產品');return;
     }
-    // 檢查每筆服務都有名稱與金額
     const invalid=S.treatment.services.find(s=>!s.name||toN(s.price)<=0);
     if(invalid){alert('請完整填寫服務名稱與金額');return;}
   }
   S.treatment.mode=mode;
   const c=$('pg-content');if(c)c.innerHTML=renderPage();
-  // 切到客戶模式時，初始化簽名 canvas
-  if(mode==='customer'){
-    setTimeout(()=>{
-      const canvas=$('t_sign_canvas');
-      if(canvas){
-        _sigCanvas=canvas;
-        const dpr=window.devicePixelRatio||1;
-        const rect=canvas.getBoundingClientRect();
-        canvas.width=rect.width*dpr;
-        canvas.height=rect.height*dpr;
-        const ctx=canvas.getContext('2d');
-        ctx.scale(dpr,dpr);
-        ctx.lineWidth=2.5;
-        ctx.lineCap='round';
-        ctx.strokeStyle='#000';
-        _sigCtx=ctx;
-        _sigHasContent=false;
-        // 如已有簽名 → 還原
-        if(S.treatment.signature){
-          const img=new Image();
-          img.onload=()=>{ctx.drawImage(img,0,0,rect.width,rect.height);_sigHasContent=true;};
-          img.src=S.treatment.signature;
-        }
-        // 綁定事件
-        function getPos(e){
-          const r=canvas.getBoundingClientRect();
-          if(e.touches&&e.touches[0])return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};
-          return{x:e.clientX-r.left,y:e.clientY-r.top};
-        }
-        function start(e){e.preventDefault();_sigDrawing=true;const p=getPos(e);_sigCtx.beginPath();_sigCtx.moveTo(p.x,p.y);}
-        function move(e){if(!_sigDrawing)return;e.preventDefault();const p=getPos(e);_sigCtx.lineTo(p.x,p.y);_sigCtx.stroke();_sigHasContent=true;}
-        function end(e){e.preventDefault();_sigDrawing=false;}
-        canvas.addEventListener('mousedown',start);
-        canvas.addEventListener('mousemove',move);
-        canvas.addEventListener('mouseup',end);
-        canvas.addEventListener('mouseleave',end);
-        canvas.addEventListener('touchstart',start,{passive:false});
-        canvas.addEventListener('touchmove',move,{passive:false});
-        canvas.addEventListener('touchend',end,{passive:false});
-      }
-    },100);
+  // 切到客戶或首次建檔模式時，初始化簽名 canvas
+  if(mode==='customer'||mode==='newCustomer'){
+    setTimeout(initSignatureCanvasInline,100);
   }
 };
 
@@ -5612,6 +6252,14 @@ window.finalizeTreatment=async()=>{
     if(!t)return;
     if(!t.customer){alert('找不到客戶');return;}
     if(!t.agreed){alert('⚠️ 請勾選「已詳閱並同意上述條款」');return;}
+    // 首次建檔需勾選健康聲明
+    if(t.mode==='newCustomer'&&!t.healthAgreed){
+      alert('⚠️ 首次建檔需勾選「健康狀況真實聲明」同意框');return;
+    }
+    // 如果有打開網路公開授權，但客戶沒勾同意 → 提示但不擋（讓老師決定）
+    if(t.publishOptIn&&!t.publishAgreed){
+      if(!confirm('⚠️ 您打開了「網路公開使用授權」但客戶尚未勾選同意。\n\n是否要繼續完成（不取得網路公開授權）？\n\n按「確定」=客戶不同意網路公開（僅服務內部使用）\n按「取消」=回去請客戶勾選'))return;
+    }
     if(!_sigCanvas||!_sigHasContent){alert('⚠️ 請先簽名');return;}
     const dataURL=_sigCanvas.toDataURL('image/png');
     const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
@@ -5702,6 +6350,17 @@ window.finalizeTreatment=async()=>{
       agreedAt:new Date().toISOString(),
       termsSnapshot,
       studioSnapshot:studioName,
+      // 影像紀錄說明（必告知）
+      imageRecordDisclosed:true,
+      // 網路公開授權
+      publishAuthorized:t.publishOptIn&&t.publishAgreed?true:false,
+      publishAuthorizedAt:t.publishOptIn&&t.publishAgreed?new Date().toISOString():null,
+      // 膚況/身體狀況快速確認單
+      skinCheck:t.skinCheck||null,
+      // 首次建檔資料（如果有）
+      isFirstVisit:t.mode==='newCustomer',
+      healthForm:t.mode==='newCustomer'?(t.healthForm||{}):null,
+      healthAgreed:t.mode==='newCustomer'?(t.healthAgreed===true):null,
       totalAmount,
       payMethod:t.payMethod,
       createdAt:new Date().toISOString()
