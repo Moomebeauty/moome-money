@@ -2307,7 +2307,7 @@ function pgTreatmentStaffView(t){
             ${customers.map(n=>`<option value="${n}"${t.customer===n?' selected':''}>${n}（餘額 $${fmt(getCustomerBalance(n))}）</option>`).join('')}
             <option value="__new__"${t.customer&&!customers.includes(t.customer)?' selected':''}>＋ 新客戶</option>
           </select>
-          <input type="text" id="t_customer_new" placeholder="新客戶姓名" oninput="updateTreatment('customer',this.value)" value="${t.customer&&!customers.includes(t.customer)?t.customer:''}" style="margin-top:6px;display:${t.customer&&!customers.includes(t.customer)?'block':'none'};">
+          <input type="text" id="t_customer_new" placeholder="新客戶姓名" oninput="updateTreatment('customer',this.value,'input')" value="${t.customer&&!customers.includes(t.customer)?t.customer:''}" style="margin-top:6px;display:${t.customer&&!customers.includes(t.customer)?'block':'none'};">
           ${balance>0?`<div class="tm" style="margin-top:4px;color:var(--gold);">💳 此客戶儲值餘額：<b>$${fmt(balance)}</b></div>`:''}
         </div>
         <div class="fgrp"><label>日期</label>
@@ -5962,7 +5962,7 @@ window.resetHealthQuestions=async()=>{
 
 // ─── 床位每小時成本：儲存到設定 ───
 // ─── 療程確認與簽名相關函式 ─────────────────────────────
-window.updateTreatment=(field,value)=>{
+window.updateTreatment=(field,value,source)=>{
   if(!S.treatment)return;
   if(field==='customer'&&value==='__new__'){
     // 顯示新客戶輸入框
@@ -5971,12 +5971,12 @@ window.updateTreatment=(field,value)=>{
     return;
   }
   S.treatment[field]=value;
-  // 客戶名稱變動時，更新餘額提示（僅老師模式）
-  if(field==='customer'&&S.treatment.mode==='staff'){
+  // 客戶從下拉選擇時 → 重新渲染（顯示餘額、首次客戶提示等）
+  // 但若是從新客戶輸入框打字（source='input'）→ 不渲染（避免鍵盤焦點消失）
+  if(field==='customer'&&S.treatment.mode==='staff'&&source!=='input'){
     const c=$('pg-content');if(c)c.innerHTML=renderPage();
   }
-  // 老師模式切換「網路公開授權」開關 → 不需重新渲染（不影響其他 UI）
-  // 但客戶模式切換 publishOptIn → 需重新渲染（要顯示/隱藏授權區）
+  // 客戶模式切換 publishOptIn → 重新渲染
   if(field==='publishOptIn'&&S.treatment.mode==='customer'){
     const c=$('pg-content');if(c)c.innerHTML=renderPage();
     setTimeout(initSignatureCanvasInline,100);
