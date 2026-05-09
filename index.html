@@ -2564,12 +2564,12 @@ function pgTreatmentCustomerView(t){
         <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:${t.skinCheck&&t.skinCheck.normal?'var(--grnL)':'var(--bg2)'};border-radius:6px;">
             <input type="radio" name="skin_status" ${t.skinCheck&&t.skinCheck.normal?'checked':''} onchange="updateSkinCheck('normal',true)" style="width:18px;height:18px;cursor:pointer;">
-            <span>✓ 一切正常，與既有紀錄相同</span>
+            <span>一切正常，與既有紀錄相同</span>
           </label>
           <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:8px 10px;background:${t.skinCheck&&t.skinCheck.changed?'var(--goldL)':'var(--bg2)'};border-radius:6px;">
             <input type="radio" name="skin_status" ${t.skinCheck&&t.skinCheck.changed?'checked':''} onchange="updateSkinCheck('changed',true)" style="width:18px;height:18px;cursor:pointer;margin-top:2px;">
             <div style="flex:1;">
-              <div>⚠️ 有以下變化（請說明）：</div>
+              <div>有以下變化（請說明）：</div>
               ${t.skinCheck&&t.skinCheck.changed?`<textarea id="t_skin_changeNote" rows="2" placeholder="例：感冒、生理期、皮膚過敏、手術後..." oninput="updateSkinCheckNote(this.value)" style="width:100%;margin-top:6px;padding:8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">${t.skinCheck.changeNote||''}</textarea>`:''}
             </div>
           </label>
@@ -2587,7 +2587,7 @@ function pgTreatmentCustomerView(t){
             {key:'allClear',label:'以上皆無'}
           ].map(it=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 12px;background:${t.skinCheck&&t.skinCheck[it.key]?(it.key==='allClear'?'var(--grnL)':'var(--goldL)'):'var(--bg2)'};border-radius:20px;font-size:13px;">
             <input type="checkbox" ${t.skinCheck&&t.skinCheck[it.key]?'checked':''} onchange="updateSkinCheck('${it.key}',this.checked)" style="width:16px;height:16px;cursor:pointer;">
-            <span>${it.key==='allClear'?'✓':'☐'} ${it.label}</span>
+            <span>${it.label}</span>
           </label>`).join('')}
         </div>
       </div>
