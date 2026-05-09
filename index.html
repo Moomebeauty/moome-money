@@ -1476,6 +1476,7 @@ function pgTreatmentRecords(c){
                   ${r.isFirstVisit?`<span class="bdg" style="background:var(--goldL);color:var(--goldDk);font-size:11px;">🆕 首次建檔</span>`:''}
                   ${r.publishAuthorized?`<span class="bdg" style="background:var(--roseL);color:var(--rose);font-size:11px;">🌐 已授權網路公開使用</span>`:`<span class="bdg" style="background:var(--bg2);color:var(--mut);font-size:11px;">🔒 僅內部使用（未授權公開）</span>`}
                   ${r.skinCheck?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='alert("【膚況確認】\\n"+JSON.stringify(${JSON.stringify(JSON.stringify(r.skinCheck))},null,2))'>🩺 看膚況</button>`:''}
+                  ${r.serviceHealthAnswers&&Object.keys(r.serviceHealthAnswers).length>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='showServiceHealth("${r.id}")'>🔹 看專屬健康確認</button>`:''}
                   ${r.healthForm&&Object.keys(r.healthForm).length>0?`<button class="btn btn-s btn-sm" style="font-size:10px;padding:2px 8px;" onclick='showHealthForm("${r.id}")'>📋 看健康問卷</button>`:''}
                 </div>
               </div>
@@ -2210,7 +2211,9 @@ function pgTreatment(){
       healthForm:{},  // 健康問卷答案
       healthAgreed:false,
       // 膚況快速確認
-      skinCheck:{}  // 勾選答案
+      skinCheck:{},  // 勾選答案
+      // 各服務專屬健康確認答案
+      serviceHealthAnswers:{}
     };
   }
   const t=S.treatment;
@@ -2598,6 +2601,59 @@ function pgTreatmentCustomerView(t){
       </div>`:''}
     </div>
   </div>
+
+  <!-- 服務專屬健康確認題目（依服務分類動態載入）-->
+  ${(()=>{
+    const svcQs=S.data.settings?.serviceHealthQuestions||{};
+    const matched=[];  // [{cat, questions}]
+    if(t.services.length>0){
+      for(const sv of t.services){
+        for(const cat of Object.keys(svcQs)){
+          const kw=cat.substring(0,2);
+          if((sv.name||'').includes(kw)||(sv.name||'').includes(cat)){
+            if(!matched.find(m=>m.cat===cat)){
+              matched.push({cat,questions:svcQs[cat]||[]});
+            }
+            break;
+          }
+        }
+      }
+    }
+    if(matched.length===0)return '';
+    return matched.map(m=>`<div class="card" style="margin-bottom:14px;border-left:4px solid var(--rose);">
+      <div class="card-hd" style="background:var(--roseL);"><span class="card-ttl" style="color:var(--rose);">🔹 ${m.cat} 專屬健康確認</span></div>
+      <div class="card-bd">
+        <div class="tm" style="font-size:12px;margin-bottom:10px;">為了您的安全，本次「${m.cat}」服務需要請您確認以下狀況</div>
+        ${m.questions.map((q,i)=>{
+          const key=`svc_${m.cat}_${q.key||i}`;
+          const val=t.serviceHealthAnswers&&t.serviceHealthAnswers[key];
+          if(q.type==='radio'){
+            return`<div style="margin-bottom:14px;">
+              <b style="font-size:13px;">${q.label}</b>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                ${(q.options||['是','否']).map(opt=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;background:${val===opt?'var(--roseL)':'var(--bg2)'};border-radius:20px;font-size:13px;">
+                  <input type="radio" name="${key}" ${val===opt?'checked':''} onchange="updateServiceHealth('${key}','${opt}')" style="cursor:pointer;">
+                  <span>${opt}</span>
+                </label>`).join('')}
+              </div>
+            </div>`;
+          }else if(q.type==='checkbox'){
+            return`<div style="margin-bottom:10px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;background:${val?'var(--roseL)':'var(--bg2)'};border-radius:6px;">
+                <input type="checkbox" ${val?'checked':''} onchange="updateServiceHealth('${key}',this.checked)" style="width:18px;height:18px;cursor:pointer;">
+                <span style="font-size:13px;">${q.label}</span>
+              </label>
+            </div>`;
+          }else{
+            return`<div class="fgrp" style="margin-bottom:10px;">
+              <label style="font-size:13px;">${q.label}</label>
+              <textarea rows="2" placeholder="${q.placeholder||''}" oninput="updateServiceHealth('${key}',this.value)" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--bdr);border-radius:6px;font-size:13px;">${val||''}</textarea>
+            </div>`;
+          }
+        }).join('')}
+      </div>
+    </div>`).join('');
+  })()}
 
   <!-- 同意條款 -->
   <div class="card" style="margin-bottom:14px;">
@@ -3203,8 +3259,34 @@ function pgSettings(){
       <div class="tm" style="margin-bottom:10px;">當客戶首次來訪走「🆕 首次建檔模式」時，會顯示這些題目讓客戶填寫。</div>
       ${(()=>{
         const qs=S.data.settings?.healthQuestions;
-        const count=qs?qs.length:9;  // 預設 9 題
+        const count=qs?qs.length:9;
         return`<div class="tm">目前共 <b>${count}</b> 題${qs?'（已自訂）':'（使用預設）'}</div>`;
+      })()}
+    </div>
+  </div>
+
+  <!-- 各服務專屬健康確認題目管理 -->
+  <div class="card" style="background:linear-gradient(135deg,var(--roseL),var(--goldL));border:1px solid var(--rose);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--rose);">🔹 各服務專屬健康確認題目</span>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">為不同服務設定<b>當日必問的健康狀況</b>。例：霧眉問是否懷孕、熱蠟問近期是否曬傷、按摩問心血管狀況。每次客戶簽名前會依當次服務動態顯示。</div>
+      ${(()=>{
+        const svcQs=S.data.settings?.serviceHealthQuestions||{};
+        const cats=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩'];
+        return`<div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${cats.map(cat=>{
+            const has=svcQs[cat]&&svcQs[cat].length>0;
+            return`<button class="btn btn-sm" style="${has?'background:var(--rose);color:#fff;':'background:var(--bg2);color:var(--mut);'}" onclick="openM('editServiceHealthQuestions','${cat}')">
+              ${has?`✓ ${cat}（${svcQs[cat].length} 題）`:`＋ ${cat}`}
+            </button>`;
+          }).join('')}
+          ${Object.entries(svcQs).filter(([k,v])=>!cats.includes(k)&&v&&v.length>0).map(([k,v])=>`
+            <button class="btn btn-sm" style="background:var(--rose);color:#fff;" onclick="openM('editServiceHealthQuestions','${k}')">✓ ${k}（${v.length} 題）</button>
+          `).join('')}
+          <button class="btn btn-sm btn-y" onclick="openM('editServiceHealthQuestions','__custom__')">＋ 新增分類</button>
+        </div>`;
       })()}
     </div>
   </div>
@@ -3930,6 +4012,90 @@ function renderModal(){
       <button class="btn btn-s" onclick="closeMod()">取消</button>
       <button class="btn btn-y" onclick="resetHealthQuestions()">🔄 還原預設</button>
       <button class="btn btn-p" onclick="saveHealthQuestions()">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯各服務專屬健康確認題目 modal ───
+  if(m.t==='editServiceHealthQuestions'){
+    const cat=m.x||'美容做臉';
+    const isCustom=cat==='__custom__';
+    const svcQs=S.data.settings?.serviceHealthQuestions||{};
+    const qs=isCustom?[]:(svcQs[cat]||[]);
+    // 預設範本（依分類）
+    const templates={
+      '霧眉霧唇':[
+        {key:'pregnant',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不確定']},
+        {key:'aRetinol',label:'近一個月是否使用 A 酸或果酸',type:'radio',options:['是','否']},
+        {key:'recentSurgery',label:'近半年是否有臉部手術或注射',type:'radio',options:['是','否']},
+        {key:'allergyMetal',label:'是否對金屬或色素過敏',type:'radio',options:['是','否','不確定']},
+        {key:'bloodThinner',label:'是否服用抗凝血劑（如阿斯匹靈）',type:'radio',options:['是','否']}
+      ],
+      '熱蠟除毛':[
+        {key:'recentExfoliate',label:'24 小時內是否有去角質',type:'radio',options:['是','否']},
+        {key:'recentSunburn',label:'近期是否曬傷或日光浴',type:'radio',options:['是','否']},
+        {key:'aRetinol',label:'近期是否使用 A 酸或果酸',type:'radio',options:['是','否']},
+        {key:'skinDisease',label:'除毛部位是否有傷口、痘痘或皮膚病',type:'radio',options:['是','否']},
+        {key:'menstrual',label:'目前是否生理期（若除私密處）',type:'radio',options:['是','否','不適用']}
+      ],
+      '美容做臉':[
+        {key:'recentAllergy',label:'近期皮膚是否有過敏反應',type:'radio',options:['是','否']},
+        {key:'usingPeel',label:'近期是否使用換膚產品（A酸、果酸、水楊酸）',type:'radio',options:['是','否']},
+        {key:'recentLaser',label:'近兩週是否做過雷射或醫美療程',type:'radio',options:['是','否']},
+        {key:'cosmeticAllergy',label:'是否對特定保養品成分過敏',type:'textarea',placeholder:'例：對酒精、香精過敏。沒有請寫「無」'},
+        {key:'pregnant',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不適用']}
+      ],
+      '美體按摩':[
+        {key:'recentInjury',label:'近期是否受傷或瘀青',type:'radio',options:['是','否']},
+        {key:'menstrual',label:'目前是否生理期',type:'radio',options:['是','否','不適用']},
+        {key:'cardiovascular',label:'是否有高血壓、心臟病等心血管疾病',type:'radio',options:['是','否']},
+        {key:'osteoporosis',label:'是否有骨質疏鬆或脊椎相關疾病',type:'radio',options:['是','否']},
+        {key:'pregnant',label:'是否懷孕或哺乳中',type:'radio',options:['是','否','不適用']},
+        {key:'pressurePref',label:'力道偏好',type:'radio',options:['輕','中','重']}
+      ],
+      '彩妝服務':[
+        {key:'cosmeticAllergy',label:'是否對特定彩妝成分過敏',type:'textarea',placeholder:'例：對含酒精、礦物油的彩妝過敏。沒有請寫「無」'},
+        {key:'recentSurgery',label:'近期是否有眼部或唇部手術',type:'radio',options:['是','否']},
+        {key:'wearLashes',label:'是否有戴假睫毛',type:'radio',options:['是','否']},
+        {key:'eyeCondition',label:'眼睛是否有發炎、不適',type:'radio',options:['是','否']}
+      ]
+    };
+    const templateForThis=templates[cat]||[];
+    const useQs=qs.length>0?qs:templateForThis;
+    c=`<div class="mttl">🔹 編輯「${isCustom?'自訂分類':cat}」當日必問</div>
+    <div class="notice" style="background:var(--roseL);border-left-color:var(--rose);color:var(--rose);font-size:13px;">
+      💡 ${isCustom?'設定新的服務分類與其專屬必問題目':`為「${cat}」設定當日必問的健康確認。客戶簽名前會看到這些問題。`}
+    </div>
+    ${isCustom?`<div class="fg fg2" style="margin-bottom:10px;">
+      <div class="fgrp" style="grid-column:1/-1"><label>分類名稱 *</label>
+        <input type="text" id="m_shq_cat" placeholder="如：醫美課程、芳療" value="">
+      </div>
+    </div>`:`<input type="hidden" id="m_shq_cat" value="${cat}">`}
+    ${(!isCustom&&qs.length===0&&templateForThis.length>0)?`<div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:12px;">
+      💡 已載入「${cat}」的建議題目範本，您可以調整後儲存
+    </div>`:''}
+    <div id="shq_list">
+      ${useQs.map((q,i)=>`<div class="shq_item" data-idx="${i}" style="background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--rose);">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <b style="color:var(--rose);">第 ${i+1} 題</b>
+          <input type="text" class="shqi_label" value="${q.label||''}" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+          <select class="shqi_type" style="width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+            <option value="radio"${q.type==='radio'?' selected':''}>選項</option>
+            <option value="textarea"${q.type==='textarea'?' selected':''}>多行文字</option>
+            <option value="checkbox"${q.type==='checkbox'?' selected':''}>勾選</option>
+          </select>
+          <button onclick="rmShqItem(${i})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+        </div>
+        <input type="text" class="shqi_options" value="${(q.options||[]).join(',')}" placeholder="選項（用逗號分隔，僅選項型用）如：是,否,不確定" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+        <input type="text" class="shqi_placeholder" value="${q.placeholder||''}" placeholder="提示文字（多行型用）" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+        <input type="hidden" class="shqi_key" value="${q.key||'q'+i+'_'+Date.now()}">
+      </div>`).join('')}
+    </div>
+    <button class="btn btn-y btn-sm" style="width:100%;margin-top:8px;" onclick="addShqItem()">＋ 新增題目</button>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      ${(!isCustom&&qs.length>0)?`<button class="btn btn-y" onclick="delServiceHealthQuestions('${cat}')">🗑️ 刪除此分類題目</button>`:''}
+      <button class="btn btn-p" onclick="saveServiceHealthQuestions('${cat}')">✓ 儲存</button>
     </div>`;
     S.modal.lg=true;
   }
@@ -5960,6 +6126,81 @@ window.resetHealthQuestions=async()=>{
   }catch(err){console.error(err);alert('失敗：'+err.message);}
 };
 
+// ─── 各服務專屬健康題目管理 ───
+window.addShqItem=()=>{
+  const list=document.getElementById('shq_list');
+  if(!list)return;
+  const idx=document.querySelectorAll('.shq_item').length;
+  const div=document.createElement('div');
+  div.className='shq_item';
+  div.dataset.idx=idx;
+  div.style.cssText='background:var(--card);padding:10px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--rose);';
+  div.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+    <b style="color:var(--rose);">第 ${idx+1} 題</b>
+    <input type="text" class="shqi_label" placeholder="題目" style="flex:1;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+    <select class="shqi_type" style="width:100px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
+      <option value="radio">選項</option>
+      <option value="textarea">多行文字</option>
+      <option value="checkbox">勾選</option>
+    </select>
+    <button onclick="rmShqItem(${idx})" style="border:none;background:var(--redL);color:var(--red);width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+  </div>
+  <input type="text" class="shqi_options" placeholder="選項（用逗號分隔）如：是,否,不確定" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;" value="是,否">
+  <input type="text" class="shqi_placeholder" placeholder="提示文字（多行型用）" style="width:100%;margin-top:4px;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:12px;">
+  <input type="hidden" class="shqi_key" value="q${idx}_${Date.now()}">`;
+  list.appendChild(div);
+};
+
+window.rmShqItem=(i)=>{
+  const items=document.querySelectorAll('.shq_item');
+  if(items[i])items[i].remove();
+};
+
+window.saveServiceHealthQuestions=async(cat)=>{
+  try{
+    let finalCat=cat;
+    if(cat==='__custom__'){
+      finalCat=$('m_shq_cat')?.value?.trim()||'';
+      if(!finalCat){alert('請輸入分類名稱');return;}
+    }
+    const items=document.querySelectorAll('.shq_item');
+    const qs=Array.from(items).map(el=>{
+      const type=el.querySelector('.shqi_type')?.value||'radio';
+      const q={
+        key:el.querySelector('.shqi_key')?.value||'q'+Date.now(),
+        label:el.querySelector('.shqi_label')?.value?.trim()||'',
+        type
+      };
+      if(type==='radio'){
+        const opts=el.querySelector('.shqi_options')?.value||'';
+        q.options=opts.split(',').map(s=>s.trim()).filter(Boolean);
+        if(q.options.length===0)q.options=['是','否'];
+      }
+      const ph=el.querySelector('.shqi_placeholder')?.value||'';
+      if(ph)q.placeholder=ph;
+      return q;
+    }).filter(q=>q.label);
+    if(qs.length===0){alert('至少需要一題');return;}
+    const serviceHealthQuestions={...(S.data.settings?.serviceHealthQuestions||{}),[finalCat]:qs};
+    const settings={...(S.data.settings||{}),serviceHealthQuestions};
+    await saveMain({settings});
+    toast(`✅ 「${finalCat}」題目已儲存`);
+    closeMod();
+  }catch(err){console.error(err);alert('失敗：'+err.message);}
+};
+
+window.delServiceHealthQuestions=async(cat)=>{
+  if(!confirm(`確認刪除「${cat}」的所有專屬題目？`))return;
+  try{
+    const serviceHealthQuestions={...(S.data.settings?.serviceHealthQuestions||{})};
+    delete serviceHealthQuestions[cat];
+    const settings={...(S.data.settings||{}),serviceHealthQuestions};
+    await saveMain({settings});
+    toast('已刪除');
+    closeMod();
+  }catch(err){console.error(err);alert('失敗：'+err.message);}
+};
+
 // ─── 床位每小時成本：儲存到設定 ───
 // ─── 療程確認與簽名相關函式 ─────────────────────────────
 window.updateTreatment=(field,value,source)=>{
@@ -6044,6 +6285,16 @@ window.updateHealthForm=(key,value)=>{
   S.treatment.healthForm[key]=value;
 };
 
+// 服務專屬健康確認更新
+window.updateServiceHealth=(key,value)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.serviceHealthAnswers)S.treatment.serviceHealthAnswers={};
+  S.treatment.serviceHealthAnswers[key]=value;
+  // 重新渲染（更新背景色變化）
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(initSignatureCanvasInline,100);
+};
+
 // 顯示健康問卷
 window.showHealthForm=(id)=>{
   const r=(S.data.treatmentRecords||[]).find(x=>x.id===id);
@@ -6055,6 +6306,37 @@ window.showHealthForm=(id)=>{
   };
   const text=Object.entries(r.healthForm).map(([k,v])=>`${labelMap[k]||k}：${v||'（未填）'}`).join('\n\n');
   alert('【健康問卷】\n\n'+text+'\n\n填寫日期：'+(r.signedAt||r.date));
+};
+
+// 顯示服務專屬健康確認答案
+window.showServiceHealth=(id)=>{
+  const r=(S.data.treatmentRecords||[]).find(x=>x.id===id);
+  if(!r||!r.serviceHealthAnswers){alert('查無資料');return;}
+  // key 格式：svc_分類_題目key
+  const grouped={};
+  for(const [k,v] of Object.entries(r.serviceHealthAnswers)){
+    const m=k.match(/^svc_([^_]+)_(.+)$/);
+    if(m){
+      const cat=m[1],qkey=m[2];
+      if(!grouped[cat])grouped[cat]={};
+      grouped[cat][qkey]=v;
+    }
+  }
+  // 用 settings 裡的 label 對照
+  const svcQs=S.data.settings?.serviceHealthQuestions||{};
+  let text='【各服務專屬健康確認】\n';
+  for(const [cat,answers] of Object.entries(grouped)){
+    text+=`\n🔹 ${cat}\n`;
+    const qs=svcQs[cat]||[];
+    for(const [qkey,ans] of Object.entries(answers)){
+      const q=qs.find(qq=>qq.key===qkey);
+      const label=q?q.label:qkey;
+      const ansShow=typeof ans==='boolean'?(ans?'是':'否'):(ans||'（未填）');
+      text+=`• ${label}：${ansShow}\n`;
+    }
+  }
+  text+='\n填寫日期：'+(r.signedAt||r.date);
+  alert(text);
 };
 
 // 重新渲染後重新初始化簽名 canvas
@@ -6357,6 +6639,8 @@ window.finalizeTreatment=async()=>{
       publishAuthorizedAt:t.publishOptIn&&t.publishAgreed?new Date().toISOString():null,
       // 膚況/身體狀況快速確認單
       skinCheck:t.skinCheck||null,
+      // 各服務專屬健康確認答案
+      serviceHealthAnswers:t.serviceHealthAnswers||null,
       // 首次建檔資料（如果有）
       isFirstVisit:t.mode==='newCustomer',
       healthForm:t.mode==='newCustomer'?(t.healthForm||{}):null,
