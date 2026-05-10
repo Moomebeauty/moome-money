@@ -437,9 +437,38 @@ async function initDefaults(){
 }
 
 async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
-async function addSub(col,data){setSyncing('syncing');try{const r=await addDoc(collection(db,'studios',FID,col),{...data,_at:Date.now()});setSyncing('synced');return r;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
-async function setSub(col,id,data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID,col,id),{...data,_at:Date.now()});setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
-async function delSub(col,id){setSyncing('syncing');try{await deleteDoc(doc(db,'studios',FID,col,id));setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('刪除失敗');}}
+async function addSub(col,data){
+  setSyncing('syncing');
+  try{
+    const r=await addDoc(collection(db,'studios',FID,col),{...data,_at:Date.now()});
+    // 立即本地更新（避免 onSnapshot 延遲）
+    if(!S.data[col])S.data[col]=[];
+    S.data[col].push({id:r.id,...data,_at:Date.now()});
+    setSyncing('synced');
+    return r;
+  }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
+}
+async function setSub(col,id,data){
+  setSyncing('syncing');
+  try{
+    await setDoc(doc(db,'studios',FID,col,id),{...data,_at:Date.now()});
+    // 立即本地更新（避免 onSnapshot 延遲）
+    if(!S.data[col])S.data[col]=[];
+    const idx=S.data[col].findIndex(x=>x.id===id);
+    if(idx>=0){S.data[col][idx]={...data,id,_at:Date.now()};}
+    else{S.data[col].push({id,...data,_at:Date.now()});}
+    setSyncing('synced');
+  }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
+}
+async function delSub(col,id){
+  setSyncing('syncing');
+  try{
+    await deleteDoc(doc(db,'studios',FID,col,id));
+    // 立即本地移除
+    if(S.data[col])S.data[col]=S.data[col].filter(x=>x.id!==id);
+    setSyncing('synced');
+  }catch(e){console.error(e);setSyncing('error');toast('刪除失敗');}
+}
 
 // ── AUTH ───────────────────────────────────────────────────
 onAuthStateChanged(auth,user=>{
@@ -5580,10 +5609,21 @@ window.updSale=async(id)=>{
   }else{
     updated.depositFaceAmount=face;
   }
+  // 立即本地更新（避免 Firebase 同步延遲導致畫面顯示舊資料）
+  const idx=(S.data.sales||[]).findIndex(x=>x.id===id);
+  if(idx>=0){S.data.sales[idx]={...updated,id};}
   await setSub('sales',id,updated);
   toast('✅ 已更新');closeMod();
+  render();
 };
-window.delSale=async id=>{if(!confirm('確認刪除？'))return;await delSub('sales',id);toast('已刪除');};
+window.delSale=async id=>{
+  if(!confirm('確認刪除？'))return;
+  // 立即本地移除（避免延遲）
+  S.data.sales=(S.data.sales||[]).filter(x=>x.id!==id);
+  await delSub('sales',id);
+  toast('已刪除');
+  render();
+};
 
 // ── Order ──（連續輸入版）
 // ── 購物車（多項產品） ──
