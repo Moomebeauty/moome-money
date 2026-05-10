@@ -383,7 +383,10 @@ const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const fmt=v=>{const n=parseFloat(String(v||0).replace(/,/g,''))||0;return Math.abs(n)>=1000?n.toLocaleString('zh-TW'):String(Math.round(n));};
 const toN=v=>parseFloat(String(v||0).replace(/,/g,''))||0;
-const today=()=>new Date().toISOString().slice(0,10);
+// 取得本地日期字串 YYYY-MM-DD（避免 toISOString 用 UTC 導致跨日問題）
+const today=()=>{const d=new Date();const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${dd}`;};
+// 取得本地日期+時間字串 YYYY-MM-DD HH:MM（用於簽名時間等）
+const nowLocal=()=>{const d=new Date();const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');const h=String(d.getHours()).padStart(2,'0'),mi=String(d.getMinutes()).padStart(2,'0');return `${y}-${m}-${dd} ${h}:${mi}`;};
 const yr=()=>new Date().getFullYear();
 const toast=msg=>{const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300)},2800);};
 const setSyncing=s=>{S.sync=s;const d=$('sync-dot');if(d)d.className='sync-dot'+( s==='syncing'?' syncing':s==='error'?' error':'');};
@@ -438,12 +441,10 @@ async function initDefaults(){
 
 async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
 async function addSub(col,data){
+  // 不在這裡 push 本地，因為 onSnapshot 的 pendingWrites 已經會更新 S.data[col]
   setSyncing('syncing');
   try{
     const r=await addDoc(collection(db,'studios',FID,col),{...data,_at:Date.now()});
-    // 立即本地更新（避免 onSnapshot 延遲）
-    if(!S.data[col])S.data[col]=[];
-    S.data[col].push({id:r.id,...data,_at:Date.now()});
     setSyncing('synced');
     return r;
   }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
@@ -456,7 +457,6 @@ async function setSub(col,id,data){
     if(!S.data[col])S.data[col]=[];
     const idx=S.data[col].findIndex(x=>x.id===id);
     if(idx>=0){S.data[col][idx]={...data,id,_at:Date.now()};}
-    else{S.data[col].push({id,...data,_at:Date.now()});}
     setSyncing('synced');
   }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
 }
@@ -796,7 +796,8 @@ function pgOverview(){
   getSales().forEach(s=>{const u=s.staff||'未分配';staffSales[u]=(staffSales[u]||0)+toN(s.amount);});
   const pending=(S.data.courseStudents||[]).filter(s=>!s.paid&&s.month===S.month&&s.year===yr());
   const now=new Date();
-  const week7=new Date(now-7*86400000).toISOString().slice(0,10);
+  const wk7=new Date(now-7*86400000);
+  const week7=`${wk7.getFullYear()}-${String(wk7.getMonth()+1).padStart(2,'0')}-${String(wk7.getDate()).padStart(2,'0')}`;
   const recent=S.data.sales.filter(s=>s.date>=week7).reduce((s,r)=>s+toN(r.amount),0);
 
   // ── 當月獲利重點計算 ──
@@ -4930,7 +4931,7 @@ function renderModal(){
       <canvas id="m_sign_canvas" width="600" height="200" style="width:100%;height:200px;cursor:crosshair;touch-action:none;display:block;background:#fff;border-radius:8px;"></canvas>
     </div>
     <div style="text-align:right;margin-top:6px;">
-      <span class="tm" style="font-size:11px;">簽名時間：${new Date().toISOString().slice(0,16).replace('T',' ')}</span>
+      <span class="tm" style="font-size:11px;">簽名時間：${nowLocal()}</span>
     </div>
 
     <div class="mbtns" style="margin-top:14px;">
@@ -6478,7 +6479,7 @@ window.saveTreatmentSignature=async(id)=>{
     const records=(S.data.treatmentRecords||[]).map(r=>r.id===id?{
       ...r,
       signature:dataURL,
-      signedAt:new Date().toISOString().slice(0,16).replace('T',' '),
+      signedAt:nowLocal(),
       agreed:true,
       agreedAt:new Date().toISOString(),
       termsSnapshot,
@@ -7369,7 +7370,7 @@ window.finalizeTreatment=async()=>{
       feedback:t.feedback||'',
       nextSuggestion:t.nextSuggestion||'',
       signature:dataURL,
-      signedAt:new Date().toISOString().slice(0,16).replace('T',' '),
+      signedAt:nowLocal(),
       agreed:true,
       agreedAt:new Date().toISOString(),
       termsSnapshot,
@@ -8984,7 +8985,7 @@ window.finalizeDeposit=async(data)=>{
     date,customer,amount,actualReceived,discountRate,payMethod,note,
     // 簽名相關（如果有）
     signature:signature||null,
-    signedAt:signature?new Date().toISOString().slice(0,16).replace('T',' '):null,
+    signedAt:signature?nowLocal():null,
     termsSnapshot:termsSnapshot||null,
     signed:signed===true,
     month:d.getMonth()+1,year:d.getFullYear()
@@ -9259,7 +9260,7 @@ window.doOut=async()=>{
 window.exportXLSX=()=>{
   if(typeof XLSX==='undefined'){toast('⏳ 載入中請稍候');return;}
   const wb=XLSX.utils.book_new();
-  const ds=new Date().toISOString().slice(0,10);
+  const ds=today();
   const salesRows=[['日期','類型','項目','細項備註','金額','付款','老師','客戶'],...S.data.sales.map(s=>[s.date,s.type==='service'?'服務':s.type==='product'?'產品':'課程',s.item,s.subNote||'',s.amount,s.payMethod,s.staff,s.customer])];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(salesRows),'銷售記錄');
   const expRows=[['日期','類別','金額','付款','備註'],...S.data.expenses.map(e=>[e.date,e.category,e.amount,e.payMethod,e.note])];
