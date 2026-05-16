@@ -3328,9 +3328,13 @@ function pgStaff(){
 // 從各資料源派生所有現金流項目（不論寫入點，自動匯整）
 function getDerivedCashFlows(){
   const flows=[];
+  // 系統啟用日期（這之前的資料不納入現金流統計，避免歷史儲值汙染數字）
+  const startDate=S.data.settings?.cashFlowStartDate||'';
+  const beforeStart=(d)=>startDate&&d&&d<startDate;
   // 1. 銷售收入（排除儲值扣款，因為儲值扣款不是現金流入）
   (S.data.sales||[]).forEach(s=>{
     if(s.payMethod==='儲值扣款')return; // 儲值扣款不算現金流
+    if(beforeStart(s.date))return; // 起算日之前不納入
     flows.push({
       id:'sale_'+s.id,
       date:s.date,
@@ -3345,6 +3349,7 @@ function getDerivedCashFlows(){
   });
   // 2. 支出（排除已寫入 cashFlow 的進貨）
   (S.data.expenses||[]).forEach(e=>{
+    if(beforeStart(e.date))return;
     flows.push({
       id:'exp_'+e.id,
       date:e.date,
@@ -3361,6 +3366,7 @@ function getDerivedCashFlows(){
   (S.data.cashFlow||[]).forEach(c=>{
     // 跳過已從 expenses 派生的進貨支出（避免重複）
     if(c.fromPurchase)return;
+    if(beforeStart(c.date))return;
     flows.push({
       id:c.id,
       date:c.date,
@@ -3406,6 +3412,15 @@ function pgCashflow(){
   return`
   <div class="pg-ttl">🏦 現金流水帳</div>
   <div class="pg-sub">完整顯示所有實際金流（自動整合銷售、支出、儲值、進貨）</div>
+  ${(()=>{
+    const sd=S.data.settings?.cashFlowStartDate||'';
+    return`<div style="background:${sd?'var(--bluL)':'var(--goldL)'};border-left:3px solid ${sd?'var(--blu)':'var(--gold)'};padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div>
+        ${sd?`📅 <b>系統啟用日期：${sd}</b>（此日期之前的資料不納入統計）`:`⚠️ <b>尚未設定系統啟用日期</b>，目前統計所有歷史資料，可能導致數字失真`}
+      </div>
+      <button class="btn btn-sm" style="background:${sd?'var(--blu)':'var(--gold)'};color:#fff;" onclick="openM('setCashFlowStartDate')">${sd?'✏️ 修改起算日':'⚙️ 設定起算日'}</button>
+    </div>`;
+  })()}
   ${moSel()}
   <div class="sg sg4">
     <div class="sc"><div class="sl">上月結餘</div><div class="sv sm gold">$${fmt(prevBal)}</div></div>
@@ -3924,6 +3939,14 @@ function pgSettings(){
           <button class="btn btn-pur" style="background:var(--pur);color:#fff;" onclick="openM('batchEditProducts')">🏷️ 批次修改產品分類/廠商/系列</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">一次性整理所有產品的「類別、廠商、系列」，讓庫存盤點分組更整齊</div>
         </div>
+        <div>
+          <button class="btn" style="background:var(--red);color:#fff;" onclick="findOrphanCashFlows()">🔍 檢查現金流孤兒紀錄</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">找出已刪除儲值但對應入帳紀錄還在的孤兒項目，可一鍵清理</div>
+        </div>
+        <div>
+          <button class="btn" style="background:#d97706;color:#fff;" onclick="openM('deleteTestCustomer')">🧹 刪除測試客戶資料</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">輸入測試客戶名稱（例如「吃早餐」），一次刪除該客戶的所有銷售/儲值/療程紀錄</div>
+        </div>
       </div>
     </div>
   </div>
@@ -4412,6 +4435,47 @@ function renderModal(){
       <div class="fgrp"><label>說明</label><input type="text" id="m_cf3" value="${cf.note||''}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updCF('${cf.id}')">✓ 更新</button></div>`;}
+
+  // ─── 設定系統啟用日期 ───
+  if(m.t==='setCashFlowStartDate'){
+    const sd=S.data.settings?.cashFlowStartDate||'';
+    c=`<div class="mttl">⚙️ 設定系統啟用日期</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 系統會把這個日期<b>之前</b>的所有銷售、支出、儲值入帳資料排除在現金流統計外。<br>
+      適合用於：你 X 月才開始用系統，但之前的舊儲值資料已輸入系統，避免那些舊資料汙染當月現金流。
+    </div>
+    <div class="fg" style="margin:14px 0;">
+      <div class="fgrp">
+        <label>系統啟用日期（從此日起算現金流）</label>
+        <input type="date" id="m_cfsd" value="${sd}">
+        <div class="tm" style="font-size:11px;margin-top:4px;">建議設為你開始完整記帳的第一天，例如 2026-04-01</div>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      ${sd?`<button class="btn btn-y" onclick="clearCashFlowStartDate()">🗑️ 清除設定（恢復統計全部歷史）</button>`:''}
+      <button class="btn btn-p" onclick="saveCashFlowStartDate()">✓ 儲存</button>
+    </div>`;
+  }
+
+  // ─── 刪除測試客戶 modal ───
+  if(m.t==='deleteTestCustomer'){
+    c=`<div class="mttl">🧹 刪除測試客戶資料</div>
+    <div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:13px;">
+      ⚠️ <b>此操作無法復原</b>！會刪除該客戶在系統中所有的：銷售紀錄、儲值紀錄、療程紀錄、出貨耗用紀錄、客戶建檔資料、現金流紀錄。
+    </div>
+    <div class="fg" style="margin:14px 0;">
+      <div class="fgrp">
+        <label>輸入要刪除的客戶名稱（完全一致）</label>
+        <input type="text" id="m_delc" placeholder="例如：吃早餐">
+        <div class="tm" style="font-size:11px;margin-top:4px;">建議先去客戶管理確認名稱，輸入後系統會列出找到的紀錄筆數讓你確認再刪。</div>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn" style="background:var(--red);color:#fff;" onclick="confirmDeleteTestCustomer()">🗑️ 預覽要刪除的紀錄</button>
+    </div>`;
+  }
 
   if(m.t==='addService'){c=`<div class="mttl">🌸 新增服務項目</div>
     <div class="fg fg2">
@@ -8259,7 +8323,98 @@ window.updCF=async(id)=>{
   await setSub('cashFlow',id,{date,amount,cat:$('m_cf2')?.value,note:$('m_cf3')?.value||'',month:d.getMonth()+1,year:d.getFullYear()});
   toast('✅ 已更新');closeMod();
 };
-window.delCF=async id=>{if(!confirm('確認刪除？'))return;await delSub('cashFlow',id);toast('已刪除');};
+window.delCF=async id=>{if(!confirm('確認刪除？'))return;await delSub('cashFlow',id);toast('已刪除');render();};
+
+// 設定系統啟用日期
+window.saveCashFlowStartDate=async()=>{
+  const sd=$('m_cfsd')?.value||'';
+  if(!sd){alert('請選擇日期');return;}
+  const settings={...(S.data.settings||{}),cashFlowStartDate:sd};
+  await saveMain({settings});
+  toast(`✅ 已設定起算日為 ${sd}`);
+  closeMod();
+};
+
+window.clearCashFlowStartDate=async()=>{
+  if(!confirm('確認清除起算日設定？\n清除後會統計全部歷史資料。'))return;
+  const settings={...(S.data.settings||{})};
+  delete settings.cashFlowStartDate;
+  await saveMain({settings});
+  toast('✅ 已清除起算日設定');
+  closeMod();
+};
+
+// 檢查孤兒現金流紀錄（儲值入帳但找不到對應的 deposits 紀錄）
+window.findOrphanCashFlows=async()=>{
+  const cashFlows=S.data.cashFlow||[];
+  const deposits=S.data.deposits||[];
+  const orphans=[];
+  cashFlows.forEach(c=>{
+    if(c.cat!=='儲值入帳')return;
+    // 找對應的 deposit
+    const noteCustomer=(c.note||'').split(' ')[0]; // 例如 "吃早餐 儲值面額..." → "吃早餐"
+    const targetAmount=toN(c.amount);
+    const found=deposits.find(d=>
+      d.date===c.date&&
+      toN(d.actualReceived||d.amount)===targetAmount&&
+      ((d.customer||'').trim()===(noteCustomer||'').trim()||(c.note||'').includes(d.customer||''))
+    );
+    if(!found)orphans.push(c);
+  });
+  if(orphans.length===0){
+    alert('✅ 沒有孤兒紀錄，現金流資料一致！');
+    return;
+  }
+  const list=orphans.map(o=>`• ${o.date}　$${fmt(o.amount)}　${o.note||''}`).join('\n');
+  if(!confirm(`找到 ${orphans.length} 筆孤兒紀錄（已刪除儲值但紀錄還在）：\n\n${list}\n\n是否一鍵清除？`))return;
+  for(const o of orphans){await delSub('cashFlow',o.id);}
+  toast(`✅ 已清除 ${orphans.length} 筆孤兒紀錄`);
+  render();
+};
+
+// 確認並刪除測試客戶（預覽 → 確認）
+window.confirmDeleteTestCustomer=async()=>{
+  const name=$('m_delc')?.value?.trim();
+  if(!name){alert('請輸入客戶名稱');return;}
+  // 找出所有相關紀錄
+  const sales=(S.data.sales||[]).filter(s=>(s.customer||'').trim()===name);
+  const deposits=(S.data.deposits||[]).filter(d=>(d.customer||'').trim()===name);
+  const records=(S.data.treatmentRecords||[]).filter(r=>(r.customer||'').trim()===name);
+  const stockOuts=(S.data.stockOuts||[]).filter(s=>(s.customer||'').trim()===name);
+  const cashFlows=(S.data.cashFlow||[]).filter(c=>(c.note||'').includes(name));
+  const customer=(S.data.customers||[]).find(c=>(c.name||'').trim()===name);
+  const total=sales.length+deposits.length+records.length+stockOuts.length+cashFlows.length+(customer?1:0);
+  if(total===0){
+    alert(`找不到客戶「${name}」的任何紀錄`);
+    return;
+  }
+  const summary=`【找到以下紀錄】\n`+
+    `• 銷售紀錄：${sales.length} 筆\n`+
+    `• 儲值紀錄：${deposits.length} 筆\n`+
+    `• 療程紀錄：${records.length} 筆\n`+
+    `• 出貨耗用：${stockOuts.length} 筆\n`+
+    `• 現金流：${cashFlows.length} 筆\n`+
+    `• 客戶建檔：${customer?'1 筆':'0 筆'}\n\n`+
+    `⚠️ 確認刪除「${name}」的全部 ${total} 筆紀錄嗎？\n此操作無法復原！`;
+  if(!confirm(summary))return;
+  // 開始刪除
+  for(const s of sales)await delSub('sales',s.id);
+  for(const d of deposits)await delSub('deposits',d.id);
+  for(const s of stockOuts)await delSub('stockOuts',s.id);
+  for(const c of cashFlows)await delSub('cashFlow',c.id);
+  // treatmentRecords 是存在主文件中的
+  if(records.length>0){
+    const remaining=(S.data.treatmentRecords||[]).filter(r=>(r.customer||'').trim()!==name);
+    await saveMain({treatmentRecords:remaining});
+  }
+  if(customer){
+    const remaining=(S.data.customers||[]).filter(c=>(c.name||'').trim()!==name);
+    await saveMain({customers:remaining});
+  }
+  toast(`✅ 已刪除「${name}」共 ${total} 筆紀錄`);
+  closeMod();
+  render();
+};
 
 // ── Settings ──
 window.saveService=async()=>{
@@ -9143,9 +9298,22 @@ window.showDepositSign=(id)=>{
 };
 
 window.delDeposit=async id=>{
-  if(!confirm('確認刪除這筆儲值紀錄？'))return;
+  if(!confirm('確認刪除這筆儲值紀錄？\n（會一併刪除現金流中的對應入帳紀錄）'))return;
+  const dep=(S.data.deposits||[]).find(x=>x.id===id);
   await delSub('deposits',id);
+  // 同步刪除 cashFlow 中對應的儲值入帳（依日期 + 客戶 + 金額比對）
+  if(dep){
+    const targetAmount=toN(dep.actualReceived||dep.amount);
+    const related=(S.data.cashFlow||[]).filter(c=>
+      c.cat==='儲值入帳'&&
+      c.date===dep.date&&
+      toN(c.amount)===targetAmount&&
+      (c.note||'').includes(dep.customer||'')
+    );
+    for(const r of related){await delSub('cashFlow',r.id);}
+  }
   toast('已刪除');
+  render();
 };
 
 window.updDeposit=async(id)=>{
