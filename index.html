@@ -6297,25 +6297,35 @@ window.unpayPurchase=async(id)=>{
 };
 
 window.delPurchase=async id=>{
-  const p=(S.data.purchases||[]).find(x=>x.id===id);
-  if(!p)return;
-  if(!confirm(`確認刪除「${p.productName}」這筆進貨？\n\n會還原 ${p.qty} 個庫存${p.paid?'，並刪除對應的支出/現金流紀錄':''}`))return;
-  // 還原庫存（同時還原加權平均成本是複雜的，這裡簡化處理：只減去數量）
-  if(p.productId){
-    const inv=getInv(p.productId);
-    const newQty=Math.max(0,toN(inv.qty)-toN(p.qty));
-    const newInv=[...S.data.inventory.filter(i=>i.productId!==p.productId),{...inv,productId:p.productId,qty:newQty}];
-    await saveMain({inventory:newInv});
+  try{
+    const p=(S.data.purchases||[]).find(x=>x.id===id);
+    if(!p){alert('找不到該筆進貨紀錄');return;}
+    if(!confirm(`確認刪除「${p.productName||'此筆進貨'}」？\n\n會還原 ${p.qty||0} 個庫存${p.paid?'，並刪除對應的支出/現金流紀錄':''}`))return;
+    // 還原庫存（容錯：沒有 productId 也不會卡住）
+    if(p.productId){
+      try{
+        const inv=getInv(p.productId);
+        const newQty=Math.max(0,toN(inv.qty)-toN(p.qty));
+        const newInv=[...(S.data.inventory||[]).filter(i=>i.productId!==p.productId),{...inv,productId:p.productId,qty:newQty}];
+        await saveMain({inventory:newInv});
+      }catch(invErr){
+        console.error('還原庫存失敗（將繼續刪除進貨）:',invErr);
+      }
+    }
+    // 已付款 → 刪除對應支出/現金流
+    if(p.paid){
+      const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase&&e.purchaseRefId===id);
+      const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase&&f.purchaseRefId===id);
+      for(const e of exps){try{await delSub('expenses',e.id);}catch(err){console.error(err);}}
+      for(const f of flows){try{await delSub('cashFlow',f.id);}catch(err){console.error(err);}}
+    }
+    await delSub('purchases',id);
+    toast('✅ 已刪除進貨紀錄並還原庫存');
+    render();
+  }catch(err){
+    console.error('刪除進貨失敗:',err);
+    alert('刪除失敗：'+(err.message||err));
   }
-  // 已付款 → 刪除對應支出/現金流
-  if(p.paid){
-    const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase&&e.purchaseRefId===id);
-    const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase&&f.purchaseRefId===id);
-    for(const e of exps)await delSub('expenses',e.id);
-    for(const f of flows)await delSub('cashFlow',f.id);
-  }
-  await delSub('purchases',id);
-  toast('已刪除進貨紀錄並還原庫存');
 };
 
 // ── 出貨/耗用 ──
