@@ -1865,32 +1865,75 @@ function pgExpenses(){
   const exps=getExp().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total=getExpTotal();
   const byCat={};exps.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+toN(e.amount);});
+  // 按付款方式統計
+  const byPay={};exps.forEach(e=>{const k=e.payMethod||'未填';byPay[k]=(byPay[k]||0)+toN(e.amount);});
+  const sortedCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   return`
   <div class="pg-ttl">💸 支出記帳</div>
   <div class="pg-sub">工作室所有支出，含固定與變動費用</div>
   ${moSel()}
-  <div class="sg sg4">
-    ${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c,v])=>`<div class="sc red"><div class="sl">${c}</div><div class="sv red sm">$${fmt(v)}</div></div>`).join('')}
+
+  <!-- 總計 + 付款方式 -->
+  <div class="sg sg3" style="margin-bottom:14px;">
+    <div class="sc red"><div class="sl">本月支出總計</div><div class="sv red">$${fmt(total)}</div></div>
+    <div class="sc">
+      <div class="sl">💵 現金支出</div>
+      <div class="sv sm" style="color:var(--grn);">$${fmt(byPay['現金']||0)}</div>
+    </div>
+    <div class="sc">
+      <div class="sl">🏦 轉帳支出</div>
+      <div class="sv sm" style="color:var(--blu);">$${fmt(byPay['轉帳']||0)}</div>
+    </div>
   </div>
+
+  <!-- 各類別統計（全部顯示，可點擊篩選） -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:var(--redL);">
+      <span class="card-ttl" style="color:var(--red);">📊 各類別支出統計（${sortedCats.length} 個類別）</span>
+      ${S.expFilter?`<button class="btn btn-sm btn-y" onclick="S.expFilter=null;render();">✕ 清除篩選</button>`:''}
+    </div>
+    <div class="card-bd">
+      ${sortedCats.length===0?`<div class="empty" style="padding:16px;"><p>本月尚無支出</p></div>`:
+        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">
+          ${sortedCats.map(([c,v])=>{
+            const pct=total>0?Math.round(v/total*100):0;
+            const active=S.expFilter===c;
+            return`<button onclick="S.expFilter='${c}';render();" style="text-align:left;padding:10px 12px;background:${active?'var(--red)':'#fff'};color:${active?'#fff':'var(--txt)'};border:1.5px solid ${active?'var(--red)':'var(--bdr)'};border-radius:8px;cursor:pointer;transition:all 0.15s;">
+              <div style="font-size:12px;opacity:0.8;">${c}</div>
+              <div style="font-size:17px;font-weight:700;color:${active?'#fff':'var(--red)'};margin:2px 0;">$${fmt(v)}</div>
+              <div style="font-size:11px;opacity:0.7;">佔 ${pct}%</div>
+            </button>`;
+          }).join('')}
+        </div>`}
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-hd">
-      <span class="card-ttl">支出明細</span>
+      <span class="card-ttl">支出明細${S.expFilter?`（已篩選：${S.expFilter}）`:''}</span>
       <button class="btn btn-p btn-sm" onclick="openM('addExp')">＋ 新增支出</button>
     </div>
     <div class="tw"><table>
       <thead><tr><th>日期</th><th>類別</th><th>金額</th><th>付款</th><th>備註</th><th></th></tr></thead>
-      <tbody>${exps.length===0?`<tr><td colspan="6"><div class="empty"><div class="empty-ico">💸</div><p>本月尚無支出</p></div></td></tr>`:
-        exps.map(e=>`<tr>
+      <tbody>${(()=>{
+        const filtered=S.expFilter?exps.filter(e=>e.category===S.expFilter):exps;
+        if(filtered.length===0)return`<tr><td colspan="6"><div class="empty"><div class="empty-ico">💸</div><p>${S.expFilter?'此類別本月無支出':'本月尚無支出'}</p></div></td></tr>`;
+        return filtered.map(e=>`<tr>
           <td>${e.date||''}</td>
           <td><span class="bdg">${e.category||''}</span></td>
           <td class="an">$${fmt(e.amount)}</td>
           <td><span class="bdg">${e.payMethod||''}</span></td>
           <td class="tm">${e.note||''}</td>
           <td><button class="bdel" style="color:#aaa;" onclick="openM('editExp','${e.id}')">✏️</button><button class="bdel" onclick="delExp('${e.id}')">×</button></td>
-        </tr>`).join('')}
+        </tr>`).join('');
+      })()}
       </tbody>
     </table></div>
-    <div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;"><b>本月合計：</b><span class="an" style="font-size:18px;">$${fmt(total)}</span></div>
+    <div class="card-bd" style="border-top:1px solid var(--bdr);padding:12px 20px;">
+      <b>${S.expFilter?'此類別合計':'本月合計'}：</b>
+      <span class="an" style="font-size:18px;">$${fmt(S.expFilter?(byCat[S.expFilter]||0):total)}</span>
+      ${S.expFilter?`<span class="tm" style="margin-left:12px;">（總支出 $${fmt(total)} 的 ${total>0?Math.round((byCat[S.expFilter]||0)/total*100):0}%）</span>`:''}
+    </div>
   </div>`;
 }
 
