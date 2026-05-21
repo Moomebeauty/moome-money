@@ -1206,6 +1206,263 @@ function pgProfit(){
   </div>`;
 }
 
+// ─── 營運診斷報告（系統自動分析）────────────────
+function generateOperationsReport(mo,yrParam){
+  const m=mo||S.month;
+  const y=yrParam||yr();
+  // 1. 取得本月與上月資料
+  const sales=(S.data.sales||[]).filter(s=>s.month===m&&s.year===y);
+  const expenses=(S.data.expenses||[]).filter(e=>e.month===m&&e.year===y);
+  const cashFlow=(S.data.cashFlow||[]).filter(c=>c.month===m&&c.year===y);
+  const deposits=(S.data.deposits||[]).filter(d=>d.month===m&&d.year===y);
+  // 上月（用於對比）
+  const lastM=m===1?12:m-1;
+  const lastY=m===1?y-1:y;
+  const lastSales=(S.data.sales||[]).filter(s=>s.month===lastM&&s.year===lastY);
+  const lastExp=(S.data.expenses||[]).filter(e=>e.month===lastM&&e.year===lastY);
+
+  // 2. 關鍵數字
+  const revenue=sales.reduce((s,r)=>s+toN(r.amount),0);
+  const totalExp=expenses.reduce((s,e)=>s+toN(e.amount),0);
+  const profit=revenue-totalExp;
+  const lastRev=lastSales.reduce((s,r)=>s+toN(r.amount),0);
+  const lastExpTotal=lastExp.reduce((s,e)=>s+toN(e.amount),0);
+  const revGrowth=lastRev>0?Math.round((revenue-lastRev)/lastRev*100):null;
+
+  // 3. 實際現金流入（排除儲值扣款）
+  const cashIn=sales.filter(s=>s.payMethod!=='儲值扣款').reduce((s,r)=>s+toN(r.amount),0);
+  const depositIn=deposits.reduce((s,d)=>s+toN(d.actualReceived||d.amount),0);
+  const totalCashIn=cashIn+depositIn;
+
+  // 4. 支出分類
+  const expByCat={};
+  expenses.forEach(e=>{expByCat[e.category]=(expByCat[e.category]||0)+toN(e.amount);});
+  const salaryExp=expByCat['薪資']||0;
+  const rentExp=expByCat['房租']||0;
+  const utilityExp=expByCat['水電']||0;
+  const marketingExp=expByCat['行銷廣告']||0;
+  const purchaseExp=expByCat['進貨成本']||0;
+
+  // 5. 健康指標計算
+  const salaryRatio=revenue>0?salaryExp/revenue*100:0;
+  const rentRatio=revenue>0?rentExp/revenue*100:0;
+  const marketingRatio=revenue>0?marketingExp/revenue*100:0;
+  const purchaseRatio=revenue>0?purchaseExp/revenue*100:0;
+  const profitMargin=revenue>0?profit/revenue*100:0;
+
+  // 6. 客戶分析
+  const uniqueCustomers=new Set(sales.map(s=>s.customer).filter(c=>c)).size;
+  const avgOrder=sales.length>0?revenue/sales.length:0;
+
+  // 7. 損益兩平點計算（簡化版：以固定費用為基礎）
+  const fixedCosts=rentExp+utilityExp;  // 房租水電視為相對固定
+  const variableExpRatio=revenue>0?(salaryExp+purchaseExp+marketingExp)/revenue:0.6;
+  const grossMarginRatio=1-variableExpRatio;
+  const breakEven=grossMarginRatio>0?fixedCosts/grossMarginRatio:0;
+
+  // 8. 健康燈號
+  const lights={
+    profit:profit>=0?'green':profit>-5000?'yellow':'red',
+    salary:salaryRatio<45?'green':salaryRatio<55?'yellow':'red',
+    marketing:marketingRatio>=5&&marketingRatio<=8?'green':marketingRatio<3?'yellow':marketingRatio>10?'yellow':'green',
+    cashflow:totalCashIn>=totalExp?'green':totalCashIn>=totalExp*0.8?'yellow':'red',
+  };
+
+  // 9. 體質診斷
+  const allGreen=Object.values(lights).every(l=>l==='green');
+  const hasRed=Object.values(lights).some(l=>l==='red');
+  const overallHealth=allGreen?'healthy':hasRed?'critical':'warning';
+
+  return{
+    m,y,revenue,totalExp,profit,profitMargin,revGrowth,
+    cashIn,depositIn,totalCashIn,
+    expByCat,salaryExp,rentExp,utilityExp,marketingExp,purchaseExp,
+    salaryRatio,rentRatio,marketingRatio,purchaseRatio,
+    uniqueCustomers,avgOrder,salesCount:sales.length,
+    fixedCosts,breakEven,
+    lights,overallHealth,
+  };
+}
+
+// 渲染營運診斷報告
+function renderOperationsReport(){
+  const r=generateOperationsReport();
+  const monthLabel=`${r.y}年${r.m}月`;
+  const healthEmoji={healthy:'🟢',warning:'🟡',critical:'🔴'};
+  const healthLabel={healthy:'體質健康',warning:'需要關注',critical:'急需調整'};
+  const healthColor={healthy:'var(--grn)',warning:'#d97706',critical:'var(--red)'};
+
+  // 空白資料
+  if(r.revenue===0&&r.totalExp===0){
+    return`<div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:linear-gradient(135deg,var(--purL),var(--bluL));">
+        <span class="card-ttl">🩺 ${monthLabel} 營運診斷報告</span>
+      </div>
+      <div class="card-bd">
+        <div class="empty"><p>本月尚無資料，請先記錄銷售與支出後再來看分析 🌸</p></div>
+      </div>
+    </div>`;
+  }
+
+  // 行動建議邏輯
+  const actions=[];
+  if(r.salaryRatio>55)actions.push({pri:1,emoji:'🚨',title:'薪資佔營收過高',
+    detail:`目前薪資佔比 ${r.salaryRatio.toFixed(1)}%（健康指標 35-45%）。代表你的營收還不夠養現有人力。`,
+    todo:'衝營收是首要任務。若 1-2 個月內衝不上去，需重新評估人力結構（抽成比例 / 兼職化）'});
+  if(r.marketingRatio<3&&r.revenue>0)actions.push({pri:2,emoji:'📣',title:'行銷投入不足',
+    detail:`目前行銷費僅佔 ${r.marketingRatio.toFixed(1)}%（建議 5-8%）。沒有行銷就沒有新客。`,
+    todo:`建議下月行銷預算提高到 $${fmt(Math.round(r.revenue*0.05))}（營收的 5%）`});
+  if(r.totalCashIn<r.totalExp)actions.push({pri:1,emoji:'💰',title:'現金流缺口',
+    detail:`本月實際現金流入 $${fmt(r.totalCashIn)}，支出 $${fmt(r.totalExp)}，缺口 $${fmt(r.totalExp-r.totalCashIn)}`,
+    todo:'優先推儲值方案（一張 $19,800 起的儲值就能補上一週現金流）'});
+  if(r.profit<0)actions.push({pri:1,emoji:'📉',title:'本月虧損',
+    detail:`本月認列虧損 $${fmt(Math.abs(r.profit))}。打平點約需營收 $${fmt(Math.round(r.breakEven))}`,
+    todo:`下月目標：營收至少達到 $${fmt(Math.round(r.breakEven*1.1))}（打平點 +10% 安全邊際）`});
+  if(r.uniqueCustomers>0&&r.uniqueCustomers<15)actions.push({pri:2,emoji:'👥',title:'客戶數偏少',
+    detail:`本月服務 ${r.uniqueCustomers} 位獨立客戶。`,
+    todo:'喚醒 3 個月未回訪的沉睡客戶（從客戶管理列出名單）'});
+  if(r.profitMargin>10)actions.push({pri:3,emoji:'🌟',title:'體質健康',
+    detail:`本月淨利率 ${r.profitMargin.toFixed(1)}%，超過健康指標 10%。`,
+    todo:'考慮把獲利的一部分存入「買房頭期專款」或設備升級基金'});
+
+  // 下月目標營收建議
+  const nextMonthTarget=r.profit<0?Math.round(r.breakEven*1.2):Math.round(r.revenue*1.15);
+
+  return`
+  <div class="card" style="margin-bottom:14px;border:2px solid ${healthColor[r.overallHealth]};">
+    <div class="card-hd" style="background:linear-gradient(135deg,${r.overallHealth==='healthy'?'var(--grnL)':r.overallHealth==='warning'?'#fef3c7':'var(--redL)'},#fff);">
+      <span class="card-ttl" style="color:${healthColor[r.overallHealth]};font-size:18px;">🩺 ${monthLabel} 營運診斷報告</span>
+      <span class="bdg" style="background:${healthColor[r.overallHealth]};color:#fff;">${healthEmoji[r.overallHealth]} ${healthLabel[r.overallHealth]}</span>
+    </div>
+    <div class="card-bd">
+
+      <!-- 一、本月關鍵數字 -->
+      <div style="margin-bottom:18px;">
+        <h4 style="margin:0 0 10px;color:var(--pur);font-size:15px;">一、本月關鍵數字</h4>
+        <div class="sg sg4">
+          <div class="sc"><div class="sl">營收</div><div class="sv sm" style="color:var(--gold);">$${fmt(r.revenue)}</div>${r.revGrowth!==null?`<div class="ss" style="color:${r.revGrowth>=0?'var(--grn)':'var(--red)'};">${r.revGrowth>=0?'↑':'↓'} ${Math.abs(r.revGrowth)}% vs 上月</div>`:''}</div>
+          <div class="sc red"><div class="sl">總支出</div><div class="sv sm red">$${fmt(r.totalExp)}</div></div>
+          <div class="sc ${r.profit>=0?'grn':'red'}"><div class="sl">${r.profit>=0?'淨利':'虧損'}</div><div class="sv sm ${r.profit>=0?'grn':'red'}">${r.profit>=0?'+':''}$${fmt(r.profit)}</div><div class="ss">${r.profitMargin.toFixed(1)}%</div></div>
+          <div class="sc"><div class="sl">實際現金流入</div><div class="sv sm" style="color:var(--blu);">$${fmt(r.totalCashIn)}</div><div class="ss">含儲值 $${fmt(r.depositIn)}</div></div>
+        </div>
+      </div>
+
+      <!-- 二、體質燈號 -->
+      <div style="margin-bottom:18px;">
+        <h4 style="margin:0 0 10px;color:var(--pur);font-size:15px;">二、體質紅綠燈</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+          ${[
+            {lbl:'本月損益',v:r.lights.profit,text:r.profit>=0?`淨利 $${fmt(r.profit)}`:`虧損 $${fmt(Math.abs(r.profit))}`},
+            {lbl:'薪資/營收比',v:r.lights.salary,text:`${r.salaryRatio.toFixed(1)}%（健康 35-45%）`},
+            {lbl:'行銷投入',v:r.lights.marketing,text:`${r.marketingRatio.toFixed(1)}%（健康 5-8%）`},
+            {lbl:'現金流',v:r.lights.cashflow,text:r.totalCashIn>=r.totalExp?`流入 > 支出 ✓`:`缺口 $${fmt(r.totalExp-r.totalCashIn)}`},
+          ].map(item=>{
+            const c=item.v==='green'?'var(--grn)':item.v==='yellow'?'#d97706':'var(--red)';
+            const bg=item.v==='green'?'var(--grnL)':item.v==='yellow'?'#fef3c7':'var(--redL)';
+            const emoji=item.v==='green'?'🟢':item.v==='yellow'?'🟡':'🔴';
+            return`<div style="padding:10px 12px;background:${bg};border-left:3px solid ${c};border-radius:6px;">
+              <div style="font-size:11px;color:var(--mut);">${item.lbl}</div>
+              <div style="font-weight:700;color:${c};margin-top:2px;font-size:13px;">${emoji} ${item.text}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- 三、結構性問題分析 -->
+      <div style="margin-bottom:18px;">
+        <h4 style="margin:0 0 10px;color:var(--pur);font-size:15px;">三、財務結構分析</h4>
+        <div style="background:var(--bg2);padding:14px;border-radius:8px;font-size:13px;line-height:1.8;">
+          <div><b>📊 各項支出佔營收比：</b></div>
+          ${[
+            {n:'薪資',v:r.salaryExp,p:r.salaryRatio,ideal:'35-45%'},
+            {n:'進貨',v:r.purchaseExp,p:r.purchaseRatio,ideal:'15-20%'},
+            {n:'房租',v:r.rentExp,p:r.rentRatio,ideal:'10-20%'},
+            {n:'行銷',v:r.marketingExp,p:r.marketingRatio,ideal:'5-8%'},
+          ].filter(x=>x.v>0).map(x=>`<div style="margin-left:12px;">• ${x.n} $${fmt(x.v)}（${x.p.toFixed(1)}%）<span class="tm" style="font-size:11px;">健康 ${x.ideal}</span></div>`).join('')}
+          <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--bdr);">
+            <b>💡 損益兩平點：</b>月營收約 <b style="color:var(--gold);">$${fmt(Math.round(r.breakEven))}</b>
+            <div class="tm" style="font-size:11px;margin-top:2px;">（指當月固定費用 $${fmt(r.fixedCosts)} / 毛利率 ${(100-r.purchaseRatio-r.salaryRatio-r.marketingRatio).toFixed(0)}%）</div>
+          </div>
+          <div style="margin-top:8px;">
+            <b>👥 客戶概況：</b>本月 ${r.uniqueCustomers} 位獨立客戶，平均客單價 $${fmt(Math.round(r.avgOrder))}
+          </div>
+        </div>
+      </div>
+
+      <!-- 四、行動建議 -->
+      ${actions.length>0?`<div style="margin-bottom:18px;">
+        <h4 style="margin:0 0 10px;color:var(--pur);font-size:15px;">四、下月行動建議（依優先順序）</h4>
+        ${actions.sort((a,b)=>a.pri-b.pri).map((a,i)=>{
+          const priColor=a.pri===1?'var(--red)':a.pri===2?'#d97706':'var(--grn)';
+          const priLabel=a.pri===1?'🚨 最高優先':a.pri===2?'⚠️ 高優先':'✨ 加分項';
+          return`<div style="border-left:3px solid ${priColor};padding:10px 14px;margin-bottom:8px;background:var(--bg2);border-radius:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <b style="color:${priColor};font-size:14px;">${a.emoji} ${a.title}</b>
+              <span class="bdg" style="background:${priColor};color:#fff;font-size:10px;">${priLabel}</span>
+            </div>
+            <div style="font-size:13px;margin-top:6px;color:var(--txt);">${a.detail}</div>
+            <div style="font-size:12px;margin-top:6px;padding:6px 10px;background:#fff;border-radius:4px;color:var(--blu);"><b>➜ 該做：</b>${a.todo}</div>
+          </div>`;
+        }).join('')}
+      </div>`:''}
+
+      <!-- 五、下月目標 -->
+      <div style="margin-bottom:18px;background:linear-gradient(135deg,var(--bluL),var(--purL));padding:14px;border-radius:8px;">
+        <h4 style="margin:0 0 10px;color:var(--blu);font-size:15px;">五、下月 KPI 目標</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;font-size:13px;">
+          <div style="background:#fff;padding:10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">營收目標</div>
+            <div style="font-weight:700;color:var(--gold);font-size:17px;">$${fmt(nextMonthTarget)}</div>
+            <div class="tm" style="font-size:11px;">${r.profit<0?'打平點 +10% 安全邊際':'比本月成長 15%'}</div>
+          </div>
+          <div style="background:#fff;padding:10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">薪資/營收比</div>
+            <div style="font-weight:700;color:var(--pur);font-size:17px;">≤ 50%</div>
+            <div class="tm" style="font-size:11px;">目前 ${r.salaryRatio.toFixed(1)}%</div>
+          </div>
+          <div style="background:#fff;padding:10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">儲值簽約</div>
+            <div style="font-weight:700;color:var(--rose);font-size:17px;">${r.profit<0?'2-3 張':'1-2 張'}</div>
+            <div class="tm" style="font-size:11px;">${r.profit<0?'急救現金流':'維持資金健康'}</div>
+          </div>
+          <div style="background:#fff;padding:10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">新客數</div>
+            <div style="font-weight:700;color:var(--grn);font-size:17px;">+5-8 位</div>
+            <div class="tm" style="font-size:11px;">含閨蜜推薦</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 六、真心話 -->
+      <div style="margin-bottom:14px;padding:14px;background:linear-gradient(135deg,var(--goldL),#fff);border-radius:8px;border-left:4px solid var(--gold);">
+        <h4 style="margin:0 0 8px;color:var(--gold);font-size:15px;">六、🌸 給負責人的真心話</h4>
+        <div style="font-size:13px;line-height:1.8;color:var(--txt);">
+          ${(()=>{
+            if(r.overallHealth==='healthy')return`本月狀況很好，<b>淨利率 ${r.profitMargin.toFixed(1)}%</b> 是健康指標。建議把獲利分配到「買房頭期專款」和「設備升級基金」，為下個成長階段做準備。穩定中求進步，繼續加油！💪`;
+            if(r.overallHealth==='warning')return`本月處於<b>勉強打平</b>的狀態，雖然不至於危險但也沒有餘裕。<br>關鍵在於「<b>規模 vs 人力</b>」要再往上推 — 不是經營不善，只是還沒長到健康規模。<br>持續推儲值方案 + 喚醒沉睡客 + 適度行銷投入，1-2 個月內應該能看到改善。`;
+            return`本月狀況需要正視 — <b>${r.profit<0?'已經虧損':'現金流缺口大'}</b>。<br>但這不代表沐蜜不行，而是「<b>還沒達到健康規模</b>」。<br>當務之急：① 衝營收（拉新+深耕）② 簽儲值補現金流 ③ 1-2 個月內若衝不上去，要果斷調整人力結構。<br><b>你已經跨進了營運管理的門檻 — 願意看數字、看分析，這就是成功的第一步。</b>`;
+          })()}
+        </div>
+      </div>
+
+      <!-- 七、下一步 -->
+      <div style="padding:14px;background:var(--bg2);border-radius:8px;">
+        <h4 style="margin:0 0 10px;color:var(--pur);font-size:15px;">七、🚀 下一步具體行動（這週做）</h4>
+        <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.8;">
+          <li><b>今天：</b>進「👤 客戶管理」列出 3 個月以上未回訪的客戶清單</li>
+          <li><b>這週：</b>個別聯絡前 5 位高消費客戶，目標簽下 1 張儲值單</li>
+          <li><b>下週：</b>檢視「⚙️ 基本設定」中的儲值同意書與服務同意書，確保簽約流程順暢</li>
+          ${r.marketingRatio<3?`<li><b>本月：</b>規劃下月行銷預算 $${fmt(Math.round(r.revenue*0.05))}（IG 廣告 + 閨蜜推薦印刷品）</li>`:''}
+        </ol>
+      </div>
+
+      <div class="tm" style="text-align:center;margin-top:14px;font-size:11px;color:var(--mut);">
+        🤖 本報告由系統依據實際資料自動生成，每月會更新
+      </div>
+    </div>
+  </div>`;
+}
+
 // ─── 財務建議（情緒踩剎車＋買房目標＋季檢視）────────────────
 function pgAdvisor(){
   const al=S.data.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000};
@@ -1220,6 +1477,11 @@ function pgAdvisor(){
   return`
   <div class="pg-ttl">🧠 財務支出建議</div>
   <div class="pg-sub">情緒煞車器、買房專款、季度檢視一站搞定</div>
+
+  ${moSel()}
+
+  <!-- 🩺 本月營運診斷報告（自動生成） -->
+  ${renderOperationsReport()}
 
   <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);">
     💡 <b>大額採購冷靜期規則：</b>單筆超過 $${fmt(al.bigPurchaseLimit)} 的設備採購，需經過 3 天冷靜期，並通過自我提問才能執行。
