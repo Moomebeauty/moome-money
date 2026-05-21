@@ -843,6 +843,13 @@ function pgOverview(){
   return`
   <div class="pg-ttl">📊 工作室總覽</div>
   <div class="pg-sub">${yr()}年 ${MOS[S.month-1]}　第 ${curQ} 季</div>
+  <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>📊 <b>日常儀表板</b>：每天/每週打開，看本月即時狀態 — 營收、支出、警示、待辦</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm" style="background:var(--gold);color:#fff;font-size:11px;" onclick="setP('profit')">💎 想看深度分析</button>
+      <button class="btn btn-sm" style="background:var(--pur);color:#fff;font-size:11px;" onclick="setP('advisor')">🩺 想看診斷報告</button>
+    </div>
+  </div>
   ${moSel()}
 
   ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')}　數量不足，請盡快補貨</div>`:''}
@@ -1119,6 +1126,13 @@ function pgProfit(){
   return`
   <div class="pg-ttl">💎 獲利分析</div>
   <div class="pg-sub">${yr()}年 — 月度與季度獲利全貌</div>
+  <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>💎 <b>商業分析</b>：哪個服務最賺、哪個客戶最忠誠、季度趨勢 — 適合每週/每月深度檢視</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm" style="background:var(--blu);color:#fff;font-size:11px;" onclick="setP('overview')">📊 回到儀表板</button>
+      <button class="btn btn-sm" style="background:var(--pur);color:#fff;font-size:11px;" onclick="setP('advisor')">🩺 想看診斷報告</button>
+    </div>
+  </div>
   ${moSel()}
 
   <!-- 當月關鍵指標 -->
@@ -1477,6 +1491,13 @@ function pgAdvisor(){
   return`
   <div class="pg-ttl">🧠 財務支出建議</div>
   <div class="pg-sub">情緒煞車器、買房專款、季度檢視一站搞定</div>
+  <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>🩺 <b>經營顧問</b>：月度診斷報告、行動建議、長期決策工具 — 適合月初/月底規劃用</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm" style="background:var(--blu);color:#fff;font-size:11px;" onclick="setP('overview')">📊 回到儀表板</button>
+      <button class="btn btn-sm" style="background:var(--gold);color:#fff;font-size:11px;" onclick="setP('profit')">💎 看獲利分析</button>
+    </div>
+  </div>
 
   ${moSel()}
 
