@@ -2116,6 +2116,10 @@ function pgStockOut(){
   return`
   <div class="pg-ttl">📤 出貨耗用紀錄</div>
   <div class="pg-sub">客戶購買、自用、損耗、贈品 — 自動扣庫存、按平均成本計算</div>
+  <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;margin-bottom:12px;">
+    💡 <b>會計邏輯說明</b>：出貨耗用<u>只扣庫存、計算成本歸屬</u>，<b>不會重複記入支出記帳</b>。<br>
+    支出已在「進貨付款」時記入（金錢實際流出時）。這裡用來：① 追蹤庫存正確性 ② 計算每次服務的真實成本。
+  </div>
   ${moSel()}
 
   <div class="sg sg4">
@@ -3989,6 +3993,10 @@ function pgSettings(){
         <div>
           <button class="btn" style="background:#d97706;color:#fff;" onclick="openM('deleteTestCustomer')">🧹 刪除測試客戶資料</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">輸入測試客戶名稱（例如「吃早餐」），一次刪除該客戶的所有銷售/儲值/療程紀錄</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanupStockOutExpenses()">🧹 清理重複的出貨支出</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">舊版會在出貨耗用時重複寫入支出（材料耗材/雜支/行銷廣告），新版已修正。點此清除歷史的重複支出記錄（不影響進貨付款的支出）</div>
         </div>
       </div>
     </div>
@@ -6407,7 +6415,7 @@ window.saveStockOut=async()=>{
     const note=$('m_so4')?.value||'';
     const d=new Date(date);
     const cost=getStockOutCost(pid,qty);
-    // 記錄出貨
+    // 記錄出貨（只記錄成本歸屬，不寫入支出記帳，避免和進貨付款重複）
     await addSub('stockOuts',{
       date,type,
       productId:pid,
@@ -6421,22 +6429,13 @@ window.saveStockOut=async()=>{
     const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),
                   {...inv,productId:pid,qty:toN(inv.qty)-qty}];
     await saveMain({inventory:newInv});
-    // 自用/損耗 → 寫支出
-    if(type==='self'||type==='damage'||type==='gift'){
-      const catLabels={self:'材料耗材',damage:'雜支',gift:'行銷廣告'};
-      const noteLabels={self:'工作室自用',damage:'損耗報廢',gift:'贈送樣品'};
-      await addSub('expenses',{
-        date,
-        category:catLabels[type]||'雜支',
-        amount:cost,
-        payMethod:'內部結轉',
-        note:`【${noteLabels[type]}】${prod.name} × ${qty}${note?'　'+note:''}`,
-        fromStockOut:true,
-        month:d.getMonth()+1,year:d.getFullYear()
-      });
-    }
-    toast(`✅ 出貨 ${qty} 個，扣成本 $${fmt(cost)}`);
+    // ❗ 不再寫入支出記帳！
+    // 原因：進貨付款時已經記過支出（現金流出），出貨只是消耗已購買的庫存。
+    // 出貨耗用的目的是「追蹤庫存」和「計算服務成本」，不應該重複記為支出。
+    const typeLabels={sale:'客戶購買',self:'工作室自用',damage:'損耗報廢',gift:'贈送樣品',check:'盤點'};
+    toast(`✅ ${typeLabels[type]||'出貨'} ${qty} 個，成本 $${fmt(cost)}（已扣庫存，不重複記支出）`);
     closeMod();
+    render();
   }catch(err){
     console.error('saveStockOut 失敗:',err);
     alert('出貨失敗：'+(err.message||err));
@@ -8466,6 +8465,25 @@ window.confirmDeleteTestCustomer=async()=>{
   }
   toast(`✅ 已刪除「${name}」共 ${total} 筆紀錄`);
   closeMod();
+  render();
+};
+
+// 清理舊版出貨耗用重複寫入的支出記帳
+window.cleanupStockOutExpenses=async()=>{
+  const orphanExps=(S.data.expenses||[]).filter(e=>
+    e.fromStockOut===true||
+    (e.payMethod==='內部結轉'&&(e.note||'').match(/【(工作室自用|損耗報廢|贈送樣品)】/))
+  );
+  if(orphanExps.length===0){
+    alert('✅ 沒有找到重複的出貨支出，資料已是乾淨的！');
+    return;
+  }
+  const totalAmount=orphanExps.reduce((s,e)=>s+toN(e.amount),0);
+  const preview=orphanExps.slice(0,10).map(e=>`• ${e.date} [${e.category}] $${fmt(e.amount)} - ${e.note||''}`).join('\n');
+  const more=orphanExps.length>10?`\n... 還有 ${orphanExps.length-10} 筆`:'';
+  if(!confirm(`找到 ${orphanExps.length} 筆「出貨耗用重複寫入的支出」，合計 $${fmt(totalAmount)}\n\n${preview}${more}\n\n⚠️ 這些是舊版錯誤記錄（進貨付款已記過支出，出貨不該再記）。\n是否一鍵清除？\n\n注意：清除後支出總額會減少 $${fmt(totalAmount)}，這才是正確的數字。`))return;
+  for(const e of orphanExps){try{await delSub('expenses',e.id);}catch(err){console.error(err);}}
+  toast(`✅ 已清除 ${orphanExps.length} 筆重複支出，共 $${fmt(totalAmount)}`);
   render();
 };
 
