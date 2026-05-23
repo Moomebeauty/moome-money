@@ -367,6 +367,7 @@ let S={
     quarterReviews:[],
     coolingDecisions:[],
     advisorChats:[],
+    learnGoals:[],
     // 出貨記錄（客戶購買、自用、損耗、贈品）
     stockOuts:[],
     // 設備（含折舊）
@@ -420,7 +421,7 @@ function startSync(){
     setSyncing('synced');render();
   },()=>setSyncing('error'));
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals'].forEach(col=>{
     onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -1220,6 +1221,183 @@ function pgProfit(){
   </div>`;
 }
 
+// ─── 進修回本計畫（讓老闆無腦執行）────────────────
+// 計算單一進修目標的進度與行動建議
+function analyzeLearnGoal(goal){
+  const today=new Date();
+  const startDate=new Date(goal.startDate);
+  const endDate=new Date(goal.endDate);
+  const totalDays=Math.max(1,Math.ceil((endDate-startDate)/(1000*60*60*24)));
+  const elapsedDays=Math.max(0,Math.ceil((today-startDate)/(1000*60*60*24)));
+  const remainingDays=Math.max(0,Math.ceil((endDate-today)/(1000*60*60*24)));
+  const timeProgress=Math.min(100,Math.round(elapsedDays/totalDays*100));
+
+  // 計算已賺金額（從 sales 中找符合該服務名稱的）
+  const matchingSales=(S.data.sales||[]).filter(s=>{
+    if(!s.date)return false;
+    const d=new Date(s.date);
+    if(d<startDate)return false;
+    // 比對服務名稱（包含關鍵字即可）
+    const itemName=(s.serviceName||s.item||'').toLowerCase();
+    const keyword=(goal.serviceName||'').toLowerCase();
+    return itemName.includes(keyword);
+  });
+  const earnedAmount=matchingSales.reduce((s,r)=>s+toN(r.amount),0);
+  const earnedCount=matchingSales.length;
+  const moneyProgress=Math.min(100,Math.round(earnedAmount/goal.targetAmount*100));
+
+  // 需要的客數
+  const totalNeeded=Math.ceil(goal.targetAmount/goal.avgPrice);
+  const remainingNeeded=Math.max(0,totalNeeded-earnedCount);
+
+  // 進度狀態判斷
+  let status='on_track';// on_track / behind / ahead / completed
+  if(moneyProgress>=100){status='completed';}
+  else if(moneyProgress>=timeProgress){status='ahead';}
+  else if(moneyProgress<timeProgress-15){status='behind';}
+
+  // 計算需要的速度
+  const remainingAmount=Math.max(0,goal.targetAmount-earnedAmount);
+  const weeksLeft=Math.max(1,Math.ceil(remainingDays/7));
+  const monthsLeft=Math.max(1,Math.ceil(remainingDays/30));
+  const perWeek=Math.ceil(remainingAmount/weeksLeft/goal.avgPrice);
+  const perMonth=Math.ceil(remainingAmount/monthsLeft/goal.avgPrice);
+
+  return{
+    ...goal,
+    today,startDate,endDate,
+    totalDays,elapsedDays,remainingDays,timeProgress,
+    matchingSales,earnedAmount,earnedCount,moneyProgress,
+    totalNeeded,remainingNeeded,remainingAmount,
+    weeksLeft,monthsLeft,perWeek,perMonth,
+    status,
+  };
+}
+
+// 渲染進修回本計畫總覽
+function renderLearnGoals(){
+  const goals=(S.data.learnGoals||[]).filter(g=>!g.archived);
+  if(goals.length===0){
+    return`<div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:linear-gradient(135deg,var(--bluL),var(--purL));">
+        <span class="card-ttl" style="color:var(--pur);">🎯 進修回本計畫</span>
+        <button class="btn btn-p btn-sm" onclick="openM('addLearnGoal')">＋ 新增計畫</button>
+      </div>
+      <div class="card-bd">
+        <div class="empty" style="padding:20px;">
+          <div class="empty-ico">📚</div>
+          <p>還沒有進修計畫</p>
+          <div class="tm" style="font-size:12px;margin-top:6px;">把每筆進修費用變成可追蹤的目標，系統會自動算出每月該做幾單、每週幾單，讓你無腦執行</div>
+          <button class="btn btn-p" style="margin-top:12px;" onclick="openM('addLearnGoal')">＋ 新增第一個計畫</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  return`<div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:linear-gradient(135deg,var(--bluL),var(--purL));">
+      <span class="card-ttl" style="color:var(--pur);">🎯 進修回本計畫（${goals.length}）</span>
+      <button class="btn btn-p btn-sm" onclick="openM('addLearnGoal')">＋ 新增計畫</button>
+    </div>
+    <div class="card-bd">
+      ${goals.map(g=>renderLearnGoalCard(analyzeLearnGoal(g))).join('')}
+    </div>
+  </div>`;
+}
+
+// 渲染單一進修計畫卡片
+function renderLearnGoalCard(a){
+  const statusInfo={
+    completed:{emoji:'🎉',label:'已達標',color:'var(--grn)',bg:'var(--grnL)'},
+    ahead:{emoji:'🌟',label:'超前進度',color:'var(--grn)',bg:'var(--grnL)'},
+    on_track:{emoji:'✅',label:'進度正常',color:'var(--blu)',bg:'var(--bluL)'},
+    behind:{emoji:'⚠️',label:'進度落後',color:'#d97706',bg:'#fef3c7'},
+  };
+  const s=statusInfo[a.status];
+
+  // 行動建議
+  let actionText='';
+  if(a.status==='completed'){
+    actionText=`🎉 恭喜！你已經把這筆進修費賺回來了！可以繼續做為純利潤，或考慮歸檔此計畫。`;
+  }else if(a.status==='behind'){
+    actionText=`⚠️ 需要加速！剩 ${a.remainingDays} 天要做 ${a.remainingNeeded} 客（${a.serviceName}），建議：<br>• 每週至少做 <b>${a.perWeek} 客</b><br>• 主動聯絡老客戶推薦${a.serviceName}<br>• IG / LINE 發布${a.serviceName}作品集吸引新客`;
+  }else if(a.status==='ahead'){
+    actionText=`🌟 進度超前！繼續保持每週 ${a.perWeek} 客的節奏，這個月底就能達標！`;
+  }else{
+    actionText=`✅ 進度正常。維持每週 ${a.perWeek} 客（${a.serviceName}）即可達標。`;
+  }
+
+  return`<div style="border:2px solid ${s.color};border-radius:10px;padding:14px;margin-bottom:12px;background:#fff;">
+    <!-- 標題列 -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:16px;font-weight:700;color:var(--txt);">${a.title}</div>
+        <div class="tm" style="font-size:11px;margin-top:2px;">${a.startDate.toLocaleDateString('zh-TW')} ~ ${a.endDate.toLocaleDateString('zh-TW')}（${a.totalDays} 天）</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-direction:column;align-items:flex-end;">
+        <span class="bdg" style="background:${s.color};color:#fff;">${s.emoji} ${s.label}</span>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm" style="background:var(--bg2);font-size:10px;padding:2px 6px;" onclick="openM('editLearnGoal','${a.id}')">編輯</button>
+          <button class="btn btn-sm" style="background:var(--bg2);font-size:10px;padding:2px 6px;" onclick="archiveLearnGoal('${a.id}')">歸檔</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 兩個進度條：金額 + 時間 -->
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+        <span><b style="color:var(--gold);">💰 金額進度</b> $${fmt(a.earnedAmount)} / $${fmt(a.targetAmount)}（${a.earnedCount} / ${a.totalNeeded} 客）</span>
+        <b style="color:var(--gold);">${a.moneyProgress}%</b>
+      </div>
+      <div style="background:var(--bg2);border-radius:6px;height:8px;overflow:hidden;margin-bottom:8px;">
+        <div style="background:linear-gradient(90deg,var(--gold),#e6b800);height:100%;width:${a.moneyProgress}%;transition:width 0.5s;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+        <span><b style="color:var(--blu);">⏱️ 時間進度</b> 第 ${a.elapsedDays} 天 / 共 ${a.totalDays} 天</span>
+        <b style="color:var(--blu);">${a.timeProgress}%</b>
+      </div>
+      <div style="background:var(--bg2);border-radius:6px;height:8px;overflow:hidden;">
+        <div style="background:linear-gradient(90deg,var(--blu),#5577cc);height:100%;width:${a.timeProgress}%;transition:width 0.5s;"></div>
+      </div>
+    </div>
+
+    <!-- 關鍵數字 -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px;">
+      <div style="background:var(--bg2);padding:8px;border-radius:6px;text-align:center;">
+        <div class="tm" style="font-size:10px;">剩餘天數</div>
+        <div style="font-weight:700;font-size:15px;color:var(--pur);">${a.remainingDays} 天</div>
+      </div>
+      <div style="background:var(--bg2);padding:8px;border-radius:6px;text-align:center;">
+        <div class="tm" style="font-size:10px;">還需賺</div>
+        <div style="font-weight:700;font-size:15px;color:var(--red);">$${fmt(a.remainingAmount)}</div>
+      </div>
+      <div style="background:var(--bg2);padding:8px;border-radius:6px;text-align:center;">
+        <div class="tm" style="font-size:10px;">每週目標</div>
+        <div style="font-weight:700;font-size:15px;color:var(--gold);">${a.perWeek} 客</div>
+      </div>
+      <div style="background:var(--bg2);padding:8px;border-radius:6px;text-align:center;">
+        <div class="tm" style="font-size:10px;">每月目標</div>
+        <div style="font-weight:700;font-size:15px;color:var(--grn);">${a.perMonth} 客</div>
+      </div>
+    </div>
+
+    <!-- 行動建議 -->
+    <div style="background:${s.bg};border-left:3px solid ${s.color};padding:10px 12px;border-radius:6px;font-size:13px;line-height:1.7;">
+      ${actionText}
+    </div>
+
+    <!-- 最近成交紀錄（前 3 筆） -->
+    ${a.matchingSales.length>0?`<details style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:12px;color:var(--mut);padding:4px;">📋 已成交 ${a.matchingSales.length} 筆（點此展開）</summary>
+      <div style="margin-top:6px;font-size:12px;">
+        ${a.matchingSales.slice(0,5).map(s=>`<div style="padding:4px 8px;background:var(--bg2);border-radius:4px;margin-bottom:3px;">
+          ${s.date} - ${s.customer||'未填'} - $${fmt(s.amount)}
+        </div>`).join('')}
+        ${a.matchingSales.length>5?`<div class="tm" style="font-size:11px;text-align:center;padding:4px;">... 還有 ${a.matchingSales.length-5} 筆</div>`:''}
+      </div>
+    </details>`:''}
+  </div>`;
+}
+
 // ─── 營運診斷報告（系統自動分析）────────────────
 function generateOperationsReport(mo,yrParam){
   const m=mo||S.month;
@@ -1503,6 +1681,9 @@ function pgAdvisor(){
 
   <!-- 🩺 本月營運診斷報告（自動生成） -->
   ${renderOperationsReport()}
+
+  <!-- 🎯 進修回本計畫 -->
+  ${renderLearnGoals()}
 
   <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);">
     💡 <b>大額採購冷靜期規則：</b>單筆超過 $${fmt(al.bigPurchaseLimit)} 的設備採購，需經過 3 天冷靜期，並通過自我提問才能執行。
@@ -5923,6 +6104,40 @@ function renderModal(){
   }
 
   // ─── 新增買房頭期專款 ───
+  // ─── 進修回本計畫 ───
+  if(m.t==='addLearnGoal'||m.t==='editLearnGoal'){
+    const g=m.t==='editLearnGoal'?((S.data.learnGoals||[]).find(x=>x.id===m.x)||{}):{};
+    const isEdit=m.t==='editLearnGoal';
+    const today=new Date();
+    const defaultEnd=new Date();defaultEnd.setMonth(defaultEnd.getMonth()+3);
+    c=`<div class="mttl">${isEdit?'✏️ 編輯':'🎯 新增'}進修回本計畫</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 把進修費用變成「可追蹤的目標」<br>
+      系統會自動算出每週/每月該做幾客，並追蹤已賺多少。
+    </div>
+    <div class="fg">
+      <div class="fgrp"><label>計畫名稱</label><input type="text" id="m_lg_title" placeholder="例：彩妝課回本計畫" value="${g.title||''}"></div>
+      <div class="fgrp"><label>對應服務名稱（用於自動追蹤）</label>
+        <input type="text" id="m_lg_service" placeholder="例：彩妝、新娘妝、宴會妝" value="${g.serviceName||''}">
+        <div class="tm" style="font-size:11px;margin-top:4px;">系統會自動找銷售紀錄中含此關鍵字的項目，計入回本進度</div>
+      </div>
+      <div class="fg fg2">
+        <div class="fgrp"><label>目標金額（學費+材料費）</label><input type="number" id="m_lg_target" placeholder="例：40000" value="${g.targetAmount||''}"></div>
+        <div class="fgrp"><label>平均客單價</label><input type="number" id="m_lg_price" placeholder="例：2500" value="${g.avgPrice||2500}"></div>
+      </div>
+      <div class="fg fg2">
+        <div class="fgrp"><label>開始日期</label><input type="date" id="m_lg_start" value="${g.startDate||today.toISOString().split('T')[0]}"></div>
+        <div class="fgrp"><label>目標達成日期</label><input type="date" id="m_lg_end" value="${g.endDate||defaultEnd.toISOString().split('T')[0]}"></div>
+      </div>
+      <div class="fgrp"><label>備註（選填）</label><input type="text" id="m_lg_note" placeholder="如：含學費 30000 + 材料 8000" value="${g.note||''}"></div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      ${isEdit?`<button class="btn btn-y" onclick="delLearnGoal('${m.x}')">🗑️ 刪除</button>`:''}
+      <button class="btn btn-p" onclick="saveLearnGoal('${isEdit?m.x:''}')">✓ ${isEdit?'更新':'建立計畫'}</button>
+    </div>`;
+  }
+
   if(m.t==='addHouseFund'){c=`<div class="mttl">🏠 紀錄買房頭期專款</div>
     <div class="fg">
       <div class="fgrp"><label>日期</label><input type="date" id="m_hf0" value="${today()}"></div>
@@ -9807,6 +10022,41 @@ window.saveHouseFund=async()=>{
   closeMod();
 };
 window.delHouseFund=async id=>{if(!confirm('確認刪除？'))return;await delSub('houseFund',id);toast('已刪除');};
+
+// ─── 進修回本計畫 ───
+window.saveLearnGoal=async(id)=>{
+  const title=$('m_lg_title')?.value?.trim();
+  const serviceName=$('m_lg_service')?.value?.trim();
+  const targetAmount=parseFloat($('m_lg_target')?.value)||0;
+  const avgPrice=parseFloat($('m_lg_price')?.value)||0;
+  const startDate=$('m_lg_start')?.value;
+  const endDate=$('m_lg_end')?.value;
+  const note=$('m_lg_note')?.value?.trim()||'';
+  if(!title||!serviceName||!targetAmount||!avgPrice||!startDate||!endDate){
+    alert('請填寫所有必要欄位（標題、服務名稱、目標金額、客單價、起訖日期）');return;
+  }
+  if(new Date(endDate)<=new Date(startDate)){alert('結束日期必須晚於開始日期');return;}
+  const data={title,serviceName,targetAmount,avgPrice,startDate,endDate,note,archived:false};
+  if(id){
+    await setSub('learnGoals',id,data);
+    toast('✅ 進修計畫已更新');
+  }else{
+    await addSub('learnGoals',data);
+    toast(`✅ 進修回本計畫已建立！系統會自動追蹤「${serviceName}」的銷售`);
+  }
+  closeMod();
+};
+window.delLearnGoal=async id=>{
+  if(!confirm('確認刪除此進修計畫？此動作無法復原。'))return;
+  await delSub('learnGoals',id);
+  toast('已刪除進修計畫');
+  closeMod();
+};
+window.archiveLearnGoal=async id=>{
+  if(!confirm('歸檔此計畫？歸檔後不會出現在列表，但資料會保留。'))return;
+  await setSub('learnGoals',id,{archived:true});
+  toast('✅ 已歸檔');
+};
 window.recordHouseFund=async(amount)=>{
   if(amount<=0){toast('本月無可分流金額');return;}
   if(!confirm(`確定要紀錄本月買房專款 $${fmt(amount)} ？`))return;
