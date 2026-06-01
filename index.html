@@ -4462,6 +4462,10 @@ function pgSettings(){
           <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanupStockOutExpenses()">🧹 清理重複的出貨支出</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">舊版會在出貨耗用時重複寫入支出（材料耗材/雜支/行銷廣告），新版已修正。點此清除歷史的重複支出記錄（不影響進貨付款的支出）</div>
         </div>
+        <div>
+          <button class="btn" style="background:var(--gold);color:#fff;" onclick="depositHealthCheck()">🩺 儲值資料健檢</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">全面掃描所有儲值的潛在問題：餘額異常、共用群組錯亂、孤兒紀錄、扣款歸屬錯誤等，並提供完整對帳報告</div>
+        </div>
       </div>
     </div>
   </div>
@@ -4503,6 +4507,9 @@ function pgSettings(){
 function renderModal(){
   if(!S.modal)return'';
   const m=S.modal;let c='';
+
+  // 自訂 HTML 報告類型（給 depositHealthReport 等）
+  if(m.html)return m.html;
 
   if(m.t==='addSale'){c=`<div class="mttl">💰 新增收入</div>
     <div class="fg fg2">
@@ -8983,6 +8990,212 @@ window.cleanupStockOutExpenses=async()=>{
   for(const e of orphanExps){try{await delSub('expenses',e.id);}catch(err){console.error(err);}}
   toast(`✅ 已清除 ${orphanExps.length} 筆重複支出，共 $${fmt(totalAmount)}`);
   render();
+};
+
+// ─── 儲值資料健檢（全面掃描儲值資料一致性） ───
+window.depositHealthCheck=async()=>{
+  const deposits=S.data.deposits||[];
+  const sales=S.data.sales||[];
+  const customers=S.data.customers||[];
+  const cashFlow=S.data.cashFlow||[];
+
+  // 1. 基本數字
+  const totalFaceAmount=deposits.reduce((s,d)=>s+toN(d.amount),0);
+  const totalCashReceived=deposits.reduce((s,d)=>s+toN(d.actualReceived||d.amount),0);
+  const totalDiscount=totalFaceAmount-totalCashReceived;
+
+  // 2. 已使用的儲值（從 sales 統計）
+  const depositSales=sales.filter(s=>s.payMethod==='儲值扣款');
+  const totalUsed=depositSales.reduce((s,r)=>s+toN(r.depositFaceAmount||r.amount),0);
+
+  // 3. 理論餘額 = 累計儲值 - 累計扣款
+  const theoreticalBalance=totalFaceAmount-totalUsed;
+
+  // 4. 系統顯示的負債餘額（透過每個客戶加總）
+  const systemDisplayBalance=getTotalDepositLiability();
+
+  // 5. 差異
+  const diff=theoreticalBalance-systemDisplayBalance;
+
+  // 6. 各客戶餘額明細
+  const custBalances={};
+  deposits.forEach(d=>{
+    const name=(d.customer||'').trim();
+    if(!name)return;
+    custBalances[name]=(custBalances[name]||0)+toN(d.amount);
+  });
+  depositSales.forEach(s=>{
+    const owner=((s.depositOwner||s.customer)||'').trim();
+    if(!owner)return;
+    custBalances[owner]=(custBalances[owner]||0)-toN(s.depositFaceAmount||s.amount);
+  });
+
+  // 7. 偵測問題
+  const issues=[];
+
+  // 問題 A：負餘額（扣超過儲值）
+  const negativeBalances=Object.entries(custBalances).filter(([n,b])=>b<-1);// 容許 $1 誤差
+  if(negativeBalances.length>0){
+    issues.push({
+      type:'negative',
+      severity:'high',
+      title:`${negativeBalances.length} 位客戶餘額為負`,
+      detail:negativeBalances.map(([n,b])=>`• ${n}: $${fmt(b)}`).join('\n'),
+      action:'這代表扣款超過儲值。請檢查是否誤扣，或補登儲值紀錄。'
+    });
+  }
+
+  // 問題 B：無歸屬扣款（payMethod=儲值扣款 但無 customer 或 depositOwner）
+  const orphanedSales=depositSales.filter(s=>{
+    const owner=((s.depositOwner||s.customer)||'').trim();
+    return !owner;
+  });
+  if(orphanedSales.length>0){
+    issues.push({
+      type:'orphan_sale',
+      severity:'high',
+      title:`${orphanedSales.length} 筆儲值扣款沒有歸屬客戶`,
+      detail:orphanedSales.slice(0,5).map(s=>`• ${s.date} $${fmt(s.amount)} - ${s.serviceName||'未填'}`).join('\n')+(orphanedSales.length>5?`\n... 還有 ${orphanedSales.length-5} 筆`:''),
+      action:'這些扣款沒有從任何客戶餘額扣，會造成系統負債餘額虛高。需要編輯這些銷售紀錄，指定客戶。'
+    });
+  }
+
+  // 問題 C：儲值客戶不存在於客戶名單
+  const depositCustomers=new Set(deposits.map(d=>(d.customer||'').trim()).filter(n=>n));
+  const customerNames=new Set(customers.map(c=>(c.name||'').trim()).filter(n=>n));
+  const ghostCustomers=Array.from(depositCustomers).filter(n=>!customerNames.has(n));
+  if(ghostCustomers.length>0){
+    issues.push({
+      type:'ghost',
+      severity:'low',
+      title:`${ghostCustomers.length} 位儲值客戶未正式建檔`,
+      detail:ghostCustomers.map(n=>`• ${n}`).join('\n'),
+      action:'這些客戶有儲值但沒在「客戶管理」建檔。不影響餘額計算，建議到客戶管理頁正式建檔。'
+    });
+  }
+
+  // 問題 D：deposit 缺 actualReceived（無法計算折扣率）
+  const missingActual=deposits.filter(d=>!toN(d.actualReceived)&&toN(d.amount)>0);
+  if(missingActual.length>0){
+    issues.push({
+      type:'missing_cash',
+      severity:'medium',
+      title:`${missingActual.length} 筆儲值未填「實收金額」`,
+      detail:missingActual.slice(0,5).map(d=>`• ${d.date} ${d.customer} 面額 $${fmt(d.amount)}`).join('\n')+(missingActual.length>5?`\n... 還有 ${missingActual.length-5} 筆`:''),
+      action:'未填實收金額會導致折扣率無法計算（預設 100% 無折扣）。請編輯這些紀錄補填。'
+    });
+  }
+
+  // 問題 E：系統餘額 vs 理論餘額不一致
+  if(Math.abs(diff)>1){
+    issues.push({
+      type:'balance_mismatch',
+      severity:'high',
+      title:`總負債餘額不一致（差 $${fmt(Math.abs(diff))}）`,
+      detail:`理論餘額（總儲值面額 - 總使用面額）= $${fmt(theoreticalBalance)}\n系統顯示負債餘額 = $${fmt(systemDisplayBalance)}\n差距 = $${fmt(diff)}`,
+      action:diff>0?'系統顯示餘額比理論少（可能有客戶被刪除但儲值還在計算中，或有歸屬錯誤）':'系統顯示餘額比理論多（可能有重複的儲值紀錄）'
+    });
+  }
+
+  // 問題 F：儲值有對應的現金流嗎？
+  const depositsWithoutFlow=deposits.filter(d=>{
+    if(!toN(d.actualReceived))return false;// 沒實收金額不需要現金流
+    const hasFlow=cashFlow.some(f=>f.depositRefId===d.id||(f.note||'').includes(`儲值-${d.customer}`));
+    return !hasFlow;
+  });
+  if(depositsWithoutFlow.length>0&&depositsWithoutFlow.length<deposits.length){// 全部沒有就不是 bug
+    issues.push({
+      type:'no_cashflow',
+      severity:'low',
+      title:`${depositsWithoutFlow.length} 筆儲值沒有對應現金流紀錄`,
+      detail:depositsWithoutFlow.slice(0,3).map(d=>`• ${d.date} ${d.customer} $${fmt(d.actualReceived)}`).join('\n'),
+      action:'這些儲值收到的錢沒寫入現金流水帳，會影響現金流分析。可手動補登或從現金流頁面新增。'
+    });
+  }
+
+  // 顯示報告
+  const reportHTML=`<div class="mttl">🩺 儲值資料健檢報告</div>
+    <div style="max-height:60vh;overflow-y:auto;padding:4px;">
+
+      <!-- 一、總覽 -->
+      <div style="background:linear-gradient(135deg,var(--goldL),#fff);padding:14px;border-radius:8px;margin-bottom:14px;">
+        <div style="font-weight:700;color:var(--gold);margin-bottom:10px;font-size:15px;">📊 整體儲值狀況</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;font-size:13px;">
+          <div style="background:#fff;padding:8px 10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">儲值筆數</div>
+            <div style="font-weight:700;color:var(--gold);font-size:16px;">${deposits.length} 筆</div>
+          </div>
+          <div style="background:#fff;padding:8px 10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">累計儲值面額</div>
+            <div style="font-weight:700;color:var(--rose);font-size:16px;">$${fmt(totalFaceAmount)}</div>
+          </div>
+          <div style="background:#fff;padding:8px 10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">累計實收現金</div>
+            <div style="font-weight:700;color:var(--grn);font-size:16px;">$${fmt(totalCashReceived)}</div>
+          </div>
+          <div style="background:#fff;padding:8px 10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">累計折扣讓利</div>
+            <div style="font-weight:700;color:var(--red);font-size:16px;">$${fmt(totalDiscount)}</div>
+          </div>
+          <div style="background:#fff;padding:8px 10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">已使用面額</div>
+            <div style="font-weight:700;color:var(--blu);font-size:16px;">$${fmt(totalUsed)}</div>
+          </div>
+          <div style="background:#fff;padding:8px 10px;border-radius:6px;">
+            <div class="tm" style="font-size:11px;">剩餘負債</div>
+            <div style="font-weight:700;color:var(--pur);font-size:16px;">$${fmt(systemDisplayBalance)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--bdr);font-size:12px;color:var(--mut);">
+          理論餘額：$${fmt(theoreticalBalance)}（總儲值 $${fmt(totalFaceAmount)} - 已使用 $${fmt(totalUsed)}）<br>
+          系統顯示：$${fmt(systemDisplayBalance)}<br>
+          差距：${Math.abs(diff)<=1?'<b style="color:var(--grn);">✅ 一致</b>':`<b style="color:var(--red);">⚠️ $${fmt(Math.abs(diff))}</b>`}
+        </div>
+      </div>
+
+      <!-- 二、客戶餘額明細 -->
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:700;color:var(--pur);margin-bottom:8px;font-size:14px;">📋 各客戶儲值餘額明細</div>
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;">
+          ${Object.entries(custBalances).filter(([n,b])=>b!==0).sort((a,b)=>b[1]-a[1]).map(([n,b])=>{
+            const color=b<0?'var(--red)':b===0?'var(--mut)':'var(--gold)';
+            return`<div style="display:flex;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--bdr);font-size:13px;">
+              <span>${n}</span>
+              <b style="color:${color};">$${fmt(b)}</b>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- 三、發現的問題 -->
+      ${issues.length===0?`<div style="background:var(--grnL);padding:14px;border-radius:8px;border-left:4px solid var(--grn);text-align:center;">
+        <div style="font-size:30px;margin-bottom:6px;">✅</div>
+        <div style="font-weight:700;color:var(--grn);font-size:15px;">資料完美！沒發現任何問題</div>
+        <div class="tm" style="font-size:12px;margin-top:4px;">所有儲值的扣款、餘額、客戶歸屬都正確</div>
+      </div>`:`<div>
+        <div style="font-weight:700;color:var(--red);margin-bottom:8px;font-size:14px;">⚠️ 發現 ${issues.length} 個需要注意的問題</div>
+        ${issues.map((iss,i)=>{
+          const color=iss.severity==='high'?'var(--red)':iss.severity==='medium'?'#d97706':'var(--blu)';
+          const bg=iss.severity==='high'?'var(--redL)':iss.severity==='medium'?'#fef3c7':'var(--bluL)';
+          const emoji=iss.severity==='high'?'🔴':iss.severity==='medium'?'🟡':'🔵';
+          return`<div style="border-left:3px solid ${color};background:${bg};padding:10px 12px;border-radius:6px;margin-bottom:8px;">
+            <div style="font-weight:700;color:${color};font-size:13px;">${emoji} ${iss.title}</div>
+            <pre style="margin:6px 0;padding:6px;background:#fff;border-radius:4px;font-size:11px;white-space:pre-wrap;font-family:inherit;color:var(--txt);">${iss.detail}</pre>
+            <div style="font-size:12px;color:var(--txt);"><b>💡 建議：</b>${iss.action}</div>
+          </div>`;
+        }).join('')}
+      </div>`}
+    </div>
+    <div class="mbtns"><button class="btn btn-p" onclick="closeMod()">關閉</button></div>`;
+
+  // 把 HTML 包裝在 S.modal 裡
+  S.modal={t:'depositHealthReport',html:reportHTML};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){
+    inn.innerHTML=reportHTML;
+    bg.className='modal-bg open';
+    inn.className='modal lg';
+  }
 };
 
 // ── Settings ──
