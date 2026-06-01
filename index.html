@@ -2421,9 +2421,11 @@ function pgPurchase(){
   </div>
 
   <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">
-    💡 <b>進貨自動連動：</b><br>
-    ✓ 已付款進貨：自動更新庫存 + 加權平均成本 + 寫入支出記帳 + 寫入現金流水帳<br>
-    ⏳ 未付款進貨（賒帳）：自動更新庫存 + 加權平均成本，但暫不記支出。月底結算後點「✓ 標記已付款」即可
+    💡 <b>進貨與支出的對應關係（現金基礎會計）：</b><br>
+    ✓ 進貨時：自動更新庫存 + 加權平均成本（不算支出）<br>
+    ✓ <b>付款時</b>：寫入支出記帳 + 現金流水帳（<u>支出記在「付款日」的月份，不是「進貨日」</u>）<br>
+    ⏳ 例如：5/14 進貨手套，6/1 才轉帳付款 → 該筆支出會記在 <b>6 月</b>（因為錢是 6 月才流出）<br>
+    💡 想看某筆進貨的支出在哪？看下面表格的「付款狀態」欄會顯示<b>實際付款日</b>。
   </div>
 
   <div class="sec-hd">
@@ -2440,6 +2442,10 @@ function pgPurchase(){
       <tbody>${purchases.length===0?`<tr><td colspan="10"><div class="empty"><div class="empty-ico">📦</div><p>本月尚無進貨記錄</p></div></td></tr>`:
         purchases.map(p=>{
           const paid=isPaid(p);
+          // 判斷支出歸屬月份是否跟進貨月份不同
+          const purchaseMonth=p.date?p.date.substring(0,7):'';
+          const payMonth=p.paidDate?p.paidDate.substring(0,7):'';
+          const isDiffMonth=paid&&purchaseMonth&&payMonth&&purchaseMonth!==payMonth;
           return`<tr style="${paid?'background:var(--grnL);':''}">
           <td>${p.date||''}</td>
           <td><b>${p.productName||''}</b></td>
@@ -2450,7 +2456,7 @@ function pgPurchase(){
           <td class="tm">${p.supplier||''}</td>
           <td class="tm">${p.note||''}</td>
           <td>${paid?
-            `<div><span class="pill grn">✅ 已付款</span><div class="tm" style="margin-top:4px;font-size:11px;">${p.paidDate||''} ${p.payMethod||p.paidMethod||''}</div></div>`
+            `<div><span class="pill grn">✅ 已付款</span><div class="tm" style="margin-top:4px;font-size:11px;">${p.paidDate||''} ${p.payMethod||p.paidMethod||''}</div>${isDiffMonth?`<div style="font-size:10px;color:var(--gold);margin-top:2px;background:#fffbf0;padding:2px 4px;border-radius:3px;">⚠️ 支出記在 ${payMonth} 月</div>`:''}</div>`
             :`<button class="btn btn-g btn-sm" onclick="payPurchase('${p.id}')">✓ 標記已付款</button>`}</td>
           <td style="white-space:nowrap;">
             ${paid?`<button class="btn btn-s btn-sm" onclick="unpayPurchase('${p.id}')">取消付款</button>`:''}
@@ -4465,6 +4471,10 @@ function pgSettings(){
         <div>
           <button class="btn" style="background:var(--gold);color:#fff;" onclick="depositHealthCheck()">🩺 儲值資料健檢</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">全面掃描所有儲值的潛在問題：餘額異常、共用群組錯亂、孤兒紀錄、扣款歸屬錯誤等，並提供完整對帳報告</div>
+        </div>
+        <div>
+          <button class="btn" style="background:#dc2626;color:#fff;" onclick="findDuplicatePurchases()">🔍 找出重複的進貨紀錄</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">掃描可能重複輸入的進貨（同日期、同產品、同金額）。可預覽後選擇刪除。例如手套被輸入兩次的情況</div>
         </div>
       </div>
     </div>
@@ -6810,47 +6820,8 @@ window.savePurchase=async()=>{
   closeMod();
 };
 
-// ── 進貨：標記為已付款（補寫入支出/現金流）──
-window.payPurchase=async(id)=>{
-  const p=(S.data.purchases||[]).find(x=>x.id===id);
-  if(!p)return;
-  if(p.paid){alert('此筆已標記為已付款');return;}
-  const today_d=today();
-  const payMethod=p.payMethod||'轉帳';
-  if(!confirm(`確認標記「${p.productName}」這筆進貨為已付款？\n\n金額 $${fmt(p.totalCost)}　付款方式：${payMethod}\n\n會自動寫入支出記帳與現金流水帳`))return;
-  // 更新進貨紀錄
-  await setSub('purchases',id,{...p,paid:true,paidDate:today_d});
-  // 寫入支出
-  const expNote=`【進貨】${p.productName} × ${p.qty}${p.supplier?'（'+p.supplier+'）':''}`;
-  const d=new Date(today_d);
-  await addSub('expenses',{
-    date:today_d,category:'進貨成本',amount:p.totalCost,
-    payMethod,note:expNote,
-    fromPurchase:true,purchaseRefId:id,
-    month:d.getMonth()+1,year:d.getFullYear()
-  });
-  await addSub('cashFlow',{
-    date:today_d,amount:-p.totalCost,cat:'進貨支出',
-    note:expNote+`（${payMethod}）`,
-    fromPurchase:true,purchaseRefId:id,
-    month:d.getMonth()+1,year:d.getFullYear()
-  });
-  toast(`✅ 已標記為已付款，並寫入支出 $${fmt(p.totalCost)}`);
-};
-
-// ── 進貨：取消已付款狀態（撤銷支出和現金流）──
-window.unpayPurchase=async(id)=>{
-  const p=(S.data.purchases||[]).find(x=>x.id===id);
-  if(!p||!p.paid)return;
-  if(!confirm(`確認取消「${p.productName}」的已付款狀態？\n\n會自動刪除對應的支出和現金流紀錄`))return;
-  // 找到並刪除對應的支出和現金流
-  const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase&&e.purchaseRefId===id);
-  const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase&&f.purchaseRefId===id);
-  for(const e of exps)await delSub('expenses',e.id);
-  for(const f of flows)await delSub('cashFlow',f.id);
-  await setSub('purchases',id,{...p,paid:false,paidDate:null});
-  toast('已取消已付款狀態');
-};
+// ── 進貨：標記為已付款/取消已付款（統一在第 8420 行附近的新版實作）──
+// 舊版函式已移除，避免雙重定義造成混亂
 
 window.delPurchase=async id=>{
   try{
@@ -8415,9 +8386,9 @@ window.updPurchase=async(id)=>{
 window.payPurchase=async(id)=>{
   const p=(S.data.purchases||[]).find(x=>x.id===id);
   if(!p){toast('找不到進貨記錄');return;}
-  if(p.paidToExpense){toast('已付款過');return;}
+  if(p.paidToExpense||p.paid){toast('已付款過');return;}
   const paidDate=$('m_pay0')?.value||today();
-  const paidMethod=$('m_pay1')?.value||'';
+  const paidMethod=$('m_pay1')?.value||'轉帳';
   const payNote=$('m_pay2')?.value||'';
   const d=new Date(paidDate);
   // 1. 寫入支出記帳
@@ -8427,25 +8398,47 @@ window.payPurchase=async(id)=>{
     amount:toN(p.totalCost),
     payMethod:paidMethod,
     note:`【進貨】${p.productName||''}　${p.supplier||''}　數量 ${p.qty||0}${payNote?'　'+payNote:''}`,
+    fromPurchase:true,
     fromPurchaseId:id,
+    purchaseRefId:id,
     month:d.getMonth()+1,year:d.getFullYear()
   });
-  // 2. 標記進貨已付款
-  await setSub('purchases',id,{...p,paidToExpense:true,paidDate,paidMethod,payNote,expenseId:expenseRef?.id||''});
-  toast(`✅ 已標記付款，自動記入支出 $${fmt(p.totalCost)}`);
+  // 2. 寫入現金流水帳（這樣銀行帳目才能對得起來）
+  const flowRef=await addSub('cashFlow',{
+    date:paidDate,
+    amount:-toN(p.totalCost),
+    cat:'進貨支出',
+    note:`【進貨】${p.productName||''} × ${p.qty||0}${p.supplier?'（'+p.supplier+'）':''}（${paidMethod}）`,
+    fromPurchase:true,
+    fromPurchaseId:id,
+    purchaseRefId:id,
+    month:d.getMonth()+1,year:d.getFullYear()
+  });
+  // 3. 標記進貨已付款
+  await setSub('purchases',id,{...p,paidToExpense:true,paid:true,paidDate,paidMethod,payMethod:paidMethod,payNote,expenseId:expenseRef?.id||'',cashFlowId:flowRef?.id||''});
+  toast(`✅ 已標記付款，自動記入 ${d.getMonth()+1} 月支出 $${fmt(p.totalCost)}`);
   closeMod();
 };
 window.unpayPurchase=async(id)=>{
-  if(!confirm('取消付款？\n會同時刪除「支出記帳」中對應的那筆支出'))return;
+  if(!confirm('取消付款？\n會同時刪除「支出記帳」和「現金流水帳」中對應的紀錄'))return;
   const p=(S.data.purchases||[]).find(x=>x.id===id);
   if(!p)return;
-  // 1. 刪除對應的支出
+  // 1. 刪除對應的支出（用兩種方式查找，相容新舊版）
   if(p.expenseId){
     try{await delSub('expenses',p.expenseId);}catch(e){console.warn('刪除支出失敗',e);}
   }
-  // 2. 還原進貨狀態
-  await setSub('purchases',id,{...p,paidToExpense:false,paidDate:'',paidMethod:'',payNote:'',expenseId:''});
-  toast('已取消付款狀態');
+  // 也刪除所有 fromPurchase/purchaseRefId 對應的支出（防漏）
+  const exps=(S.data.expenses||[]).filter(e=>(e.fromPurchase||e.fromPurchaseId)&&(e.purchaseRefId===id||e.fromPurchaseId===id));
+  for(const e of exps){try{await delSub('expenses',e.id);}catch(err){console.warn(err);}}
+  // 2. 刪除對應的現金流
+  if(p.cashFlowId){
+    try{await delSub('cashFlow',p.cashFlowId);}catch(e){console.warn('刪除現金流失敗',e);}
+  }
+  const flows=(S.data.cashFlow||[]).filter(f=>(f.fromPurchase||f.fromPurchaseId)&&(f.purchaseRefId===id||f.fromPurchaseId===id));
+  for(const f of flows){try{await delSub('cashFlow',f.id);}catch(err){console.warn(err);}}
+  // 3. 還原進貨狀態
+  await setSub('purchases',id,{...p,paidToExpense:false,paid:false,paidDate:'',paidMethod:'',payMethod:'',payNote:'',expenseId:'',cashFlowId:''});
+  toast('已取消付款狀態，並清除對應的支出與現金流紀錄');
 };
 
 // ── Purchase 批次 ──
@@ -9196,6 +9189,165 @@ window.depositHealthCheck=async()=>{
     bg.className='modal-bg open';
     inn.className='modal lg';
   }
+};
+
+// ─── 找出重複的進貨紀錄 ───
+window.findDuplicatePurchases=async()=>{
+  const purchases=S.data.purchases||[];
+  // 用「日期+產品名+金額+數量」做指紋，找出重複
+  const groups={};
+  purchases.forEach(p=>{
+    const fp=`${p.date||''}_${(p.productName||'').trim()}_${p.qty||0}_${p.totalCost||0}`;
+    if(!groups[fp])groups[fp]=[];
+    groups[fp].push(p);
+  });
+  const dupGroups=Object.entries(groups).filter(([_,arr])=>arr.length>1);
+  if(dupGroups.length===0){
+    alert('✅ 沒有發現重複的進貨紀錄，資料是乾淨的！');
+    return;
+  }
+  // 統計
+  const totalDups=dupGroups.reduce((s,[_,arr])=>s+(arr.length-1),0);
+  const dupAmount=dupGroups.reduce((s,[_,arr])=>{
+    return s+arr.slice(1).reduce((ss,p)=>ss+toN(p.totalCost),0);
+  },0);
+  // 顯示報告
+  const html=`<div class="mttl">🔍 重複進貨檢測報告</div>
+    <div style="max-height:60vh;overflow-y:auto;padding:4px;">
+      <div style="background:var(--redL);padding:12px;border-radius:8px;border-left:4px solid var(--red);margin-bottom:14px;">
+        <div style="font-weight:700;color:var(--red);font-size:15px;">⚠️ 發現 ${dupGroups.length} 組重複進貨</div>
+        <div style="font-size:13px;margin-top:6px;color:var(--txt);">
+          • 共 <b>${totalDups}</b> 筆多餘紀錄<br>
+          • 金額重複合計 <b>$${fmt(dupAmount)}</b><br>
+          • 建議：保留每組第一筆，刪除其餘
+        </div>
+      </div>
+
+      ${dupGroups.map(([fp,arr],i)=>{
+        const sample=arr[0];
+        return`<div style="border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+          <div style="font-weight:700;color:var(--pur);font-size:14px;margin-bottom:8px;">
+            🔁 第 ${i+1} 組：${sample.productName||'未填'} （${sample.date}）
+            <span class="bdg" style="background:var(--red);color:#fff;">${arr.length} 筆</span>
+          </div>
+          <div style="font-size:12px;color:var(--mut);margin-bottom:8px;">
+            數量 ${sample.qty} × $${fmt(sample.unitCost)} = $${fmt(sample.totalCost)}
+          </div>
+          <div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;">
+            ${arr.map((p,idx)=>{
+              const isPaid=p.paid||p.paidToExpense;
+              const isKeep=idx===0;
+              return`<div style="padding:6px 8px;background:${isKeep?'var(--grnL)':'var(--redL)'};border-radius:4px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div>
+                  <b style="color:${isKeep?'var(--grn)':'var(--red)'};">${isKeep?'✓ 保留':'✗ 建議刪除'}</b>
+                  <span style="font-family:monospace;font-size:10px;color:var(--mut);">　ID:${(p.id||'').substring(0,8)}</span>
+                  ${isPaid?`<span class="bdg" style="background:var(--grn);color:#fff;font-size:10px;">已付款 ${p.paidDate||''}</span>`:'<span class="bdg" style="background:#aaa;color:#fff;font-size:10px;">未付款</span>'}
+                </div>
+                ${!isKeep?`<button class="btn btn-sm" style="background:var(--red);color:#fff;font-size:11px;padding:2px 8px;" onclick="deleteDupePurchase('${p.id}')">🗑️ 刪除這筆</button>`:''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+
+      <div style="margin-top:14px;padding:12px;background:var(--bluL);border-radius:8px;border-left:4px solid var(--blu);font-size:13px;color:var(--blu);">
+        💡 <b>建議操作步驟：</b><br>
+        1. 上方每組保留<b>第一筆（綠色）</b>，刪除<b>其餘（紅色）</b><br>
+        2. 點各筆右側「🗑️ 刪除這筆」按鈕逐筆清理<br>
+        3. 或下方一鍵清除全部重複（保留每組第一筆）
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanupAllDuplicatePurchases()">🧹 一鍵清除全部重複</button>
+    </div>`;
+
+  S.modal={t:'duplicatePurchaseReport',html};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){
+    inn.innerHTML=html;
+    bg.className='modal-bg open';
+    inn.className='modal lg';
+  }
+};
+
+// 刪除單筆重複進貨（不還原庫存，因為已經是重複輸入的）
+window.deleteDupePurchase=async(id)=>{
+  if(!confirm('確認刪除這筆重複的進貨？\n\n注意：不會還原庫存（因為這是重複輸入的多餘紀錄，原本就不該存在）\n但會刪除對應的支出和現金流。'))return;
+  const p=(S.data.purchases||[]).find(x=>x.id===id);
+  if(!p)return;
+  // 刪除對應的支出（如果有）
+  if(p.expenseId){
+    try{await delSub('expenses',p.expenseId);}catch(e){console.warn(e);}
+  }
+  const exps=(S.data.expenses||[]).filter(e=>(e.fromPurchase||e.fromPurchaseId)&&(e.purchaseRefId===id||e.fromPurchaseId===id));
+  for(const e of exps){try{await delSub('expenses',e.id);}catch(err){console.warn(err);}}
+  // 刪除對應的現金流（如果有）
+  if(p.cashFlowId){
+    try{await delSub('cashFlow',p.cashFlowId);}catch(e){console.warn(e);}
+  }
+  const flows=(S.data.cashFlow||[]).filter(f=>(f.fromPurchase||f.fromPurchaseId)&&(f.purchaseRefId===id||f.fromPurchaseId===id));
+  for(const f of flows){try{await delSub('cashFlow',f.id);}catch(err){console.warn(err);}}
+  // 還要扣減被多算的庫存
+  if(p.productId){
+    try{
+      const inv=getInv(p.productId);
+      const newQty=Math.max(0,toN(inv.qty)-toN(p.qty));
+      const newInv=[...(S.data.inventory||[]).filter(i=>i.productId!==p.productId),{...inv,productId:p.productId,qty:newQty}];
+      await saveMain({inventory:newInv});
+    }catch(e){console.warn(e);}
+  }
+  // 刪除進貨紀錄本身
+  await delSub('purchases',id);
+  toast(`✅ 已刪除重複進貨，並扣減重複的庫存 ${p.qty} 個`);
+  // 重新打開檢測報告
+  setTimeout(()=>{findDuplicatePurchases();},500);
+};
+
+// 一鍵清除所有重複
+window.cleanupAllDuplicatePurchases=async()=>{
+  const purchases=S.data.purchases||[];
+  const groups={};
+  purchases.forEach(p=>{
+    const fp=`${p.date||''}_${(p.productName||'').trim()}_${p.qty||0}_${p.totalCost||0}`;
+    if(!groups[fp])groups[fp]=[];
+    groups[fp].push(p);
+  });
+  const toDelete=[];
+  Object.values(groups).forEach(arr=>{
+    if(arr.length>1)toDelete.push(...arr.slice(1));// 保留第一筆
+  });
+  if(toDelete.length===0){alert('沒有需要清除的重複資料');return;}
+  if(!confirm(`⚠️ 確認一鍵清除？\n\n將刪除 ${toDelete.length} 筆重複進貨，並：\n• 刪除對應的支出/現金流紀錄\n• 扣減重複多算的庫存\n\n此操作無法復原！`))return;
+  // 統計庫存調整
+  const invAdj={};
+  for(const p of toDelete){
+    if(p.productId){
+      invAdj[p.productId]=(invAdj[p.productId]||0)+toN(p.qty);
+    }
+    // 刪除對應的支出
+    if(p.expenseId){try{await delSub('expenses',p.expenseId);}catch(e){console.warn(e);}}
+    const exps=(S.data.expenses||[]).filter(e=>(e.fromPurchase||e.fromPurchaseId)&&(e.purchaseRefId===p.id||e.fromPurchaseId===p.id));
+    for(const e of exps){try{await delSub('expenses',e.id);}catch(err){console.warn(err);}}
+    // 刪除對應的現金流
+    if(p.cashFlowId){try{await delSub('cashFlow',p.cashFlowId);}catch(e){console.warn(e);}}
+    const flows=(S.data.cashFlow||[]).filter(f=>(f.fromPurchase||f.fromPurchaseId)&&(f.purchaseRefId===p.id||f.fromPurchaseId===p.id));
+    for(const f of flows){try{await delSub('cashFlow',f.id);}catch(err){console.warn(err);}}
+    // 刪除進貨本身
+    try{await delSub('purchases',p.id);}catch(e){console.warn(e);}
+  }
+  // 統一扣減庫存
+  let newInv=[...(S.data.inventory||[])];
+  Object.entries(invAdj).forEach(([pid,qty])=>{
+    const inv=newInv.find(i=>i.productId===pid)||{productId:pid,qty:0};
+    const newQty=Math.max(0,toN(inv.qty)-qty);
+    newInv=newInv.filter(i=>i.productId!==pid);
+    newInv.push({...inv,productId:pid,qty:newQty});
+  });
+  await saveMain({inventory:newInv});
+  toast(`✅ 已清除 ${toDelete.length} 筆重複進貨並調整庫存`);
+  closeMod();
+  render();
 };
 
 // ── Settings ──
