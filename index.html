@@ -693,6 +693,110 @@ function getCustomerBalance(custName){
   return deposits-usedDeposits;
 }
 
+// 🎯 取得客戶各筆儲值的明細與餘額（區分限定 vs 通用）
+// 回傳：[{depositId, amount, used, balance, scope, allowedServices, monthlyLimit, ...}]
+function getCustomerDepositDetails(custName){
+  if(!custName)return[];
+  const target=(custName||'').trim();
+  // 取該客戶所有儲值，按日期排序（先進先出 FIFO）
+  const deposits=(S.data.deposits||[])
+    .filter(d=>(d.customer||'').trim()===target)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  // 取所有扣款（用 depositRefId 精確匹配；沒有的話按 FIFO 從通用儲值扣）
+  const sales=(S.data.sales||[]).filter(s=>{
+    if(s.payMethod!=='儲值扣款')return false;
+    const owner=((s.depositOwner||s.customer)||'').trim();
+    return owner===target;
+  });
+  // 用 FIFO 分配扣款到儲值（限定的優先扣自己服務的、通用的隨便扣）
+  const result=deposits.map(d=>({
+    depositId:d.id,date:d.date,
+    amount:toN(d.amount),
+    actualReceived:toN(d.actualReceived),
+    used:0,
+    scope:d.scope||'general',
+    allowedServices:d.allowedServices||[],
+    monthlyLimit:toN(d.monthlyLimit)||0,
+    discountRate:toN(d.discountRate)||1,
+    note:d.note||''
+  }));
+  // 對每筆銷售扣款，按 FIFO 從相符的儲值扣
+  for(const s of sales){
+    let need=toN(s.depositFaceAmount||s.amount);
+    const itemName=(s.item||s.serviceName||'').trim();
+    // 優先扣「指定到此筆銷售」的儲值（如果有 depositRefId）
+    if(s.depositRefId){
+      const r=result.find(x=>x.depositId===s.depositRefId);
+      if(r){
+        const ded=Math.min(need,r.amount-r.used);
+        r.used+=ded;need-=ded;
+      }
+    }
+    if(need<=0)continue;
+    // 先扣限定服務的儲值（如果這筆銷售符合限定）
+    for(const r of result){
+      if(need<=0)break;
+      if(r.scope!=='restricted')continue;
+      const matchService=r.allowedServices.some(svc=>itemName.includes(svc)||svc.includes(itemName));
+      if(!matchService)continue;
+      const avail=r.amount-r.used;
+      if(avail<=0)continue;
+      const ded=Math.min(need,avail);
+      r.used+=ded;need-=ded;
+    }
+    // 剩下的從通用儲值扣
+    for(const r of result){
+      if(need<=0)break;
+      if(r.scope==='restricted')continue;
+      const avail=r.amount-r.used;
+      if(avail<=0)continue;
+      const ded=Math.min(need,avail);
+      r.used+=ded;need-=ded;
+    }
+  }
+  // 計算餘額
+  result.forEach(r=>{r.balance=r.amount-r.used;});
+  return result;
+}
+
+// 🎯 檢查指定服務名稱是否可用某筆儲值扣款
+// 回傳：{ok:boolean, availableBalance, message}
+function checkDepositUsableForService(custName,serviceName){
+  const details=getCustomerDepositDetails(custName);
+  if(details.length===0)return{ok:false,availableBalance:0,message:'此客戶沒有任何儲值'};
+  const svcName=(serviceName||'').trim();
+  // 計算可用於此服務的總餘額
+  let availableBalance=0;
+  const restrictedMatch=[];
+  const generalDeposits=[];
+  details.forEach(d=>{
+    if(d.balance<=0)return;
+    if(d.scope==='restricted'){
+      const match=d.allowedServices.some(svc=>svcName.includes(svc)||svc.includes(svcName));
+      if(match){restrictedMatch.push(d);availableBalance+=d.balance;}
+    }else{
+      generalDeposits.push(d);availableBalance+=d.balance;
+    }
+  });
+  // 完全沒有可用儲值
+  if(availableBalance<=0){
+    // 看是否有限定方案但服務不對
+    const hasRestrictedOnly=details.some(d=>d.balance>0&&d.scope==='restricted');
+    if(hasRestrictedOnly){
+      const allowedList=details
+        .filter(d=>d.balance>0&&d.scope==='restricted')
+        .flatMap(d=>d.allowedServices)
+        .filter((v,i,a)=>a.indexOf(v)===i);
+      return{
+        ok:false,availableBalance:0,
+        message:`⚠️ 此客戶的儲值是「限定方案」，只能用於：${allowedList.join('、')}\n但目前服務是「${svcName||'未指定'}」，不在允許範圍內`
+      };
+    }
+    return{ok:false,availableBalance:0,message:'⚠️ 此客戶儲值餘額為 0'};
+  }
+  return{ok:true,availableBalance,message:`可扣款 $${fmt(availableBalance)}（含 ${restrictedMatch.length} 筆限定+${generalDeposits.length} 筆通用）`};
+}
+
 // 取得客戶最後一筆儲值的折扣率
 // 例如 deposits = {amount:22000, actualReceived:19800} → discountRate = 0.9
 // 若無儲值或未填 actualReceived，回傳 1.0（不打折）
@@ -1994,19 +2098,24 @@ function pgCustomerDetail(c){
     <div class="card">
       <div class="card-hd"><span class="card-ttl">💳 儲值入帳紀錄</span></div>
       <div class="tw"><table>
-        <thead><tr><th>日期</th><th>面額</th><th>實收</th><th>折扣</th><th>付款方式</th><th>備註</th><th></th></tr></thead>
-        <tbody>${c.deposits.length===0?`<tr><td colspan="7"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
+        <thead><tr><th>日期</th><th>面額</th><th>實收</th><th>折扣</th><th>付款方式</th><th>類型</th><th>備註</th><th></th></tr></thead>
+        <tbody>${c.deposits.length===0?`<tr><td colspan="8"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
           c.deposits.map(d=>{
             const actual=toN(d.actualReceived||d.amount);
             const face=toN(d.amount);
             const rate=face>0?actual/face:1;
             const rateText=rate<1?`${(rate*10).toFixed(1)}折`:'-';
-            return`<tr>
+            const isRestricted=d.scope==='restricted';
+            const allowedList=(d.allowedServices||[]).join('、');
+            return`<tr style="${isRestricted?'background:var(--purL);':''}">
             <td>${d.date}${d.signed?`<br><button class="bdg" style="background:var(--purL);color:var(--pur);font-size:10px;border:none;cursor:pointer;margin-top:2px;" onclick="showDepositSign('${d.id}')">✍️ 已簽名</button>`:''}</td>
             <td class="ag">$${fmt(face)}</td>
             <td class="tm">$${fmt(actual)}</td>
             <td class="tm">${rateText}</td>
             <td><span class="bdg">${d.payMethod||''}</span></td>
+            <td>${isRestricted
+              ?`<span class="bdg" style="background:var(--pur);color:#fff;font-size:10px;" title="${allowedList}">🎯 限定</span><div class="tm" style="font-size:10px;margin-top:2px;color:var(--pur);">${allowedList}</div>${d.monthlyLimit>0?`<div class="tm" style="font-size:10px;">${d.monthlyLimit}次/月</div>`:''}`
+              :`<span class="bdg" style="background:var(--bg2);color:var(--mut);font-size:10px;">通用</span>`}</td>
             <td class="tm">${d.note||''}</td>
             <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editDeposit','${d.id}')" title="編輯">✏️</button><button class="bdel" onclick="delDeposit('${d.id}')" title="刪除">×</button></td>
           </tr>`;}).join('')}
@@ -6059,6 +6168,31 @@ function renderModal(){
       </div>
       <div class="fgrp"><label>實際收款方式</label><select id="m_dp3"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
       <div class="fgrp"><label>備註</label><input type="text" id="m_dp4" placeholder="如：A方案、客戶生日折扣"></div>
+
+      <!-- 🎯 指定服務儲值（限定方案）-->
+      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:12px;border-radius:8px;border-left:3px solid var(--pur);">
+        <label style="color:var(--pur);font-weight:700;">
+          <input type="checkbox" id="m_dp_restricted" onchange="toggleDepositScope()" style="margin-right:6px;">
+          🎯 限定特定服務使用（綁定方案）
+        </label>
+        <div class="tm" style="font-size:11px;margin-top:4px;color:var(--mut);">
+          勾選後此儲值金<b>只能用於指定的服務</b>，無法購買其他項目。<br>
+          適合：固定週期療程、特定方案（如「6 個月霧眉維護」、「12 堂熱蠟」）
+        </div>
+        <div id="m_dp_scope_panel" style="display:none;margin-top:10px;">
+          <label style="font-size:12px;color:var(--mut);">勾選允許使用此儲值金的服務（可多選）：</label>
+          <div id="m_dp_svc_list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-top:6px;max-height:200px;overflow-y:auto;padding:6px;background:#fff;border-radius:6px;border:1px solid var(--bdr);">
+            ${(S.data.services||[]).map(s=>`<label style="font-size:12px;padding:4px 8px;background:var(--bg2);border-radius:4px;cursor:pointer;">
+              <input type="checkbox" class="m_dp_svc_chk" value="${s.name}" style="margin-right:4px;">${s.name}
+            </label>`).join('')}
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <label style="font-size:12px;color:var(--mut);">每月可用次數限制（選填）：</label>
+            <input type="number" id="m_dp_monthly_limit" placeholder="不限" style="width:80px;padding:4px 8px;">
+            <span class="tm" style="font-size:11px;">次/月</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDeposit()">✓ 確認入帳</button></div>`;
     bindDepositCustomerToggle();
@@ -6091,6 +6225,31 @@ function renderModal(){
         </div>
       </div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_dp4" placeholder="選填"></div>
+
+      <!-- 🎯 指定服務儲值（限定方案）-->
+      <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:12px;border-radius:8px;border-left:3px solid var(--pur);">
+        <label style="color:var(--pur);font-weight:700;">
+          <input type="checkbox" id="m_dp_restricted" onchange="toggleDepositScope()" style="margin-right:6px;">
+          🎯 限定特定服務使用（綁定方案）
+        </label>
+        <div class="tm" style="font-size:11px;margin-top:4px;color:var(--mut);">
+          勾選後此儲值金<b>只能用於指定的服務</b>，無法購買其他項目。<br>
+          適合：固定週期療程、特定方案（如「6 個月霧眉維護」、「12 堂熱蠟」）
+        </div>
+        <div id="m_dp_scope_panel" style="display:none;margin-top:10px;">
+          <label style="font-size:12px;color:var(--mut);">勾選允許使用此儲值金的服務（可多選）：</label>
+          <div id="m_dp_svc_list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-top:6px;max-height:200px;overflow-y:auto;padding:6px;background:#fff;border-radius:6px;border:1px solid var(--bdr);">
+            ${(S.data.services||[]).map(s=>`<label style="font-size:12px;padding:4px 8px;background:var(--bg2);border-radius:4px;cursor:pointer;">
+              <input type="checkbox" class="m_dp_svc_chk" value="${s.name}" style="margin-right:4px;">${s.name}
+            </label>`).join('')}
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <label style="font-size:12px;color:var(--mut);">每月可用次數限制（選填）：</label>
+            <input type="number" id="m_dp_monthly_limit" placeholder="不限" style="width:80px;padding:4px 8px;">
+            <span class="tm" style="font-size:11px;">次/月</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveDepositFor('${custName}')">✓ 確認入帳</button></div>`;
   }
@@ -6500,6 +6659,20 @@ window.saveCartOrder=async(continueInput)=>{
       if(bal<depositFaceAmount){
         const ownerLabel=depositOwner===customer?'此客戶':`${depositOwner}（共用儲值）`;
         if(!confirm(`⚠️ ${ownerLabel} 儲值餘額不足！\n餘額 $${fmt(bal)}　扣款 $${fmt(depositFaceAmount)}\n\n是否仍要記錄？`))return;
+      }
+      // 🎯 限定服務檢查：檢查購物車內所有服務項目是否都能用此儲值扣款
+      const restrictedIssues=[];
+      let totalAvailable=0;
+      for(const it of items){
+        if(it.type!=='service')continue;// 產品不受限定服務限制
+        const check=checkDepositUsableForService(depositOwner,it.name);
+        if(!check.ok){
+          restrictedIssues.push(`• 「${it.name}」：${check.message}`);
+        }
+      }
+      if(restrictedIssues.length>0){
+        const msg=`⚠️ 此客戶的儲值有「服務限定」設定，以下服務無法用儲值扣款：\n\n${restrictedIssues.join('\n\n')}\n\n是否仍要強制扣款？\n（建議：取消後改用其他付款方式，或為這些服務另外建立通用儲值）`;
+        if(!confirm(msg))return;
       }
       realRevenueRate=getCustomerDiscountRate(depositOwner);
     }
@@ -9954,20 +10127,30 @@ window.saveDeposit=async()=>{
     const note=$('m_dp4')?.value||'';
     const d=new Date(date);
     const discountRate=actualReceived/amount;
-    // 儲值紀錄存「面額」+「實收」+「折扣率」
+    // 🎯 收集限定服務設定
+    const isRestricted=$('m_dp_restricted')?.checked||false;
+    const allowedServices=isRestricted?Array.from(document.querySelectorAll('.m_dp_svc_chk:checked')).map(cb=>cb.value):[];
+    const monthlyLimit=isRestricted?(parseInt($('m_dp_monthly_limit')?.value)||0):0;
+    if(isRestricted&&allowedServices.length===0){
+      alert('已勾選「限定特定服務」，請至少選一個允許使用的服務');return;
+    }
+    // 儲值紀錄存「面額」+「實收」+「折扣率」+ 限定服務
     await addSub('deposits',{
       date,customer,
       amount,                  // 面額（公司負債）
       actualReceived,          // 實收現金
       discountRate,            // 折扣率
       payMethod,note,
+      scope:isRestricted?'restricted':'general',
+      allowedServices,         // 限定的服務名稱陣列
+      monthlyLimit,            // 每月可用次數限制（0 = 不限）
       month:d.getMonth()+1,year:d.getFullYear()
     });
     // 現金流只記實收金額
     await addSub('cashFlow',{
       date,amount:actualReceived,
       cat:'儲值入帳',
-      note:`${customer} 儲值面額$${fmt(amount)} 實收$${fmt(actualReceived)} ${note?'('+note+')':''}`,
+      note:`${customer} 儲值面額$${fmt(amount)} 實收$${fmt(actualReceived)}${isRestricted?` 🎯限定：${allowedServices.join('/')}`:''}${note?' ('+note+')':''}`,
       month:d.getMonth()+1,year:d.getFullYear()
     });
     if(!(S.data.customers||[]).find(c=>c.name===customer)){
@@ -9975,12 +10158,19 @@ window.saveDeposit=async()=>{
       await saveMain({customers});
     }
     const bonus=amount-actualReceived;
-    toast(`✅ 儲值入帳　實收 $${fmt(actualReceived)}　面額 $${fmt(amount)}${bonus>0?`（贈 $${fmt(bonus)}）`:''}`);
+    toast(`✅ 儲值入帳　實收 $${fmt(actualReceived)}　面額 $${fmt(amount)}${bonus>0?`（贈 $${fmt(bonus)}）`:''}${isRestricted?` 🎯 限定 ${allowedServices.length} 個服務`:''}`);
     closeMod();
   }catch(err){
     console.error('saveDeposit 失敗:',err);
     alert('儲值失敗：'+(err.message||err));
   }
+};
+
+// 切換限定服務面板
+window.toggleDepositScope=()=>{
+  const cb=$('m_dp_restricted');
+  const panel=$('m_dp_scope_panel');
+  if(cb&&panel)panel.style.display=cb.checked?'block':'none';
 };
 
 window.saveDepositFor=async(customer)=>{
@@ -9992,11 +10182,19 @@ window.saveDepositFor=async(customer)=>{
     if(actualReceived<=0){alert('請填實收金額');return;}
     const payMethod=$('m_dp3')?.value||'轉帳';
     const note=$('m_dp4')?.value||'';
+    // 🎯 收集限定服務設定
+    const isRestricted=$('m_dp_restricted')?.checked||false;
+    const allowedServices=isRestricted?Array.from(document.querySelectorAll('.m_dp_svc_chk:checked')).map(cb=>cb.value):[];
+    const monthlyLimit=isRestricted?(parseInt($('m_dp_monthly_limit')?.value)||0):0;
+    if(isRestricted&&allowedServices.length===0){
+      alert('已勾選「限定特定服務」，請至少選一個允許使用的服務');return;
+    }
+    const scope=isRestricted?'restricted':'general';
     // 判斷是否需要簽名（依儲值門檻）
     const threshold=S.data.settings?.depositSignThreshold??DEFAULT_DEPOSIT_SIGN_THRESHOLD;
     if(actualReceived>=threshold){
       // 跳客戶儲值簽名模式（不直接寫入，存進 S.depositPending）
-      S.depositPending={customer,date,amount,actualReceived,payMethod,note};
+      S.depositPending={customer,date,amount,actualReceived,payMethod,note,scope,allowedServices,monthlyLimit};
       closeMod();
       // 切到服務確認頁的儲值簽名模式
       S.page='treatment';
@@ -10005,7 +10203,7 @@ window.saveDepositFor=async(customer)=>{
       setTimeout(initSignatureCanvasInline,100);
     }else{
       // 金額未達門檻，直接寫入
-      await finalizeDeposit({customer,date,amount,actualReceived,payMethod,note,signed:false});
+      await finalizeDeposit({customer,date,amount,actualReceived,payMethod,note,scope,allowedServices,monthlyLimit,signed:false});
     }
   }catch(err){
     console.error('saveDepositFor 失敗:',err);
@@ -10334,7 +10532,7 @@ window.finalizeDepositSign=async()=>{
 };
 
 window.finalizeDeposit=async(data)=>{
-  const {customer,date,amount,actualReceived,payMethod,note,signature,termsSnapshot,signed}=data;
+  const {customer,date,amount,actualReceived,payMethod,note,signature,termsSnapshot,signed,scope,allowedServices,monthlyLimit}=data;
   const d=new Date(date);
   const discountRate=actualReceived/amount;
   await addSub('deposits',{
@@ -10344,14 +10542,19 @@ window.finalizeDeposit=async(data)=>{
     signedAt:signature?nowLocal():null,
     termsSnapshot:termsSnapshot||null,
     signed:signed===true,
+    // 🎯 限定服務相關
+    scope:scope||'general',
+    allowedServices:allowedServices||[],
+    monthlyLimit:monthlyLimit||0,
     month:d.getMonth()+1,year:d.getFullYear()
   });
+  const restrictedNote=(scope==='restricted'&&allowedServices?.length)?` 🎯限定：${allowedServices.join('/')}`:'';
   await addSub('cashFlow',{
     date,amount:actualReceived,cat:'儲值入帳',
-    note:`${customer} 儲值面額$${fmt(amount)} 實收$${fmt(actualReceived)} ${note?'('+note+')':''}`,
+    note:`${customer} 儲值面額$${fmt(amount)} 實收$${fmt(actualReceived)}${restrictedNote}${note?' ('+note+')':''}`,
     month:d.getMonth()+1,year:d.getFullYear()
   });
-  toast(`✅ 已為 ${customer} 儲值面額 $${fmt(amount)}（實收 $${fmt(actualReceived)}）${signed?' ✍️ 已簽名':''}`);
+  toast(`✅ 已為 ${customer} 儲值面額 $${fmt(amount)}（實收 $${fmt(actualReceived)}）${signed?' ✍️ 已簽名':''}${restrictedNote}`);
 };
 
 // 顯示儲值簽名與條款
