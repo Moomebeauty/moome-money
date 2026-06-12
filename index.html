@@ -553,6 +553,7 @@ function appHTML(){
       <span class="tb-ttl">${curPage.ico} ${curPage.lbl}</span>
       <div class="tb-right">
         <div id="sync-dot" class="sync-dot"></div>
+        <button class="btn-out" onclick="openSearch()" style="background:linear-gradient(135deg,var(--pur),var(--blu));color:#fff;border:none;">🔍 搜尋</button>
         <button class="btn-out" onclick="exportXLSX()">⬇ 匯出</button>
         <button class="btn-out" onclick="doOut()">登出</button>
       </div>
@@ -4665,6 +4666,25 @@ function renderModal(){
   // 自訂 HTML 報告類型（給 depositHealthReport 等）
   if(m.html)return m.html;
 
+  // 🔍 全站搜尋
+  if(m.t==='globalSearch'){
+    const q=(S.searchQuery||'').trim().toLowerCase();
+    const results=q?globalSearch(q):null;
+    c=`<div class="mttl">🔍 全站搜尋</div>
+    <div style="margin-bottom:14px;">
+      <input type="text" id="m_search_input" placeholder="輸入關鍵字（客戶名、產品、金額、備註...）" value="${S.searchQuery||''}"
+        style="width:100%;padding:12px 16px;font-size:15px;border:2px solid var(--pur);border-radius:8px;outline:none;"
+        oninput="doSearch(this.value)" autofocus>
+      <div class="tm" style="font-size:11px;margin-top:6px;color:var(--mut);">
+        💡 支援：客戶名、產品名、服務項目、金額（如 "2200"）、備註關鍵字、供應商、老師名稱
+      </div>
+    </div>
+    <div id="m_search_results" style="max-height:55vh;overflow-y:auto;">
+      ${results===null?`<div class="empty" style="padding:30px;"><div class="empty-ico">🔍</div><p>輸入關鍵字開始搜尋</p></div>`:renderSearchResults(results,q)}
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+  }
+
   if(m.t==='addSale'){c=`<div class="mttl">💰 新增收入</div>
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_s0" value="${today()}"></div>
@@ -6487,6 +6507,247 @@ window.openM=(t,x)=>{
   }
 };
 window.closeMod=()=>{S.modal=null;const bg=$('modal-bg');if(bg)bg.className='modal-bg';};
+
+// ─── 🔍 全站搜尋系統 ───
+window.openSearch=()=>{
+  S.searchQuery='';
+  S.modal={t:'globalSearch',lg:true};
+  render();
+  setTimeout(()=>{const inp=$('m_search_input');if(inp)inp.focus();},100);
+};
+
+window.doSearch=(q)=>{
+  S.searchQuery=q;
+  const wrap=$('m_search_results');
+  if(!wrap)return;
+  const query=(q||'').trim().toLowerCase();
+  if(!query){
+    wrap.innerHTML=`<div class="empty" style="padding:30px;"><div class="empty-ico">🔍</div><p>輸入關鍵字開始搜尋</p></div>`;
+    return;
+  }
+  const results=globalSearch(query);
+  wrap.innerHTML=renderSearchResults(results,query);
+};
+
+// 全站搜尋邏輯
+function globalSearch(q){
+  const lcQ=q.toLowerCase();
+  const matchAmount=parseFloat(q)>0?parseFloat(q):null;// 如果是純數字，也比對金額
+  const matchText=(...fields)=>fields.some(f=>(f||'').toString().toLowerCase().includes(lcQ));
+  const matchAmt=(amt)=>matchAmount!==null&&Math.abs(toN(amt)-matchAmount)<0.01;
+
+  // 1. 搜尋銷售/收入
+  const salesResult=(S.data.sales||[]).filter(s=>{
+    return matchText(s.item,s.subNote,s.customer,s.staff,s.payMethod)||matchAmt(s.amount);
+  }).slice(0,30);
+
+  // 2. 搜尋支出
+  const expResult=(S.data.expenses||[]).filter(e=>{
+    return matchText(e.category,e.note,e.payMethod)||matchAmt(e.amount);
+  }).slice(0,30);
+
+  // 3. 搜尋進貨
+  const purResult=(S.data.purchases||[]).filter(p=>{
+    return matchText(p.productName,p.category,p.supplier,p.note)||matchAmt(p.totalCost)||matchAmt(p.unitCost);
+  }).slice(0,30);
+
+  // 4. 搜尋儲值
+  const depResult=(S.data.deposits||[]).filter(d=>{
+    return matchText(d.customer,d.note,d.payMethod)||matchAmt(d.amount)||matchAmt(d.actualReceived);
+  }).slice(0,30);
+
+  // 5. 搜尋客戶
+  const custResult=(S.data.customers||[]).filter(c=>{
+    return matchText(c.name,c.phone,c.note,c.birthday,c.source);
+  }).slice(0,30);
+
+  // 6. 搜尋產品
+  const prodResult=(S.data.products||[]).filter(p=>{
+    return matchText(p.name,p.category,p.supplier,p.series)||matchAmt(p.price)||matchAmt(p.cost);
+  }).slice(0,30);
+
+  // 7. 搜尋出貨耗用
+  const stockResult=(S.data.stockOuts||[]).filter(s=>{
+    return matchText(s.productName,s.customer,s.note,s.type)||matchAmt(s.totalCost);
+  }).slice(0,30);
+
+  // 8. 搜尋現金流
+  const cfResult=(S.data.cashFlow||[]).filter(f=>{
+    return matchText(f.cat,f.note)||matchAmt(f.amount)||matchAmt(Math.abs(f.amount));
+  }).slice(0,30);
+
+  return{
+    sales:salesResult,
+    expenses:expResult,
+    purchases:purResult,
+    deposits:depResult,
+    customers:custResult,
+    products:prodResult,
+    stockOuts:stockResult,
+    cashFlow:cfResult,
+    totalCount:salesResult.length+expResult.length+purResult.length+depResult.length+custResult.length+prodResult.length+stockResult.length+cfResult.length
+  };
+}
+
+// 渲染搜尋結果
+function renderSearchResults(r,q){
+  if(r.totalCount===0){
+    return`<div class="empty" style="padding:30px;">
+      <div class="empty-ico">😢</div>
+      <p>找不到「${q}」相關紀錄</p>
+      <div class="tm" style="font-size:12px;margin-top:6px;">試試其他關鍵字，或減少字數</div>
+    </div>`;
+  }
+  // 高亮關鍵字
+  const hl=(text)=>{
+    if(!text)return'';
+    const t=text.toString();
+    const idx=t.toLowerCase().indexOf(q.toLowerCase());
+    if(idx<0)return t;
+    return t.substring(0,idx)+`<mark style="background:var(--gold);color:#fff;padding:0 2px;border-radius:2px;">${t.substring(idx,idx+q.length)}</mark>`+t.substring(idx+q.length);
+  };
+
+  let html=`<div style="margin-bottom:10px;padding:8px 12px;background:var(--bg2);border-radius:6px;font-size:13px;color:var(--mut);">
+    🎯 共找到 <b style="color:var(--pur);">${r.totalCount}</b> 筆「${q}」相關紀錄
+  </div>`;
+
+  // 銷售區塊
+  if(r.sales.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--rose);margin-bottom:6px;font-size:14px;">
+        💰 銷售/收入（${r.sales.length} 筆）
+      </div>
+      ${r.sales.map(s=>`<div style="padding:8px 12px;background:#fff;border-left:3px solid var(--rose);border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div><b>${hl(s.item||'(未填項目)')}</b> ${s.subNote?`<span class="tm" style="font-size:11px;">${hl(s.subNote)}</span>`:''}</div>
+          <div class="tm" style="font-size:11px;">${s.date||''} ${s.customer?`👤 ${hl(s.customer)}`:''} ${s.staff?`👩‍💼 ${hl(s.staff)}`:''} ${s.payMethod?`💳 ${hl(s.payMethod)}`:''}</div>
+        </div>
+        <div style="font-weight:700;color:var(--rose);">$${fmt(s.amount)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // 支出區塊
+  if(r.expenses.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--red);margin-bottom:6px;font-size:14px;">
+        💸 支出（${r.expenses.length} 筆）
+      </div>
+      ${r.expenses.map(e=>`<div style="padding:8px 12px;background:#fff;border-left:3px solid var(--red);border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div><b>${hl(e.category||'')}</b> ${e.note?`<span class="tm" style="font-size:12px;">${hl(e.note)}</span>`:''}</div>
+          <div class="tm" style="font-size:11px;">${e.date||''} ${e.payMethod?`💳 ${hl(e.payMethod)}`:''}</div>
+        </div>
+        <div style="font-weight:700;color:var(--red);">-$${fmt(e.amount)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // 進貨區塊
+  if(r.purchases.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--gold);margin-bottom:6px;font-size:14px;">
+        📦 進貨（${r.purchases.length} 筆）
+      </div>
+      ${r.purchases.map(p=>`<div style="padding:8px 12px;background:#fff;border-left:3px solid var(--gold);border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div><b>${hl(p.productName||'')}</b> <span class="bdg" style="font-size:10px;">${p.category||''}</span></div>
+          <div class="tm" style="font-size:11px;">${p.date||''} 數量 ${p.qty||0} × $${fmt(p.unitCost)} ${p.supplier?`🏪 ${hl(p.supplier)}`:''} ${(p.paid||p.paidToExpense)?'✅已付款':'⏳未付款'}</div>
+        </div>
+        <div style="font-weight:700;color:var(--gold);">$${fmt(p.totalCost)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // 儲值區塊
+  if(r.deposits.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--pur);margin-bottom:6px;font-size:14px;">
+        💳 儲值（${r.deposits.length} 筆）
+      </div>
+      ${r.deposits.map(d=>`<div style="padding:8px 12px;background:#fff;border-left:3px solid var(--pur);border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div><b>👤 ${hl(d.customer||'')}</b> ${d.scope==='restricted'?'<span class="bdg" style="background:var(--pur);color:#fff;font-size:10px;">🎯 限定</span>':''}</div>
+          <div class="tm" style="font-size:11px;">${d.date||''} 面額 $${fmt(d.amount)} 實收 $${fmt(d.actualReceived||d.amount)} ${d.note?`📝 ${hl(d.note)}`:''}</div>
+        </div>
+        <div style="font-weight:700;color:var(--pur);">$${fmt(d.amount)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // 客戶區塊
+  if(r.customers.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--blu);margin-bottom:6px;font-size:14px;">
+        👤 客戶（${r.customers.length} 筆）
+      </div>
+      ${r.customers.map(c=>{
+        const bal=getCustomerBalance?getCustomerBalance(c.name):0;
+        return`<div style="padding:8px 12px;background:#fff;border-left:3px solid var(--blu);border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;" onclick="closeMod();setP('customers');setTimeout(()=>{S.selectedCustomer='${c.name.replace(/'/g,'')}';render();},100);">
+          <div style="flex:1;min-width:200px;">
+            <div><b>${hl(c.name)}</b> ${c.phone?`📞 ${hl(c.phone)}`:''}</div>
+            <div class="tm" style="font-size:11px;">${c.birthday?`🎂 ${c.birthday}`:''} ${c.source?`📍 ${hl(c.source)}`:''} ${c.note?`📝 ${hl(c.note)}`:''}</div>
+          </div>
+          <div style="font-weight:700;color:${bal>0?'var(--gold)':'var(--mut)'};">餘額 $${fmt(bal)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // 產品區塊
+  if(r.products.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:var(--grn);margin-bottom:6px;font-size:14px;">
+        🧴 產品（${r.products.length} 筆）
+      </div>
+      ${r.products.map(p=>{
+        const inv=getInv?getInv(p.id):{qty:0};
+        return`<div style="padding:8px 12px;background:#fff;border-left:3px solid var(--grn);border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <div><b>${hl(p.name)}</b> <span class="bdg" style="font-size:10px;">${p.category||''}</span></div>
+            <div class="tm" style="font-size:11px;">${p.supplier?`🏪 ${hl(p.supplier)}`:''} ${p.series?`系列：${hl(p.series)}`:''} 售價 $${fmt(p.price)} 庫存 ${inv.qty||0}</div>
+          </div>
+          <div style="font-weight:700;color:var(--grn);">$${fmt(p.price)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // 出貨耗用區塊
+  if(r.stockOuts.length>0){
+    const typeLabels={sale:'客戶購買',self:'工作室自用',damage:'損耗報廢',gift:'贈送樣品',check:'盤點'};
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:#0891b2;margin-bottom:6px;font-size:14px;">
+        📤 出貨耗用（${r.stockOuts.length} 筆）
+      </div>
+      ${r.stockOuts.map(s=>`<div style="padding:8px 12px;background:#fff;border-left:3px solid #0891b2;border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div><b>${hl(s.productName||'')}</b> <span class="bdg" style="font-size:10px;">${typeLabels[s.type]||s.type||''}</span></div>
+          <div class="tm" style="font-size:11px;">${s.date||''} 數量 ${s.qty||0} ${s.customer?`👤 ${hl(s.customer)}`:''} ${s.note?`📝 ${hl(s.note)}`:''}</div>
+        </div>
+        <div style="font-weight:700;color:#0891b2;">$${fmt(s.totalCost)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // 現金流區塊
+  if(r.cashFlow.length>0){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-weight:700;color:#92400e;margin-bottom:6px;font-size:14px;">
+        🏦 現金流（${r.cashFlow.length} 筆）
+      </div>
+      ${r.cashFlow.map(f=>`<div style="padding:8px 12px;background:#fff;border-left:3px solid #92400e;border-radius:4px;margin-bottom:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div><b>${hl(f.cat||'')}</b></div>
+          <div class="tm" style="font-size:11px;">${f.date||''} ${f.note?`📝 ${hl(f.note)}`:''}</div>
+        </div>
+        <div style="font-weight:700;color:${toN(f.amount)>=0?'var(--grn)':'var(--red)'};">${toN(f.amount)>=0?'+':''}$${fmt(f.amount)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  return html;
+}
 window.setP=p=>{
   // 離開銷售開單頁時清空購物車
   if(S.page==='order'&&p!=='order')S.cart=[];
