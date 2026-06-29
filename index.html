@@ -217,30 +217,50 @@ const SUPPLIER_PRESETS=['Ten','EXU','AN','泌美麗','淘寶','蝦皮','其他�
 
 // 儲值預設政策（可在基本設定修改）
 const DEFAULT_DEPOSIT_SIGN_THRESHOLD=1;  // 任何儲值都簽（門檻=1元，等同於每次都簽）
-const DEFAULT_DEPOSIT_TERMS=`【儲值方案說明】
-本人同意以實收金額 NT$ \${actualReceived} 元，購買可使用金額 NT$ \${amount} 元之服務儲值方案，並了解以下事項：
+const DEFAULT_DEPOSIT_TERMS=`【沐蜜美容工作室・服務儲值方案契約書】
+
+═══════════════════════════════════════
+【店家（乙方）資訊】
+店家名稱：沐蜜美容工作室
+負責人：＿＿＿＿＿＿　統一編號：＿＿＿＿＿＿
+營業地址：＿＿＿＿＿＿＿＿＿＿＿＿
+聯絡電話：＿＿＿＿＿＿　客訴專線：1950（消費者服務專線）
+
+═══════════════════════════════════════
+【儲值方案說明】
+本人（甲方）同意以實收金額 NT$ \${actualReceived} 元，購買可使用金額 NT$ \${amount} 元之服務儲值方案，並已詳閱、了解並同意以下全部條款：
 
 ═══════════════════════════════════════
 【方案結構】
 • 客人實付金額：NT$ \${actualReceived} 元（此為退費計算之基礎金額）
 • 可使用金額（含優惠）：NT$ \${amount} 元
 • 優惠／贈送金額：NT$ \${bonus} 元
-• 折扣率：\${discountRate}%（本方案折扣率不高於20%，符合主管機關規定）
+• 折扣率：\${discountRate}%（本方案折扣率不高於 20%，符合主管機關規定）
+
+═══════════════════════════════════════
+【本方案適用服務及計價方式】
+1. 本儲值金適用於乙方提供之下列服務類別：
+   • 美容做臉類（各式臉部保養、課程服務）
+   • 熱蠟除毛類（各部位除毛服務）
+   • 美體按摩類（各式身體按摩服務）
+2. 每次使用時，依「乙方公告之服務項目價目表」所載各服務之單次原價，自儲值餘額中扣除。
+3. 完整服務項目及單次原價，詳如簽約時乙方提供之價目表（為本契約附件，雙方確認後生效）。
+4. 服務項目及價格如有調整，乙方將於調整前公告；惟甲方已儲值之金額，仍依「儲值當時之價目表」計價，不受日後漲價影響。
 
 ═══════════════════════════════════════
 【優惠方式或贈品】
 本優惠為「附條件式贈與」（民法第408條、第412條）：
-1. 甲方（客戶）已了解乙方（工作室）所給予之優惠，為附解除條件之贈與，甲方須於期限內將全部金額使用完畢，始得享有之。
-2. <usage_period>。
-3. 逾期或提前解約：自動取消乙方所給的優惠，剩餘金額按客人實付比例計算。
+1. 甲方已了解乙方所給予之優惠，為附解除條件之贈與。
+2. 本儲值金未設使用期限，甲方得持續使用至餘額用罄為止。
+3. 提前解約時：自動取消乙方所給之優惠，剩餘金額按客人實付比例計算退還。
 
 ═══════════════════════════════════════
 【七日鑑賞期】
 依《消費者保護法》第19條，自儲值日起算七日內（含例假日），如未使用任何服務，本人得書面通知工作室解除契約，工作室應於接到通知日起15日內退還全部金額。
 
 ═══════════════════════════════════════
-【提前解約退費計算方式】（單堂原價計算）
-1. 已使用部分：依「服務項目單次原價列表」計算（請參閱附件或備註欄位）。
+【提前解約退費計算方式】（單次原價計算）
+1. 已使用部分：依「服務項目單次原價表」計算（詳如本契約附件之價目表）。
 2. 剩餘部分：按客人實付金額比例換算後，扣除10%解約手續費（消保法上限）退還。
 3. 退費計算公式：
    • 已使用金額 ＝ 各服務次數 × 單次原價之總和
@@ -250,19 +270,17 @@ const DEFAULT_DEPOSIT_TERMS=`【儲值方案說明】
    • 應退還客人 ＝ 剩餘實付對應金額 － 解約手續費
 
 ═══════════════════════════════════════
-【優惠適用範圍】
-本儲值方案之優惠適用於下列服務，均得以儲值金依各服務「單次原價」折抵使用：
-• 美容做臉
-• 熱蠟除毛
-• 美體按摩
-各項服務每次使用時，依「服務項目單次原價表」扣除對應金額。
-
-═══════════════════════════════════════
 【使用方式】
-1. 本儲值金限本人使用，<transferable>。
-2. 每次使用時將從餘額中扣除「該服務之單次原價」，並於儲值卡使用紀錄表記載並由本人簽名確認。
+1. 本儲值金 <transferable>。
+2. 每次使用時將從餘額中扣除「該服務之單次原價」，並於儲值卡使用紀錄表記載，由本人簽名確認。
 3. 本人有權隨時查詢餘額及使用紀錄。
 4. 本人了解每次簽名確認後，即不得異議該次使用之內容與金額。
+
+═══════════════════════════════════════
+【健康狀況告知】
+1. 乙方已於簽約前詢問甲方之身體健康狀況，包含過敏體質、肌膚敏感、疾病治療、懷孕等情形。
+2. 甲方應據實告知個人健康狀況；如因甲方未誠實告知致生損害，乙方不負相關責任。
+3. 接受服務期間，任一方如發現甲方身體有異狀，應即告知對方，乙方並應中止服務、採取適當處理措施。
 
 ═══════════════════════════════════════
 【特殊情境退費】
@@ -272,11 +290,15 @@ const DEFAULT_DEPOSIT_TERMS=`【儲值方案說明】
 
 ═══════════════════════════════════════
 【個人資料】
-本人同意工作室依《個人資料保護法》於提供服務之必要範圍內，蒐集、處理及利用本人個人資料，保存期間為最後一次服務後 2 年。
+本人同意工作室依《個人資料保護法》於提供服務之必要範圍內，蒐集、處理及利用本人個人資料，保存期間為最後一次服務後 2 年。本人有權隨時查閱、更正或要求刪除個人資料，乙方承諾不轉售予第三方。
 
 ═══════════════════════════════════════
 【其他】
-本契約內容如有變更，將事先告知客戶並取得同意。客戶完成簽名後，視為已詳閱、了解並同意上述全部條款。`;
+本契約內容如有變更，將事先告知客戶並取得同意。客戶完成簽名後，視為已詳閱、了解並同意上述全部條款。本契約一式兩份，甲乙雙方各執一份為憑。
+
+───────────────────────────────────────
+甲方（客戶）簽名：＿＿＿＿＿＿　日期：＿＿＿＿＿＿
+乙方（店家）簽名／用印：＿＿＿＿＿＿　日期：＿＿＿＿＿＿\`;
 
 const COURSE_CATS=['美容課程','彩妝課程','技術課程','其他課程'];
 
@@ -296,7 +318,7 @@ const DEFAULT_SERVICE_PRICES=[
 const DEFAULT_DEPOSIT_PLANS=[
   {id:'新入門',name:'入門（做臉專屬）',actualReceived:10000,amount:11000,desc:'儲值 10,000 享 11,000 服務（送 1,000・約9折）'},
   {id:'新主力',name:'主力（做臉專屬）',actualReceived:20000,amount:23000,desc:'儲值 20,000 享 23,000 服務（送 3,000・約87折）'},
-  {id:'新尊榮',name:'尊榮（做臉專屬）',actualReceived:38000,amount:46000,desc:'儲值 38,000 享 46,000 服務（送 8,000・約83折）'},
+  {id:'新尊榮',name:'尊榮（做臉專屬）',actualReceived:38000,amount:45000,desc:'儲值 38,000 享 45,000 服務（送 7,000・約84折）'},
   {id:'A',name:'A方案（舊）',actualReceived:19800,amount:22000,desc:'儲值 19,800 享 22,000 服務（10% 優惠）'},
   {id:'B',name:'B方案（舊）',actualReceived:36800,amount:46000,desc:'儲值 36,800 享 46,000 服務（20% 優惠）'},
 ];
@@ -6630,7 +6652,7 @@ function renderModal(){
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
           <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(10000,11000)">入門：實收 $10,000 / 面額 $11,000（送 $1,000・約9折）</button>
           <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(20000,23000)">主力：實收 $20,000 / 面額 $23,000（送 $3,000・約87折）</button>
-          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(38000,46000)">尊榮：實收 $38,000 / 面額 $46,000（送 $8,000・約83折）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(38000,45000)">尊榮：實收 $38,000 / 面額 $45,000（送 $7,000・約84折）</button>
         </div>
         <div style="font-size:12px;color:var(--mut);font-weight:700;margin-top:10px;">📋 舊方案（保留）</div>
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
@@ -6695,7 +6717,7 @@ function renderModal(){
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
           <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(10000,11000)">入門：$10,000 / $11,000（送$1,000）</button>
           <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(20000,23000)">主力：$20,000 / $23,000（送$3,000）</button>
-          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(38000,46000)">尊榮：$38,000 / $46,000（送$8,000）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(38000,45000)">尊榮：$38,000 / $45,000（送$7,000）</button>
         </div>
         <div style="font-size:12px;color:var(--mut);font-weight:700;margin-top:10px;">📋 舊方案（保留）</div>
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
@@ -6755,7 +6777,7 @@ function renderModal(){
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
           <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(10000,11000)">入門：$10,000 / $11,000（送$1,000）</button>
           <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(20000,23000)">主力：$20,000 / $23,000（送$3,000）</button>
-          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(38000,46000)">尊榮：$38,000 / $46,000（送$8,000）</button>
+          <button type="button" class="btn btn-s btn-sm" onclick="setDepositPlan(38000,45000)">尊榮：$38,000 / $45,000（送$7,000）</button>
         </div>
         <div style="font-size:12px;color:var(--mut);font-weight:700;margin-top:10px;">📋 舊方案（保留）</div>
         <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
@@ -11493,10 +11515,12 @@ window.finalizeDepositSign=async()=>{
     const termsTemplate=S.data.settings?.depositTerms||DEFAULT_DEPOSIT_TERMS;
     const usagePeriodStr=S.data.settings?.depositUsagePeriod||'無使用期限';
     const transferableStr=S.data.settings?.depositTransferable===true?'得轉讓予他人使用':'限本人使用，不可轉讓予他人';
+    const discountRateVal=dp.amount?Math.round(dp.actualReceived/dp.amount*100):0;
     const termsSnapshot=termsTemplate
       .replace(/\$\{actualReceived\}/g,fmt(dp.actualReceived||0))
       .replace(/\$\{amount\}/g,fmt(dp.amount||0))
       .replace(/\$\{bonus\}/g,fmt((dp.amount||0)-(dp.actualReceived||0)))
+      .replace(/\$\{discountRate\}/g,(100-discountRateVal).toString())
       .replace(/<usage_period>/g,usagePeriodStr)
       .replace(/<transferable>/g,transferableStr);
     await finalizeDeposit({
@@ -11505,12 +11529,153 @@ window.finalizeDepositSign=async()=>{
       termsSnapshot,
       signed:true
     });
+    // 把這次契約資料暫存，供「下載/複製」用
+    S.lastDepositContract={
+      customer:dp.customer,
+      date:dp.date,
+      actualReceived:dp.actualReceived,
+      amount:dp.amount,
+      termsSnapshot,
+      signature:dataURL,
+      signedAt:nowLocal()
+    };
     S.treatment=null;
     S.depositPending=null;
-    render();
+    // 顯示完成畫面（含下載/複製契約按鈕）
+    showDepositContractDone();
   }catch(err){
     console.error('finalizeDepositSign 失敗:',err);
     alert('失敗：'+(err.message||err));
+  }
+};
+
+// 儲值完成後的畫面：提供「下載契約圖」「複製契約」給客人留存
+window.showDepositContractDone=()=>{
+  const c=S.lastDepositContract;
+  if(!c){render();return;}
+  const html=`<div class="mttl">✅ 儲值完成</div>
+    <div style="text-align:center;padding:10px 0 16px;">
+      <div style="font-size:50px;">🌸</div>
+      <div style="font-size:17px;font-weight:700;color:var(--grn);margin-top:6px;">${c.customer} 的儲值已完成並簽名</div>
+      <div class="tm" style="font-size:13px;margin-top:4px;">實收 $${fmt(c.actualReceived)}　面額 $${fmt(c.amount)}</div>
+    </div>
+    <div style="background:var(--bluL);padding:14px;border-radius:10px;border-left:3px solid var(--blu);margin-bottom:14px;font-size:13px;color:var(--blu);">
+      📋 <b>把契約給客人留存一份</b>（法規要求雙方各執一份）：<br>
+      選下面任一方式，傳給客人即可。
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-p" style="padding:14px;font-size:15px;" onclick="downloadDepositContractImage()">🖼️ 下載契約圖（含簽名）→ 再傳 LINE 給客人</button>
+      <button class="btn btn-y" style="padding:14px;font-size:15px;" onclick="copyDepositContractText()">📋 複製契約全文 → 貼到 LINE 傳給客人</button>
+    </div>
+    <div class="tm" style="font-size:11px;margin-top:10px;color:var(--mut);text-align:center;line-height:1.6;">
+      💡 「下載契約圖」會把整份契約+客人簽名存成一張圖片到你的裝置，<br>你再從 LINE 相簿傳給客人，客人就有完整的簽名契約留存。
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeDepositDone()">完成，關閉</button></div>`;
+  S.modal={t:'depositContractDone',html};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+  else{render();}
+};
+
+window.closeDepositDone=()=>{
+  S.modal=null;
+  S.lastDepositContract=null;
+  render();
+};
+
+// 複製契約全文（含方案資訊）到剪貼簿
+window.copyDepositContractText=()=>{
+  const c=S.lastDepositContract;
+  if(!c)return;
+  const fullText=`${c.termsSnapshot}\n\n───────────────────────────────────────\n客戶：${c.customer}\n簽署時間：${c.signedAt}\n（本契約已由客戶電子簽名確認）`;
+  try{
+    navigator.clipboard.writeText(fullText);
+    toast('✅ 契約全文已複製，請貼到 LINE 傳給客人');
+  }catch(e){
+    // 後備方案
+    const ta=document.createElement('textarea');
+    ta.value=fullText;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');toast('✅ 契約全文已複製');}catch(e2){alert('複製失敗，請手動複製');}
+    document.body.removeChild(ta);
+  }
+};
+
+// 把契約+簽名畫成一張圖片下載
+window.downloadDepositContractImage=()=>{
+  const c=S.lastDepositContract;
+  if(!c)return;
+  try{
+    const lines=c.termsSnapshot.split('\n');
+    // 計算畫布大小
+    const lineHeight=22;
+    const padding=40;
+    const headerH=70;
+    const sigH=140;
+    const width=720;
+    const textH=lines.length*lineHeight;
+    const height=headerH+textH+sigH+padding*2;
+    const canvas=document.createElement('canvas');
+    const scale=2; // 高解析度
+    canvas.width=width*scale;
+    canvas.height=height*scale;
+    const ctx=canvas.getContext('2d');
+    ctx.scale(scale,scale);
+    // 背景
+    ctx.fillStyle='#fffaf3';
+    ctx.fillRect(0,0,width,height);
+    // 標題列
+    ctx.fillStyle='#b5838d';
+    ctx.fillRect(0,0,width,headerH);
+    ctx.fillStyle='#fff';
+    ctx.font='bold 24px "Noto Serif TC",serif';
+    ctx.textAlign='center';
+    ctx.fillText('沐蜜美容工作室・儲值契約',width/2,44);
+    // 內文
+    ctx.fillStyle='#333';
+    ctx.font='14px sans-serif';
+    ctx.textAlign='left';
+    let y=headerH+padding;
+    lines.forEach(line=>{
+      // 過長的行自動截斷（簡單處理）
+      ctx.fillText(line.substring(0,46),padding,y);
+      y+=lineHeight;
+    });
+    // 簽名區
+    y+=10;
+    ctx.strokeStyle='#d99a57';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(padding,y);ctx.lineTo(width-padding,y);ctx.stroke();
+    y+=24;
+    ctx.fillStyle='#666';
+    ctx.font='13px sans-serif';
+    ctx.fillText(`客戶：${c.customer}　簽署時間：${c.signedAt}`,padding,y);
+    y+=10;
+    // 畫簽名圖
+    const sigImg=new Image();
+    sigImg.onload=()=>{
+      ctx.drawImage(sigImg,padding,y,200,70);
+      ctx.fillStyle='#999';
+      ctx.font='12px sans-serif';
+      ctx.fillText('（客戶簽名）',padding+210,y+40);
+      // 觸發下載
+      const link=document.createElement('a');
+      link.download=`沐蜜儲值契約_${c.customer}_${c.date}.png`;
+      link.href=canvas.toDataURL('image/png');
+      link.click();
+      toast('✅ 契約圖已下載，請從相簿傳 LINE 給客人');
+    };
+    sigImg.onerror=()=>{
+      // 簽名載入失敗也先下載文字部分
+      const link=document.createElement('a');
+      link.download=`沐蜜儲值契約_${c.customer}_${c.date}.png`;
+      link.href=canvas.toDataURL('image/png');
+      link.click();
+      toast('✅ 契約圖已下載');
+    };
+    sigImg.src=c.signature;
+  }catch(err){
+    console.error('產生契約圖失敗',err);
+    alert('產生契約圖失敗，請改用「複製契約全文」傳給客人');
   }
 };
 
