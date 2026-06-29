@@ -504,29 +504,7 @@ if(sessionStorage.getItem('mumei_unlock')==='1'){
 
 // ── RENDER ─────────────────────────────────────────────────
 function render(){
-  // 🌸 客戶預約模式（從 ?book=<token> 進入，免登入）
-  const urlParams=new URLSearchParams(window.location.search);
-  const bookToken=urlParams.get('book');
-  if(bookToken){
-    // 驗證 token 是否為店家設定的 token
-    // 如果系統還沒設定 token，預設用 'moome' 為通關密碼
-    const expectedToken=localStorage.getItem('bookingToken')||'moome';
-    if(bookToken===expectedToken||bookToken==='1'){  // '1' 兼容舊連結
-      $('app').innerHTML=customerBookingHTML();
-      bindCustomerBookingEvents();
-      return;
-    }else{
-      // token 不對，顯示「連結已失效」
-      $('app').innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff5f0,#fff);padding:20px;">
-        <div style="background:#fff;padding:40px;border-radius:16px;text-align:center;max-width:380px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">
-          <div style="font-size:50px;margin-bottom:14px;">🔒</div>
-          <div style="font-size:18px;font-weight:700;color:var(--roseDk);margin-bottom:8px;">預約連結已更新</div>
-          <div style="color:var(--mut);font-size:14px;line-height:1.6;">這個預約連結可能已過期或變更，<br>請從沐蜜的 LINE@ 重新取得最新的預約連結 🌸</div>
-        </div>
-      </div>`;
-      return;
-    }
-  }
+  // 預約功能已移除（客戶預約改用獨立的 LIFF 網站，與財務系統完全分開，最安全）
   $('app').innerHTML=S.auth?appHTML():loginHTML();
   bindEvents();
   if(S.auth&&S.sync==='idle'&&auth.currentUser){
@@ -844,7 +822,6 @@ function appHTML(){
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'profit',ico:'💎',lbl:'獲利分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
-    {id:'appointments',ico:'📅',lbl:'預約管理'},
     {id:'customers',ico:'👤',lbl:'客戶管理'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
@@ -895,7 +872,7 @@ function renderPage(){
     case'overview':  return pgOverview();
     case'profit':    return pgProfit();
     case'advisor':   return pgAdvisor();
-    case'appointments': return pgAppointments();
+    case'appointments': return pgOverview();
     case'customers': return pgCustomers();
     case'sales':     return pgSales();
     case'order':     return pgOrder();
@@ -1282,17 +1259,6 @@ function pgOverview(){
     </div>
   </div>
   ${moSel()}
-
-  ${(()=>{
-    // 今日預約警示
-    const today=new Date().toISOString().split('T')[0];
-    const todayAppts=(S.data.appointments||[]).filter(a=>a.date===today&&a.status!=='cancelled'&&a.status!=='completed').sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-    if(todayAppts.length===0)return'';
-    return`<div class="notice" style="background:linear-gradient(135deg,#fef3c7,#fff);border-left-color:#d97706;color:#92400e;">
-      📅 <b>今日 ${todayAppts.length} 筆預約：</b>${todayAppts.map(a=>`${a.time} ${a.customerName}（${a.serviceName||'未指定'}）`).join('、')}　
-      <button class="btn btn-sm" style="background:#d97706;color:#fff;margin-left:8px;" onclick="setP('appointments')">查看詳情 →</button>
-    </div>`;
-  })()}
 
   ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')}　數量不足，請盡快補貨</div>`:''}
 
