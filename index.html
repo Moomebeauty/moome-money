@@ -209,7 +209,7 @@ const BACKEND_EMAIL='moome5391@gmail.com';
 const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
-const TEACHERS=['珞熙','璇璇','婉甄','其他']; // 服務老師
+const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
 const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
 const SERVICE_PRESETS=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩','自訂項目'];
 const PRODUCT_CATS=['保養品販售','做臉耗材','霧唇霧眉耗材','彩妝耗材','熱蠟耗材','美體耗材','工作室耗材'];
@@ -3470,7 +3470,7 @@ function pgTreatment(){
       mode:'staff',     // 'staff'=老師設定 / 'customer'=客戶顯示簽名 / 'newCustomer'=首次建檔
       customer:'',
       date:today(),
-      staff:TEACHERS[0]||'珞熙',
+      staff:TEACHERS[0]||'于蜜',
       services:[],
       products:[],
       skinCondition:'',
@@ -5079,6 +5079,10 @@ function pgSettings(){
           <div class="tm" style="font-size:11px;margin-top:4px;">全面掃描所有儲值的潛在問題：餘額異常、共用群組錯亂、孤兒紀錄、扣款歸屬錯誤等，並提供完整對帳報告</div>
         </div>
         <div>
+          <button class="btn" style="background:var(--pur);color:#fff;" onclick="renameStaff()">🔄 老師改名工具</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">把舊紀錄中某位老師的名字，整批改成新名字（例如珞熙→于蜜），業績、抽成、儲值都會一起更新，舊業績就會併到新名字名下</div>
+        </div>
+        <div>
           <button class="btn" style="background:#dc2626;color:#fff;" onclick="findDuplicatePurchases()">🔍 找出重複的進貨紀錄</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">掃描可能重複輸入的進貨（同日期、同產品、同金額）。可預覽後選擇刪除。例如手套被輸入兩次的情況</div>
         </div>
@@ -5494,7 +5498,7 @@ function renderModal(){
     </div>
     <div class="fg fg2" style="margin-bottom:14px;">
       <div class="fgrp"><label>盤點日期 *</label><input type="date" id="m_msc_date" value="${today()}"></div>
-      <div class="fgrp"><label>盤點人</label><input type="text" id="m_msc_by" placeholder="選填" value="珞熙"></div>
+      <div class="fgrp"><label>盤點人</label><input type="text" id="m_msc_by" placeholder="選填" value="于蜜"></div>
     </div>
     <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--bdr);border-radius:8px;">
       ${sortedGroups.map(([k,g])=>`
@@ -10063,6 +10067,70 @@ window.cleanupStockOutExpenses=async()=>{
 };
 
 // ─── 儲值資料健檢（全面掃描儲值資料一致性） ───
+// ─── 🔄 老師改名工具（把舊紀錄的老師名字整批改成新名字）───
+window.renameStaff=async()=>{
+  const oldName=prompt('請輸入「舊的老師名字」（要被改掉的，例如：珞熙）：');
+  if(!oldName||!oldName.trim())return;
+  const newName=prompt(`請輸入「新的老師名字」（例如：于蜜）：\n\n將把所有紀錄中的「${oldName.trim()}」改成新名字`);
+  if(!newName||!newName.trim())return;
+  const o=oldName.trim(),nn=newName.trim();
+  if(o===nn){alert('新舊名字一樣，不用改');return;}
+
+  // 先掃描有多少筆會被影響
+  const sales=(S.data.sales||[]).filter(s=>s.staff===o);
+  const courses=(S.data.courses||[]).filter(c=>c.instructor===o);
+  const serviceRecords=(S.data.serviceRecords||[]).filter(r=>r.staff===o);
+  const deposits=(S.data.deposits||[]).filter(d=>d.staff===o);
+  const total=sales.length+courses.length+serviceRecords.length+deposits.length;
+
+  if(total===0){
+    alert(`找不到任何「${o}」的紀錄。\n\n可能名字打錯了，或這位老師本來就沒有紀錄。`);
+    return;
+  }
+
+  if(!confirm(`即將把以下紀錄的老師名字從「${o}」改成「${nn}」：\n\n• 業績/收入：${sales.length} 筆\n• 課程：${courses.length} 筆\n• 服務紀錄：${serviceRecords.length} 筆\n• 儲值：${deposits.length} 筆\n────────\n共 ${total} 筆\n\n改完後「${o}」的舊業績會全部併到「${nn}」名下。\n\n確定要執行嗎？`))return;
+
+  setSyncing('syncing');
+  let done=0;
+  try{
+    // 1. sales（子集合）
+    for(const s of sales){
+      await setSub('sales',s.id,{...s,staff:nn});
+      const idx=(S.data.sales||[]).findIndex(x=>x.id===s.id);
+      if(idx>=0)S.data.sales[idx].staff=nn;
+      done++;
+    }
+    // 2. courses（子集合）
+    for(const c of courses){
+      await setSub('courses',c.id,{...c,instructor:nn});
+      const idx=(S.data.courses||[]).findIndex(x=>x.id===c.id);
+      if(idx>=0)S.data.courses[idx].instructor=nn;
+      done++;
+    }
+    // 3. serviceRecords（子集合，如果有）
+    for(const r of serviceRecords){
+      await setSub('serviceRecords',r.id,{...r,staff:nn});
+      const idx=(S.data.serviceRecords||[]).findIndex(x=>x.id===r.id);
+      if(idx>=0)S.data.serviceRecords[idx].staff=nn;
+      done++;
+    }
+    // 4. deposits（子集合）
+    for(const d of deposits){
+      await setSub('deposits',d.id,{...d,staff:nn});
+      const idx=(S.data.deposits||[]).findIndex(x=>x.id===d.id);
+      if(idx>=0)S.data.deposits[idx].staff=nn;
+      done++;
+    }
+    setSyncing('synced');
+    alert(`✅ 完成！已把 ${done} 筆紀錄的「${o}」改成「${nn}」。\n\n現在「${nn}」的業績已包含原本「${o}」的所有紀錄。`);
+    render();
+  }catch(err){
+    setSyncing('error');
+    console.error('老師改名失敗',err);
+    alert(`改名過程發生錯誤（已完成 ${done}/${total} 筆）：\n${err.message||err}\n\n可以再點一次按鈕，會繼續處理剩下的。`);
+  }
+};
+
 window.depositHealthCheck=async()=>{
   const deposits=S.data.deposits||[];
   const sales=S.data.sales||[];
