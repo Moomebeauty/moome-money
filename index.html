@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>🌸 沐蜜財務系統</title>
+<title>沐蜜美學💰財務系統</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -217,11 +217,11 @@ const SUPPLIER_PRESETS=['Ten','EXU','AN','泌美麗','淘寶','蝦皮','其他�
 
 // 儲值預設政策（可在基本設定修改）
 const DEFAULT_DEPOSIT_SIGN_THRESHOLD=1;  // 任何儲值都簽（門檻=1元，等同於每次都簽）
-const DEFAULT_DEPOSIT_TERMS=`【沐蜜美容工作室・服務儲值方案契約書】
+const DEFAULT_DEPOSIT_TERMS=`【沐蜜美學・服務儲值方案契約書】
 
 ═══════════════════════════════════════
 【店家（乙方）資訊】
-店家名稱：沐蜜美容工作室
+店家名稱：沐蜜美學
 負責人：＿＿＿＿＿＿　統一編號：＿＿＿＿＿＿
 營業地址：＿＿＿＿＿＿＿＿＿＿＿＿
 聯絡電話：＿＿＿＿＿＿　客訴專線：1950（消費者服務專線）
@@ -542,7 +542,7 @@ function loginHTML(){return`
 <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--roseL) 0%,var(--goldL) 100%);">
   <div style="background:var(--card);border-radius:20px;padding:44px;width:380px;box-shadow:var(--shadow2);text-align:center;">
     <div style="font-size:54px;margin-bottom:10px;">🌸</div>
-    <div style="font-family:'Noto Serif TC',serif;font-size:26px;font-weight:900;color:var(--roseDk);margin-bottom:32px;letter-spacing:0.12em;">沐蜜</div>
+    <div style="font-family:'Noto Serif TC',serif;font-size:22px;font-weight:900;color:var(--roseDk);margin-bottom:32px;letter-spacing:0.08em;">沐蜜美學💰財務系統</div>
     <div class="fgrp" style="margin-bottom:8px;text-align:left;">
       <label>請輸入密碼</label>
       <input type="password" id="m_pw" placeholder="••••••" autofocus onkeydown="if(event.key==='Enter')doLogin()" style="font-size:18px;padding:13px 16px;letter-spacing:0.2em;">
@@ -562,7 +562,7 @@ function customerBookingHTML(){
     document.head.appendChild(meta);
   }
   // 改 page title 不暴露「沐蜜財務系統」
-  document.title='沐蜜美容工作室｜線上預約 🌸';
+  document.title='沐蜜美學💰財務系統';
   return`<div style="min-height:100vh;background:linear-gradient(135deg,#fff5f0,#fff,#f0f5ff);padding:20px;">
   <div style="max-width:480px;margin:0 auto;">
     <!-- 標題區 -->
@@ -3730,7 +3730,7 @@ function pgTreatmentStaffView(t){
 // ───── 客戶顯示與簽名模式 ─────
 function pgTreatmentCustomerView(t){
   const products=S.data.products||[];
-  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
   const totalServices=t.services.reduce((s,sv)=>s+toN(sv.price),0);
   const totalProducts=t.products.reduce((s,p)=>s+toN(p.price)*toN(p.qty||1),0);
   const totalAmount=totalServices+totalProducts;
@@ -3999,7 +3999,7 @@ function pgTreatmentCustomerView(t){
 
 // ───── 首次建檔模式（健康問卷 + 服務同意書）─────
 function pgTreatmentNewCustomerView(t){
-  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
   const products=S.data.products||[];
   const totalServices=t.services.reduce((s,sv)=>s+toN(sv.price),0);
   const totalProducts=t.products.reduce((s,p)=>s+toN(p.price)*toN(p.qty||1),0);
@@ -4211,7 +4211,7 @@ function pgTreatmentNewCustomerView(t){
 
 // ───── 儲值客戶簽名模式 ─────
 function pgDepositCustomerView(t){
-  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
   const dp=t.depositData||{};
   const {customer,date,amount,actualReceived,payMethod,note}=dp;
   const bonus=(amount||0)-(actualReceived||0);
@@ -4884,7 +4884,7 @@ function pgSettings(){
   const svcs=S.data.services||[];
   const prods=S.data.products||[];
   const sups=S.data.suppliers||[];
-  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
   const termsMap=S.data.settings?.termsMap||{};
   const termsCategories=['預設（通用）','美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩'];
   return`
@@ -4898,7 +4898,7 @@ function pgSettings(){
     <div class="card-bd">
       <div class="fg fg2">
         <div class="fgrp" style="grid-column:1/-1"><label>工作室名稱（顯示在簽名畫面）</label>
-          <input type="text" id="m_set_studio" value="${studioName}" placeholder="例：沐蜜美容工作室">
+          <input type="text" id="m_set_studio" value="${studioName}" placeholder="例：沐蜜美學💰財務系統">
         </div>
       </div>
       <button class="btn btn-p" onclick="saveStudioName()" style="margin-top:10px;">✓ 儲存工作室名稱</button>
@@ -6210,7 +6210,7 @@ function renderModal(){
   if(m.t==='signTreatment'){
     const r=(S.data.treatmentRecords||[]).find(x=>x.id===m.x)||{};
     const products=(S.data.products||[]);
-    const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+    const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
     // 自訂同意條款（從設定讀取，否則用預設）
     const customTerms=S.data.settings?.serviceTerms||`【服務項目確認】
 本人已知悉並同意接受以下服務內容，包含使用之產品與用量。
@@ -8257,7 +8257,7 @@ window.saveTreatmentSignature=async(id)=>{
     if(!agreed){alert('⚠️ 請勾選「已詳閱並同意上述條款」');return;}
     if(!_sigCanvas||!_sigHasContent){alert('⚠️ 請先簽名');return;}
     const dataURL=_sigCanvas.toDataURL('image/png');
-    const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+    const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
     const termsSnapshot=S.data.settings?.serviceTerms||'';
     const records=(S.data.treatmentRecords||[]).map(r=>r.id===id?{
       ...r,
@@ -8399,7 +8399,7 @@ function refreshServiceCardItems(){
 // ─── 工作室名稱儲存 ───
 window.saveStudioName=async()=>{
   try{
-    const studioName=$('m_set_studio')?.value?.trim()||'沐蜜美容工作室';
+    const studioName=$('m_set_studio')?.value?.trim()||'沐蜜美學💰財務系統';
     const settings={...(S.data.settings||{}),studioName};
     await saveMain({settings});
     toast('✅ 工作室名稱已儲存');
@@ -9070,7 +9070,7 @@ window.finalizeTreatment=async()=>{
     }
     if(!_sigCanvas||!_sigHasContent){alert('⚠️ 請先簽名');return;}
     const dataURL=_sigCanvas.toDataURL('image/png');
-    const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+    const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
     const termsMap=S.data.settings?.termsMap||{};
     let termsSnapshot=termsMap['預設（通用）']||'';
     const svcNames=t.services.map(s=>s.name||'').join(' ');
@@ -11410,7 +11410,7 @@ window.printRefundReceipt=()=>{
   if(reason==='cooling_off')refund=actual;
   else if(reason==='unused_full')refund=actual-fee;
   else refund=Math.max(0,remainActual-fee);
-  const studioName=S.data.settings?.studioName||'沐蜜美容工作室';
+  const studioName=S.data.settings?.studioName||'沐蜜美學💰財務系統';
   const w=window.open('','_blank','width=720,height=900');
   if(!w){alert('請允許彈出視窗');return;}
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>退費計算單 - ${r.customer}</title>
@@ -11697,7 +11697,7 @@ window.downloadDepositContractImage=()=>{
     ctx.fillStyle='#fff';
     ctx.font='bold 24px "Noto Serif TC",serif';
     ctx.textAlign='center';
-    ctx.fillText('沐蜜美容工作室・儲值契約',width/2,44);
+    ctx.fillText('沐蜜美學・儲值契約',width/2,44);
     // 內文
     ctx.fillStyle='#333';
     ctx.font='14px sans-serif';
