@@ -7809,7 +7809,10 @@ window.updExp=async(id)=>{
 window.delExp=async id=>{if(!confirm('確認刪除？'))return;await delSub('expenses',id);toast('已刪除');};
 
 // ── Purchase 單筆 ──
+window._savingPurchase=false;
 window.savePurchase=async()=>{
+  // 防止重複送出（雙擊 / 連點會建立兩筆並讓付款欄位讀到預設值）
+  if(window._savingPurchase)return;
   const date=$('m_p0')?.value;
   const pickedPid=$('m_pPick')?.value||'';
   const productName=$('m_p2')?.value?.trim();
@@ -7823,6 +7826,14 @@ window.savePurchase=async()=>{
   if(!pickedPid&&!productName){alert('請選擇現有產品或填寫產品名稱');return;}
   const supSel=$('m_p6')?.value;
   const supplier=supSel==='其他手動輸入廠商'?($('m_p6c')?.value||'').trim():supSel;
+  // ⚠️ 在任何 await 之前先讀取付款狀態/方式，避免 DOM 被清掉後讀到預設值
+  const paidStatus=document.querySelector('input[name="m_pPaid"]:checked')?.value||'paid';
+  const payMethod=$('m_pPayMethod')?.value||'轉帳';
+  const noteVal=$('m_p7')?.value||'';
+  // 上鎖 + 鎖定按鈕
+  window._savingPurchase=true;
+  const _btn=document.querySelector('#modal-inner .mbtns .btn-p');
+  if(_btn){_btn.disabled=true;_btn.textContent='處理中…';}
   // 優先：用 productId 直接找產品（避免名稱比對問題）
   let prod=null;
   if(pickedPid){
@@ -7862,40 +7873,42 @@ window.savePurchase=async()=>{
   }
   const d=new Date(date);
   const recordName=prod?prod.name:productName.trim();
-  // 付款狀態
-  const paidStatus=document.querySelector('input[name="m_pPaid"]:checked')?.value||'paid';
-  const payMethod=$('m_pPayMethod')?.value||'轉帳';
+  // 付款狀態（已於函式開頭讀取，避免讀到預設值）
   const paid=paidStatus==='paid';
-  // 建立進貨紀錄
-  const purchaseId=uid();
-  const purchaseData={
-    id:purchaseId,
-    date,productId:pid,productName:recordName,category,qty,unitCost,totalCost,
-    supplier,series,
-    paid,payMethod,paidDate:paid?date:null,
-    note:$('m_p7')?.value||'',
-    month:d.getMonth()+1,year:d.getFullYear()
-  };
-  await addSub('purchases',purchaseData);
-  // 已付款 → 同步寫入支出 + 現金流
-  if(paid){
-    const expNote=`【進貨】${recordName} × ${qty}${supplier?'（'+supplier+'）':''}`;
-    const expRef=await addSub('expenses',{
-      date,category:'進貨成本',amount:totalCost,
-      payMethod,note:expNote,
-      fromPurchase:true,purchaseRefId:purchaseId,
+  try{
+    // 建立進貨紀錄
+    const purchaseId=uid();
+    const purchaseData={
+      id:purchaseId,
+      date,productId:pid,productName:recordName,category,qty,unitCost,totalCost,
+      supplier,series,
+      paid,payMethod,paidDate:paid?date:null,
+      note:noteVal,
       month:d.getMonth()+1,year:d.getFullYear()
-    });
-    await addSub('cashFlow',{
-      date,amount:-totalCost,cat:'進貨支出',
-      note:expNote+`（${payMethod}）`,
-      fromPurchase:true,purchaseRefId:purchaseId,
-      month:d.getMonth()+1,year:d.getFullYear()
-    });
+    };
+    await addSub('purchases',purchaseData);
+    // 已付款 → 同步寫入支出 + 現金流
+    if(paid){
+      const expNote=`【進貨】${recordName} × ${qty}${supplier?'（'+supplier+'）':''}`;
+      const expRef=await addSub('expenses',{
+        date,category:'進貨成本',amount:totalCost,
+        payMethod,note:expNote,
+        fromPurchase:true,purchaseRefId:purchaseId,
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+      await addSub('cashFlow',{
+        date,amount:-totalCost,cat:'進貨支出',
+        note:expNote+`（${payMethod}）`,
+        fromPurchase:true,purchaseRefId:purchaseId,
+        month:d.getMonth()+1,year:d.getFullYear()
+      });
+    }
+    const finalAvg=getAvgCost(pid);
+    toast(`✅ 進貨完成 ${qty} 個，平均成本更新為 $${fmt(finalAvg)}${paid?'（已記支出）':'（未付款，待結算）'}`);
+    closeMod();
+  }finally{
+    window._savingPurchase=false;
   }
-  const finalAvg=getAvgCost(pid);
-  toast(`✅ 進貨完成 ${qty} 個，平均成本更新為 $${fmt(finalAvg)}${paid?'（已記支出）':'（未付款，待結算）'}`);
-  closeMod();
 };
 
 // ── 進貨：標記為已付款/取消已付款（統一在第 8420 行附近的新版實作）──
@@ -9665,7 +9678,10 @@ window.recalcGroupCosts=()=>{
   if($('m_bpGroupHint'))$('m_bpGroupHint').innerHTML=hint;
 };
 
+window._savingBatchPurchase=false;
 window.saveBatchPurchase=async()=>{
+  // 防止重複送出（雙擊會把整批存兩遍）
+  if(window._savingBatchPurchase)return;
   const date=$('m_bpDate')?.value||today();
   const supSel=$('m_bpSup')?.value;
   const supplier=supSel==='其他手動輸入廠商'?($('m_bpSupC')?.value||'').trim():supSel;
@@ -9675,11 +9691,16 @@ window.saveBatchPurchase=async()=>{
   const isGroup=S.modal.groupMode||false;
   const groupTotal=parseFloat($('m_bpGroupTotal')?.value)||0;
   if(isGroup&&groupTotal<=0){alert('請填整組總成本');return;}
-  // 整批付款狀態
+  // 整批付款狀態（在任何 await 之前讀取）
   const paidStatus=document.querySelector('input[name="m_bpPaid"]:checked')?.value||'paid';
   const payMethod=$('m_bpPayMethod')?.value||'轉帳';
   const paid=paidStatus==='paid';
+  // 上鎖 + 鎖定按鈕
+  window._savingBatchPurchase=true;
+  const _btn=document.querySelector('#modal-inner .mbtns .btn-p');
+  if(_btn){_btn.disabled=true;_btn.textContent='處理中…';}
   const d=new Date(date);
+  try{
   let count=0;
   let totalAllCost=0;
   let groupNote=isGroup?`整組 $${fmt(groupTotal)}`:'';
@@ -9750,9 +9771,12 @@ window.saveBatchPurchase=async()=>{
     }
     count++;
   }
-  await saveMain({products:S.data.products,inventory:S.data.inventory});
-  toast(`✅ 已批次新增 ${count} 筆進貨，總成本 $${fmt(totalAllCost)}${paid?'（已記支出）':'（未付款，待結算）'}`);
-  closeMod();
+    await saveMain({products:S.data.products,inventory:S.data.inventory});
+    toast(`✅ 已批次新增 ${count} 筆進貨，總成本 $${fmt(totalAllCost)}${paid?'（已記支出）':'（未付款，待結算）'}`);
+    closeMod();
+  }finally{
+    window._savingBatchPurchase=false;
+  }
 };
 
 // ── Inventory ──
