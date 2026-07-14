@@ -858,6 +858,7 @@ function appHTML(){
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'profit',ico:'💎',lbl:'獲利分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
+    {id:'pricelist',ico:'🏷️',lbl:'產品價目表'},
     {id:'customers',ico:'👤',lbl:'客戶管理'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
@@ -909,6 +910,7 @@ function renderPage(){
     case'profit':    return pgProfit();
     case'advisor':   return pgAdvisor();
     case'appointments': return pgOverview();
+    case'pricelist': return pgPriceList();
     case'customers': return pgCustomers();
     case'sales':     return pgSales();
     case'order':     return pgOrder();
@@ -2413,6 +2415,113 @@ function pgAppointments(){
   </details>`:''}
   `;
 }
+
+// ─── 🏷️ 產品價目表（客人問價時快速查閱）───
+function pgPriceList(){
+  const allProds=S.data.products||[];
+  // 預設只顯示「保養品販售」（客人會買的），但可切換看全部
+  const showAll=S.priceListShowAll||false;
+  const kw=(S.priceListSearch||'').trim().toLowerCase();
+
+  let prods=showAll?allProds:allProds.filter(p=>p.category==='保養品販售');
+  // 搜尋過濾
+  if(kw){
+    prods=prods.filter(p=>
+      (p.name||'').toLowerCase().includes(kw)||
+      (p.series||'').toLowerCase().includes(kw)||
+      (p.supplier||'').toLowerCase().includes(kw)
+    );
+  }
+  // 依系列分組
+  const groups={};
+  prods.forEach(p=>{
+    const ser=p.series||'其他';
+    if(!groups[ser])groups[ser]=[];
+    groups[ser].push(p);
+  });
+  Object.values(groups).forEach(g=>g.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant')));
+
+  const noPriceCount=prods.filter(p=>toN(p.price)<=0).length;
+
+  return`
+  <div class="pg-ttl">🏷️ 產品價目表</div>
+  <div class="pg-sub">客人問價格時，這裡一秒查到</div>
+
+  <!-- 搜尋列 -->
+  <div style="position:sticky;top:0;z-index:10;background:var(--bg);padding:10px 0;margin-bottom:10px;">
+    <input type="text" id="priceSearchInput" placeholder="🔍 輸入產品名稱、系列或廠商..."
+      value="${S.priceListSearch||''}"
+      oninput="doPriceSearch(this.value)"
+      style="width:100%;padding:14px 16px;font-size:16px;border:2px solid var(--gold);border-radius:10px;outline:none;background:#fff;">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-sm ${!showAll?'btn-p':'btn-s'}" onclick="togglePriceListScope(false)">🧴 販售保養品</button>
+      <button class="btn btn-sm ${showAll?'btn-p':'btn-s'}" onclick="togglePriceListScope(true)">📦 全部產品</button>
+      <span class="tm" style="font-size:12px;margin-left:auto;">共 ${prods.length} 項</span>
+    </div>
+  </div>
+
+  ${noPriceCount>0?`<div class="notice" style="background:#fef3c7;border-left-color:#d97706;color:#92400e;">
+    ⚠️ 有 <b>${noPriceCount}</b> 個產品還沒設定售價（顯示為未定價）。到「🗂️ 庫存盤點」點產品可以編輯售價。
+  </div>`:''}
+
+  ${prods.length===0?`<div class="empty" style="padding:40px;">
+    <div class="empty-ico">🏷️</div>
+    <p>${kw?`找不到「${kw}」相關產品`:'還沒有產品資料'}</p>
+    ${kw?`<div class="tm" style="font-size:13px;margin-top:8px;">試試其他關鍵字，或切換「全部產品」看看</div>`:''}
+  </div>`:
+  Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'zh-Hant')).map(([series,items])=>`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:linear-gradient(90deg,var(--goldL),transparent);">
+        <span class="card-ttl">📦 ${series}</span>
+        <span class="bdg gold">${items.length} 項</span>
+      </div>
+      <div class="card-bd" style="padding:0;">
+        ${items.map(p=>{
+          const inv=getInv(p.id);
+          const hasStock=toN(inv.qty)>0;
+          const price=toN(p.price);
+          return`<div style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--bdr);gap:12px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:16px;font-weight:700;color:var(--txt);line-height:1.4;">${p.name}</div>
+              <div class="tm" style="font-size:12px;margin-top:4px;">
+                ${p.supplier?`🏪 ${p.supplier}`:''}
+                ${hasStock?`　<span style="color:var(--grn);">✓ 有貨 ${inv.qty}</span>`:`　<span style="color:var(--red);">✗ 缺貨</span>`}
+              </div>
+            </div>
+            <div style="text-align:right;white-space:nowrap;">
+              ${price>0?
+                `<div style="font-size:22px;font-weight:900;color:var(--gold);">$${fmt(price)}</div>`:
+                `<div style="font-size:14px;color:var(--mut);">未定價</div>`
+              }
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('')}
+  `;
+}
+
+window.doPriceSearch=(v)=>{
+  S.priceListSearch=v;
+  // 只重繪內容，不重繪整頁（避免輸入框失焦）
+  const c=$('pg-content');
+  if(c){
+    c.innerHTML=pgPriceList();
+    // 恢復搜尋框焦點和游標位置
+    const inp=$('priceSearchInput');
+    if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
+  }else{
+    render();
+  }
+};
+
+window.togglePriceListScope=(showAll)=>{
+  S.priceListShowAll=showAll;
+  const c=$('pg-content');
+  if(c)c.innerHTML=pgPriceList();
+  else render();
+};
 
 function pgCustomers(){
   const customers=S.data.customers||[];
