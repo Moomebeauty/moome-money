@@ -2441,7 +2441,7 @@ function pgPriceList(){
   });
   Object.values(groups).forEach(g=>g.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant')));
 
-  const noPriceCount=prods.filter(p=>toN(p.price)<=0).length;
+  const noPriceCount=prods.filter(p=>toN(p.price)<=0&&!(p.specs||[]).some(s=>toN(s.price)>0)).length;
 
   return`
   <div class="pg-ttl">🏷️ 產品價目表</div>
@@ -2480,6 +2480,41 @@ function pgPriceList(){
           const inv=getInv(p.id);
           const hasStock=toN(inv.qty)>0;
           const price=toN(p.price);
+          const specs=(p.specs||[]).filter(s=>s.label&&toN(s.price)>0);
+
+          // 有多規格 → 顯示規格表，自動算省多少、打幾折
+          if(specs.length>0){
+            // 以「最小規格」當基準（specs 已依 units 排序）
+            const base=specs[0];
+            const baseUnitPrice=toN(base.price)/(toN(base.units)||1);  // 單支等價
+            return`<div style="padding:16px;border-bottom:1px solid var(--bdr);">
+              <div style="font-size:17px;font-weight:700;color:var(--txt);margin-bottom:2px;">${p.name}</div>
+              <div class="tm" style="font-size:12px;margin-bottom:10px;">
+                ${p.supplier?`🏪 ${p.supplier}`:''}
+                ${hasStock?`　<span style="color:var(--grn);">✓ 有貨 ${inv.qty}</span>`:`　<span style="color:var(--red);">✗ 缺貨</span>`}
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                ${specs.map((sp,idx)=>{
+                  const spPrice=toN(sp.price);
+                  const spUnits=toN(sp.units)||1;
+                  const fullPrice=baseUnitPrice*spUnits;   // 用最小規格單價換算的原價
+                  const save=Math.round(fullPrice-spPrice);
+                  const discount=fullPrice>0?Math.round(spPrice/fullPrice*100):100;
+                  const isBase=idx===0;
+                  const isBest=idx===specs.length-1&&specs.length>1;
+                  return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:${isBest?'linear-gradient(90deg,var(--goldL),transparent)':'var(--bg2)'};border-radius:8px;${isBest?'border:1px solid var(--gold);':''}">
+                    <div style="flex:1;min-width:0;">
+                      <span style="font-weight:700;font-size:15px;color:var(--txt);">${sp.label}</span>
+                      ${!isBase&&save>0?`<div class="tm" style="font-size:12px;color:var(--grn);margin-top:2px;">省 $${fmt(save)}　約打 ${(discount/10).toFixed(1)} 折${isBest?'　🔥 最划算':''}</div>`:''}
+                    </div>
+                    <div style="font-size:20px;font-weight:900;color:var(--gold);white-space:nowrap;margin-left:10px;">$${fmt(spPrice)}</div>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>`;
+          }
+
+          // 沒有多規格 → 顯示單一售價（原本的樣子）
           return`<div style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--bdr);gap:12px;">
             <div style="flex:1;min-width:0;">
               <div style="font-size:16px;font-weight:700;color:var(--txt);line-height:1.4;">${p.name}</div>
@@ -6694,6 +6729,24 @@ function renderModal(){
       </div>
       <div class="fgrp"><label>現有庫存</label><input type="number" id="m_pr4" value="${inv.qty||0}"></div>
       <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" value="${inv.minQty||1}"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:12px;border-radius:8px;border-left:3px solid var(--gold);">
+        <label style="color:var(--goldDk);font-weight:700;">🏷️ 多規格價格（例：單支 / 三支 / 一盒）</label>
+        <div class="tm" style="font-size:11px;margin:4px 0 8px;">
+          填了之後，價目表會顯示所有規格，並自動算「省多少、打幾折」（以最小規格當基準）。<br>
+          「等於幾支」是用來扣庫存的：賣一盒扣幾支，就填幾。不填規格就只用上面的單一售價。
+        </div>
+        <div id="m_prSpecList">
+          ${(pr.specs||[]).map((sp,i)=>`
+            <div class="spec-row" style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
+              <input type="text" placeholder="規格名（單支）" value="${sp.label||''}" data-spec-i="${i}" data-spec-f="label" style="flex:2;">
+              <input type="number" placeholder="價格" value="${sp.price||''}" data-spec-i="${i}" data-spec-f="price" style="flex:1.2;">
+              <input type="number" placeholder="=幾支" value="${sp.units||''}" data-spec-i="${i}" data-spec-f="units" style="flex:1;" step="0.01">
+              <button type="button" class="bdel" onclick="removeSpecRow(this)">×</button>
+            </div>
+          `).join('')}
+        </div>
+        <button type="button" class="btn btn-s btn-sm" onclick="addSpecRow()">＋ 新增規格</button>
+      </div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_pr6" value="${pr.note||''}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updProduct('${pr.id}')">✓ 更新</button></div>`;
@@ -11037,6 +11090,44 @@ window.saveProduct=async()=>{
   const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty,avgCost:cost}];
   await saveMain({products:prods,inventory:newInv});toast('✅ 產品已新增');closeMod();
 };
+// ─── 多規格價格：新增/刪除規格列 ───
+window.addSpecRow=()=>{
+  const list=$('m_prSpecList');
+  if(!list)return;
+  const i=list.querySelectorAll('.spec-row').length;
+  const div=document.createElement('div');
+  div.className='spec-row';
+  div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center;';
+  div.innerHTML=`
+    <input type="text" placeholder="規格名（單支）" data-spec-i="${i}" data-spec-f="label" style="flex:2;">
+    <input type="number" placeholder="價格" data-spec-i="${i}" data-spec-f="price" style="flex:1.2;">
+    <input type="number" placeholder="=幾支" data-spec-i="${i}" data-spec-f="units" style="flex:1;" step="0.01">
+    <button type="button" class="bdel" onclick="removeSpecRow(this)">×</button>`;
+  list.appendChild(div);
+};
+
+window.removeSpecRow=(btn)=>{
+  const row=btn.closest('.spec-row');
+  if(row)row.remove();
+};
+
+// 從表單收集規格資料
+function collectSpecs(){
+  const rows=document.querySelectorAll('#m_prSpecList .spec-row');
+  const specs=[];
+  rows.forEach(row=>{
+    const label=row.querySelector('[data-spec-f="label"]')?.value?.trim();
+    const price=parseFloat(row.querySelector('[data-spec-f="price"]')?.value)||0;
+    const units=parseFloat(row.querySelector('[data-spec-f="units"]')?.value)||0;
+    if(label&&price>0){
+      specs.push({label,price,units:units||1});
+    }
+  });
+  // 依「等於幾支」排序（小到大）
+  specs.sort((a,b)=>a.units-b.units);
+  return specs;
+}
+
 window.updProduct=async(id)=>{
   const name=$('m_pr0')?.value?.trim();if(!name){alert('請填產品名稱');return;}
   const qty=parseFloat($('m_pr4')?.value)||0;
@@ -11046,6 +11137,7 @@ window.updProduct=async(id)=>{
   const series=$('m_prSeries')?.value?.trim()||'';
   const capacity=parseFloat($('m_prCap')?.value)||0;
   const capacityUnit=$('m_prCapUnit')?.value||'';
+  const specs=collectSpecs();
   const prods=(S.data.products||[]).map(p=>p.id===id?{
     ...p,name,
     category:$('m_pr1')?.value,
@@ -11053,6 +11145,7 @@ window.updProduct=async(id)=>{
     cost:parseFloat($('m_pr3')?.value)||0,
     supplier,series,
     capacity,capacityUnit,
+    specs,
     note:$('m_pr6')?.value||''
   }:p);
   const oldInv=getInv(id);
