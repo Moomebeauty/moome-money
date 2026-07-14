@@ -5097,6 +5097,14 @@ function pgSettings(){
           <div class="tm" style="font-size:11px;margin-top:4px;">把舊紀錄中某位老師的名字，整批改成新名字（例如珞熙→于蜜），業績、抽成、儲值都會一起更新，舊業績就會併到新名字名下</div>
         </div>
         <div>
+          <button class="btn" style="background:#0891b2;color:#fff;" onclick="diagnoseInventory()">🔍 庫存診斷</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">檢查產品清單、庫存、進貨的資料筆數，確認到底有沒有資料。庫存盤點空白時先點這個看診斷</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--grn);color:#fff;" onclick="rebuildInventoryFromPurchases()">🔧 從進貨重建庫存</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">如果產品清單/庫存不見了，但進貨紀錄還在，用這個從進貨紀錄反推重建產品和庫存（只補回缺的，不動現有資料）</div>
+        </div>
+        <div>
           <button class="btn" style="background:#dc2626;color:#fff;" onclick="findDuplicatePurchases()">🔍 找出重複的進貨紀錄</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">掃描可能重複輸入的進貨（同日期、同產品、同金額）。可預覽後選擇刪除。例如手套被輸入兩次的情況</div>
         </div>
@@ -10142,6 +10150,131 @@ window.renameStaff=async()=>{
     setSyncing('error');
     console.error('老師改名失敗',err);
     alert(`改名過程發生錯誤（已完成 ${done}/${total} 筆）：\n${err.message||err}\n\n可以再點一次按鈕，會繼續處理剩下的。`);
+  }
+};
+
+// ─── 🔍 庫存診斷 ───
+window.diagnoseInventory=()=>{
+  const products=S.data.products||[];
+  const inventory=S.data.inventory||[];
+  const purchases=S.data.purchases||[];
+  const stockOuts=S.data.stockOuts||[];
+  // 從進貨紀錄統計「應該有幾個不同產品」
+  const purchaseProductIds=new Set(purchases.map(p=>p.productId).filter(x=>x));
+  const purchaseProductNames=new Set(purchases.map(p=>p.productName).filter(x=>x));
+  const msg=`📊 庫存資料診斷報告
+────────────────────
+【目前系統載入的資料】
+• 產品清單：${products.length} 筆
+• 庫存紀錄：${inventory.length} 筆
+• 進貨紀錄：${purchases.length} 筆
+• 出貨耗用：${stockOuts.length} 筆
+
+【從進貨紀錄推算】
+• 進貨中出現過的不同產品：${purchaseProductIds.size} 種（依編號）
+• 進貨中出現過的產品名稱：${purchaseProductNames.size} 種（依名稱）
+────────────────────
+${products.length===0&&purchases.length>0?
+'⚠️ 診斷結果：產品清單是空的，但進貨紀錄還在！\n\n這代表產品資料沒載入或被清空，但可以用進貨紀錄重建。\n\n👉 請點「🔧 從進貨重建庫存」按鈕來復原。':
+products.length>0?
+'✅ 診斷結果：產品清單有資料（'+products.length+'筆），資料正常。\n\n如果庫存盤點頁還是空白，可能是顯示問題，請強制重新整理（Cmd+Shift+R）。':
+'⚠️ 產品和進貨都是空的，可能資料還在同步中，請稍等幾秒再點一次診斷。'}`;
+  alert(msg);
+};
+
+// ─── 🔧 從進貨紀錄重建產品清單與庫存 ───
+window.rebuildInventoryFromPurchases=async()=>{
+  const purchases=S.data.purchases||[];
+  if(purchases.length===0){
+    alert('沒有進貨紀錄，無法重建。\n\n如果你確定有進貨資料，可能還在同步中，請稍等幾秒再試。');
+    return;
+  }
+  const existingProducts=S.data.products||[];
+  const existingIds=new Set(existingProducts.map(p=>p.id));
+  const existingNames=new Set(existingProducts.map(p=>(p.name||'').trim()));
+
+  // 從進貨紀錄彙整出所有產品（依 productId 分組）
+  const productMap={};  // productId -> 產品資訊 + 累計進貨
+  purchases.forEach(pur=>{
+    const pid=pur.productId;
+    if(!pid)return;
+    if(!productMap[pid]){
+      productMap[pid]={
+        id:pid,
+        name:pur.productName||'未命名產品',
+        category:pur.category||'其他',
+        supplier:pur.supplier||'',
+        series:pur.series||'',
+        totalQty:0,
+        totalCost:0,
+        lastUnitCost:0
+      };
+    }
+    productMap[pid].totalQty+=toN(pur.qty);
+    productMap[pid].totalCost+=toN(pur.totalCost);
+    if(toN(pur.unitCost)>0)productMap[pid].lastUnitCost=toN(pur.unitCost);
+  });
+
+  // 扣掉出貨耗用的數量
+  const stockOuts=S.data.stockOuts||[];
+  stockOuts.forEach(so=>{
+    const pid=so.productId;
+    if(pid&&productMap[pid]){
+      productMap[pid].totalQty-=toN(so.qty);
+    }
+  });
+
+  const rebuildProducts=Object.values(productMap);
+  const newCount=rebuildProducts.filter(p=>!existingIds.has(p.id)).length;
+
+  if(newCount===0){
+    alert(`診斷：進貨紀錄裡的 ${rebuildProducts.length} 個產品，系統裡都已經存在了。\n\n所以不需要重建。如果庫存盤點還是空白，請強制重新整理（Cmd+Shift+R）看看。`);
+    return;
+  }
+
+  if(!confirm(`即將從進貨紀錄重建產品和庫存：\n\n• 進貨中的產品總數：${rebuildProducts.length} 種\n• 系統現有：${existingProducts.length} 種\n• 需要補回：${newCount} 種\n\n重建方式：\n- 產品名稱、類別、廠商 → 從進貨紀錄取得\n- 庫存數量 → 進貨總量 減 出貨耗用量\n- 平均成本 → 進貨總成本 ÷ 進貨總量\n\n（已存在的產品不會被覆蓋）\n\n確定要重建嗎？`))return;
+
+  setSyncing('syncing');
+  try{
+    // 合併：保留現有產品，補上缺的
+    const mergedProducts=[...existingProducts];
+    const mergedInventory=[...(S.data.inventory||[])];
+    const existInvIds=new Set(mergedInventory.map(i=>i.productId));
+
+    rebuildProducts.forEach(rp=>{
+      const avgCost=rp.totalQty>0?Math.round(rp.totalCost/(rp.totalQty+ (stockOuts.filter(s=>s.productId===rp.id).reduce((a,s)=>a+toN(s.qty),0)) )):rp.lastUnitCost;
+      // 補產品
+      if(!existingIds.has(rp.id)){
+        mergedProducts.push({
+          id:rp.id,
+          name:rp.name,
+          category:rp.category,
+          supplier:rp.supplier,
+          series:rp.series,
+          price:0,  // 售價進貨紀錄沒有，先設0，之後手動補
+          cost:rp.lastUnitCost||avgCost
+        });
+      }
+      // 補庫存
+      if(!existInvIds.has(rp.id)){
+        mergedInventory.push({
+          productId:rp.id,
+          qty:Math.max(0,rp.totalQty),
+          minQty:1,
+          avgCost:rp.lastUnitCost||avgCost,
+          totalPurchaseCost:rp.totalCost
+        });
+      }
+    });
+
+    await saveMain({products:mergedProducts,inventory:mergedInventory});
+    setSyncing('synced');
+    alert(`✅ 重建完成！\n\n• 產品清單：現在有 ${mergedProducts.length} 種\n• 庫存紀錄：現在有 ${mergedInventory.length} 筆\n\n請到「庫存盤點」查看。\n\n注意：重建的產品「售價」會是 0，請到產品清單手動補上售價。庫存數量是用「進貨減出貨」算的，如果之前有手動調整過庫存，可能要再核對一下。`);
+    render();
+  }catch(err){
+    setSyncing('error');
+    console.error('重建庫存失敗',err);
+    alert('重建失敗：'+(err.message||err));
   }
 };
 
