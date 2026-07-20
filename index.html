@@ -3526,6 +3526,7 @@ function pgServiceCost(){
         <div class="card-hd" style="background:linear-gradient(90deg,var(--purL),transparent);">
           <span class="card-ttl">💎 ${card.name||'未命名'}　${card.duration?`<span class="bdg">${card.duration} 分鐘</span>`:''}</span>
           <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('courseSteps','${card.id}')">📖 步驟${(card.steps||[]).length>0?`(${card.steps.length})`:''}</button>
             <button class="btn btn-s btn-sm" onclick="openM('editServiceCost','${card.id}')">✏️ 編輯</button>
             <button class="bdel" onclick="delServiceCost('${card.id}')">×</button>
           </div>
@@ -6620,6 +6621,66 @@ function renderModal(){
 
   // ─── 床位成本設定 modal ───
   // ─── 🏠 固定成本試算機 ───
+  // ─── 📖 課程步驟（檢視／編輯）───
+  if(m.t==='courseSteps'){
+    const card=(S.data.serviceCosts||[]).find(x=>x.id===m.x)||{};
+    const steps=card.steps||[];
+    const editing=S.modal.stepEdit||false;
+    const totalMin=steps.reduce((s,st)=>s+toN(st.minutes),0);
+
+    if(!editing){
+      // ── 檢視模式：好讀、服務前快速複習 ──
+      c=`<div class="mttl">📖 ${card.name||'課程'}　操作步驟</div>
+      ${steps.length===0?`
+        <div class="empty" style="padding:30px;">
+          <div class="empty-ico">📖</div>
+          <p>還沒有建立步驟</p>
+          <div class="tm" style="font-size:13px;margin-top:6px;">把這堂課的操作流程記下來，服務前可以快速複習</div>
+        </div>`:`
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+          <span class="bdg gold">${steps.length} 個步驟</span>
+          ${totalMin>0?`<span class="bdg">共 ${totalMin} 分鐘</span>`:''}
+          ${card.duration?`<span class="tm" style="font-size:12px;">（課程時長 ${card.duration} 分鐘）</span>`:''}
+        </div>
+        <div style="max-height:60vh;overflow-y:auto;padding-right:4px;">
+          ${steps.map((st,i)=>`
+            <div style="display:flex;gap:10px;margin-bottom:12px;">
+              <div style="flex-shrink:0;width:30px;height:30px;background:var(--pur);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">${i+1}</div>
+              <div style="flex:1;background:var(--bg2);padding:12px;border-radius:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+                  <b style="font-size:15px;color:var(--txt);">${st.title||'（未命名）'}</b>
+                  ${toN(st.minutes)>0?`<span class="tm" style="font-size:12px;white-space:nowrap;">⏱ ${st.minutes} 分</span>`:''}
+                </div>
+                ${st.note?`<div style="font-size:13px;color:var(--mut);margin-top:6px;line-height:1.7;white-space:pre-wrap;">${st.note}</div>`:''}
+                ${st.key?`<div style="margin-top:8px;padding:8px 10px;background:var(--goldL);border-radius:6px;font-size:13px;color:var(--goldDk);">
+                  💡 <b>重點：</b>${st.key}
+                </div>`:''}
+              </div>
+            </div>
+          `).join('')}
+        </div>`}
+      <div class="mbtns">
+        <button class="btn btn-s" onclick="closeMod()">關閉</button>
+        <button class="btn btn-p" onclick="toggleStepEdit(true)">✏️ ${steps.length===0?'建立步驟':'編輯步驟'}</button>
+      </div>`;
+    }else{
+      // ── 編輯模式 ──
+      if(!S.modal.stepDraft)S.modal.stepDraft=JSON.parse(JSON.stringify(steps));
+      c=`<div class="mttl">✏️ 編輯步驟：${card.name||'課程'}</div>
+      <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:12px;">
+        把操作流程拆成步驟，每步可以填「說明」和「重點提醒」。服務前點開就能快速複習。
+      </div>
+      <div id="m_step_list" style="max-height:55vh;overflow-y:auto;margin-top:12px;"></div>
+      <button class="btn btn-s btn-sm" style="margin-top:8px;" onclick="addStepRow()">＋ 新增步驟</button>
+      <div class="mbtns">
+        <button class="btn btn-s" onclick="toggleStepEdit(false)">取消</button>
+        <button class="btn btn-p" onclick="saveCourseSteps('${card.id}')">✓ 儲存步驟</button>
+      </div>`;
+      setTimeout(renderStepRows,30);
+    }
+    S.modal.lg=true;
+  }
+
   if(m.t==='fixedCostCalc'){
     if(!S.modal.fcItems){
       // 預設帶入常見項目
@@ -10800,6 +10861,88 @@ window.renameStaff=async()=>{
     console.error('老師改名失敗',err);
     alert(`改名過程發生錯誤（已完成 ${done}/${total} 筆）：\n${err.message||err}\n\n可以再點一次按鈕，會繼續處理剩下的。`);
   }
+};
+
+// ═══ 📖 課程步驟 ═══
+window.toggleStepEdit=(on)=>{
+  if(!S.modal)return;
+  S.modal.stepEdit=on;
+  if(!on)S.modal.stepDraft=null;
+  const inn=$('modal-inner');
+  if(inn){
+    inn.innerHTML=renderModal();
+    if(on)setTimeout(renderStepRows,30);
+  }
+};
+
+window.addStepRow=()=>{
+  if(!S.modal)return;
+  if(!S.modal.stepDraft)S.modal.stepDraft=[];
+  S.modal.stepDraft.push({title:'',note:'',key:'',minutes:0});
+  renderStepRows();
+};
+
+window.removeStepRow=(i)=>{
+  if(!S.modal||!S.modal.stepDraft)return;
+  S.modal.stepDraft.splice(i,1);
+  renderStepRows();
+};
+
+window.moveStepRow=(i,dir)=>{
+  if(!S.modal||!S.modal.stepDraft)return;
+  const arr=S.modal.stepDraft;
+  const j=i+dir;
+  if(j<0||j>=arr.length)return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];
+  renderStepRows();
+};
+
+window.updateStepField=(i,field,val)=>{
+  if(!S.modal||!S.modal.stepDraft||!S.modal.stepDraft[i])return;
+  S.modal.stepDraft[i][field]=field==='minutes'?(parseFloat(val)||0):val;
+};
+
+window.renderStepRows=()=>{
+  const wrap=$('m_step_list');
+  if(!wrap||!S.modal)return;
+  const arr=S.modal.stepDraft||[];
+  if(arr.length===0){
+    wrap.innerHTML=`<div class="empty" style="padding:20px;"><p class="tm">點「＋新增步驟」開始建立流程</p></div>`;
+    return;
+  }
+  wrap.innerHTML=arr.map((st,i)=>`
+    <div style="background:var(--bg2);padding:10px;border-radius:8px;margin-bottom:8px;">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+        <span style="flex-shrink:0;width:24px;height:24px;background:var(--pur);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">${i+1}</span>
+        <input type="text" value="${(st.title||'').replace(/"/g,'&quot;')}" placeholder="步驟名稱（如：卸妝清潔）"
+          onchange="updateStepField(${i},'title',this.value)" style="flex:1;font-size:14px;font-weight:700;">
+        <input type="number" value="${st.minutes||''}" placeholder="分"
+          onchange="updateStepField(${i},'minutes',this.value)" style="width:56px;font-size:13px;">
+        <button class="bdel" onclick="moveStepRow(${i},-1)" title="上移" ${i===0?'style="opacity:.3;"':''}>↑</button>
+        <button class="bdel" onclick="moveStepRow(${i},1)" title="下移" ${i===arr.length-1?'style="opacity:.3;"':''}>↓</button>
+        <button class="bdel" onclick="removeStepRow(${i})">×</button>
+      </div>
+      <textarea placeholder="操作說明（選填）" rows="2"
+        onchange="updateStepField(${i},'note',this.value)"
+        style="width:100%;font-size:13px;margin-bottom:6px;">${st.note||''}</textarea>
+      <input type="text" value="${(st.key||'').replace(/"/g,'&quot;')}" placeholder="💡 重點提醒（選填，會用金色標示）"
+        onchange="updateStepField(${i},'key',this.value)" style="width:100%;font-size:13px;">
+    </div>
+  `).join('');
+};
+
+window.saveCourseSteps=async(cardId)=>{
+  if(!S.modal)return;
+  const draft=(S.modal.stepDraft||[]).filter(st=>(st.title||'').trim());
+  const cards=(S.data.serviceCosts||[]).map(c=>
+    c.id===cardId?{...c,steps:draft}:c
+  );
+  await saveMain({serviceCosts:cards});
+  S.modal.stepEdit=false;
+  S.modal.stepDraft=null;
+  toast(`✅ 已儲存 ${draft.length} 個步驟`);
+  const inn=$('modal-inner');
+  if(inn)inn.innerHTML=renderModal();
 };
 
 // ═══ 🏠 固定成本試算機 ═══
