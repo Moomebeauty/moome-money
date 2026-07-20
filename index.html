@@ -3530,8 +3530,9 @@ function pgServiceCost(){
               <tr><td><b>📦 材料成本</b></td>
                 <td class="tm">${card.items?.length>0?card.items.map(it=>{
                   const p=products.find(x=>x.id===it.productId);
-                  const cost=p?Math.round(getAvgCost(p.id)*toN(it.qty)):0;
-                  return`${p?.name||'(已刪除)'} × ${it.qty}${it.unit||''} = $${fmt(cost)}`;
+                  const cost=p?Math.round(getUnitCost(p.id)*toN(it.qty)*100)/100:0;
+                  const u=p?.capacityUnit||'';
+                  return`${p?.name||'(已刪除)'} × ${it.qty}${u} = $${cost.toFixed(2)}`;
                 }).join('　/　'):'<span class="tm">（無材料）</span>'}</td>
                 <td class="an">$${fmt(fin.materialCost)}</td>
               </tr>
@@ -6857,8 +6858,21 @@ function renderModal(){
             ${['ml','g','片','瓶','次',''].map(u=>`<option value="${u}"${u===(pr.capacityUnit||'ml')?' selected':''}>${u||'無單位'}</option>`).join('')}
           </select>
         </div>
-        <div class="tm" style="font-size:11px;margin-top:4px;">
-          ${toN(pr.capacity)>0?`目前單位成本：$${fmt(Math.round(getUnitCost(pr.id)*100)/100)}/${pr.capacityUnit||''}`:'尚未填容量，將以「整瓶/整個」為單位計算成本'}
+        <div class="tm" style="font-size:11px;margin-top:6px;line-height:1.8;">
+          ${(()=>{
+            const cap=toN(pr.capacity);
+            const u=pr.capacityUnit||'';
+            if(cap<=0)return'尚未填容量，將以「整瓶/整個」為單位計算成本';
+            const stdU=getStdUnitCost(pr.id);
+            const actU=getUnitCost(pr.id);
+            const stdTotal=getStdCost(pr.id);
+            const actTotal=getAvgCost(pr.id);
+            let html=`📋 標準成本 $${fmt(Math.round(stdTotal))} ÷ ${cap}${u} = <b style="color:var(--goldDk);">$${stdU.toFixed(2)}/${u}</b>　<span style="color:var(--mut);">（定價用這個）</span>`;
+            if(actTotal>0&&Math.abs(actTotal-stdTotal)>=0.01){
+              html+=`<br>🛒 實際均價 $${fmt(Math.round(actTotal))} ÷ ${cap}${u} = <b style="color:var(--grn);">$${actU.toFixed(2)}/${u}</b>　<span style="color:var(--mut);">（真實花費）</span>`;
+            }
+            return html;
+          })()}
         </div>
       </div>
       <div class="fgrp"><label>現有庫存</label><input type="number" id="m_pr4" value="${inv.qty||0}"></div>
