@@ -3518,70 +3518,33 @@ function pgServiceCost(){
   </div>
 
   ${cards.length===0?`<div class="card"><div class="empty"><div class="empty-ico">💎</div><p>尚未建立任何服務成本卡</p><p class="tm">點「+新增成本卡」開始為每項服務建立成本配方</p></div></div>`:
-    cards.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant')).map(card=>{
-      const fin=calcServiceCardFinancials(card,fixedPerSvc);
-      const profitColor=fin.companyNet>=0?'var(--grn)':'var(--red)';
-      const marginColor=fin.netMargin>=20?'var(--grn)':fin.netMargin>=0?'var(--gold)':'var(--red)';
-      return`<div class="card" style="margin-bottom:14px;">
-        <div class="card-hd" style="background:linear-gradient(90deg,var(--purL),transparent);">
-          <span class="card-ttl">💎 ${card.name||'未命名'}　${card.duration?`<span class="bdg">${card.duration} 分鐘</span>`:''}</span>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('courseSteps','${card.id}')">📖 步驟${(card.steps||[]).length>0?`(${card.steps.length})`:''}</button>
-            <button class="btn btn-s btn-sm" onclick="openM('editServiceCost','${card.id}')">✏️ 編輯</button>
+    `<div class="card"><div class="card-bd" style="padding:0;">
+      ${cards.sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant')).map(card=>{
+        const fin=calcServiceCardFinancials(card,fixedPerSvc);
+        const marginColor=fin.netMargin>=60?'var(--grn)':fin.netMargin>=30?'var(--gold)':'var(--red)';
+        const stepCount=(card.steps||[]).length;
+        return`<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--bdr);flex-wrap:wrap;">
+          <div style="flex:1;min-width:150px;cursor:pointer;" onclick="openM('cardDetail','${card.id}')">
+            <div style="font-size:16px;font-weight:700;color:var(--txt);">
+              ${card.name||'未命名'}
+              ${card.duration?`<span class="bdg" style="font-size:11px;margin-left:6px;">${card.duration}分</span>`:''}
+            </div>
+            <div class="tm" style="font-size:12px;margin-top:3px;">
+              售價 <b style="color:var(--rose);">$${fmt(card.price||0)}</b>
+              　成本 $${fmt(Math.round(fin.totalCost))}
+              　淨利 <b style="color:${marginColor};">${fin.netMargin}%</b>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button class="btn btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('courseSteps','${card.id}')">📖${stepCount>0?` ${stepCount}`:''}</button>
+            <button class="btn btn-s btn-sm" onclick="openM('cardDetail','${card.id}')">📊 明細</button>
+            <button class="btn btn-s btn-sm" onclick="openM('editServiceCost','${card.id}')">✏️</button>
             <button class="bdel" onclick="delServiceCost('${card.id}')">×</button>
           </div>
-        </div>
-        <div class="card-bd">
-          <div class="sg sg4" style="margin-bottom:10px;">
-            <div class="sc"><div class="sl">售價</div><div class="sv sm" style="color:var(--rose);">$${fmt(card.price||0)}</div></div>
-            <div class="sc"><div class="sl">總成本</div><div class="sv sm" style="color:var(--red);">$${fmt(fin.totalCost)}</div><div class="ss">材+抽+攤</div></div>
-            <div class="sc"><div class="sl">公司淨利</div><div class="sv sm" style="color:${profitColor};">$${fmt(fin.companyNet)}</div></div>
-            <div class="sc"><div class="sl">淨利率</div><div class="sv sm" style="color:${marginColor};">${fin.netMargin}%</div></div>
-          </div>
-
-          <div class="tw"><table style="font-size:13px;">
-            <thead><tr><th>項目</th><th>明細</th><th class="tm">金額</th></tr></thead>
-            <tbody>
-              <tr><td><b>📦 材料成本</b></td>
-                <td class="tm">${card.items?.length>0?card.items.map(it=>{
-                  const p=products.find(x=>x.id===it.productId);
-                  const _cf=(S.cardCostMode||'std')==='std'?getStdUnitCost:getUnitCost;
-                  const cost=p?Math.round(_cf(p.id)*toN(it.qty)*100)/100:0;
-                  const u=p?.capacityUnit||'';
-                  return`${p?.name||'(已刪除)'} × ${it.qty}${u} = $${cost.toFixed(2)}`;
-                }).join('　/　'):'<span class="tm">（無材料）</span>'}</td>
-                <td class="an">$${fmt(fin.materialCost)}</td>
-              </tr>
-              <tr><td><b>👩‍💼 老師抽成</b></td>
-                <td class="tm">售價 $${fmt(card.price||0)} × ${Math.round((card.commissionRate||0.6)*100)}%</td>
-                <td class="an">$${fmt(fin.commission)}</td>
-              </tr>
-              <tr><td><b>🏪 固定攤分</b></td>
-                <td class="tm">${fin.fixedSource==='custom'?'此服務自訂金額':fin.fixedSource==='hourly'?`床位成本 $${fmt(toN(S.data.settings?.bedHourlyRate))}/小時 × ${card.duration||0} 分鐘`:'本月房租水電 ÷ 月服務數（建議改設床位成本）'}</td>
-                <td class="an">$${fmt(fin.fixed)}</td>
-              </tr>
-              <tr style="background:var(--bg2);font-weight:700;">
-                <td>總成本</td><td></td>
-                <td class="an">$${fmt(fin.totalCost)}</td>
-              </tr>
-              <tr style="background:${fin.companyNet>=0?'var(--grnL)':'var(--redL)'};font-weight:700;">
-                <td style="color:${profitColor};">公司淨利</td>
-                <td class="tm">售價 - 總成本</td>
-                <td style="color:${profitColor};">$${fmt(fin.companyNet)}　(${fin.netMargin}%)</td>
-              </tr>
-            </tbody>
-          </table></div>
-
-          ${fin.companyNet<0?`<div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:13px;margin-top:10px;">
-            ⚠️ <b>這項服務虧錢！</b>建議：① 降低材料用量　② 提高售價至 $${fmt(fin.suggestedPrice30)}（淨利 30%）　③ 降低抽成率
-          </div>`:fin.netMargin<10?`<div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;margin-top:10px;">
-            ⚠️ <b>淨利率偏低（${fin.netMargin}%）</b>建議：售價可調至 $${fmt(fin.suggestedPrice30)}（淨利 30%）
-          </div>`:`<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;margin-top:10px;">
-            ✅ <b>盈利狀態良好</b>　淨利率 ${fin.netMargin}%
-          </div>`}
-        </div>
-      </div>`;
-    }).join('')}`;
+        </div>`;
+      }).join('')}
+    </div></div>`}
+  `;
 }
 
 // 計算服務成本卡的財務數據
@@ -6621,6 +6584,76 @@ function renderModal(){
 
   // ─── 床位成本設定 modal ───
   // ─── 🏠 固定成本試算機 ───
+  // ─── 📊 成本卡明細 ───
+  if(m.t==='cardDetail'){
+    const card=(S.data.serviceCosts||[]).find(x=>x.id===m.x)||{};
+    const products=S.data.products||[];
+    const monthExp2=getExp().filter(e=>['房租','水電','設備維修'].includes(e.category)).reduce((s,e)=>s+toN(e.amount),0);
+    const monthSvcCount2=getSales().filter(s=>s.type==='service').length;
+    const fixedPerSvc2=monthSvcCount2>0?Math.round(monthExp2/monthSvcCount2):0;
+    const fin=calcServiceCardFinancials(card,fixedPerSvc2);
+    const profitColor=fin.companyNet>=0?'var(--grn)':'var(--red)';
+    const marginColor=fin.netMargin>=20?'var(--grn)':fin.netMargin>=0?'var(--gold)':'var(--red)';
+    c=`<div class="mttl">📊 ${card.name||'未命名'}${card.duration?`　<span class="bdg">${card.duration} 分鐘</span>`:''}</div>
+    <div style="max-height:65vh;overflow-y:auto;">
+      <div class="sg sg4" style="margin-bottom:12px;">
+        <div class="sc"><div class="sl">售價</div><div class="sv sm" style="color:var(--rose);">$${fmt(card.price||0)}</div></div>
+        <div class="sc"><div class="sl">總成本</div><div class="sv sm" style="color:var(--red);">$${fmt(fin.totalCost)}</div></div>
+        <div class="sc"><div class="sl">淨利</div><div class="sv sm" style="color:${profitColor};">$${fmt(fin.companyNet)}</div></div>
+        <div class="sc"><div class="sl">淨利率</div><div class="sv sm" style="color:${marginColor};">${fin.netMargin}%</div></div>
+      </div>
+
+      <div class="tw"><table style="font-size:13px;">
+        <thead><tr><th>項目</th><th>明細</th><th class="tm">金額</th></tr></thead>
+        <tbody>
+          <tr><td><b>📦 材料成本</b></td>
+            <td class="tm">${card.items?.length>0?card.items.map(it=>{
+              const p=products.find(x=>x.id===it.productId);
+              const _cf=(S.cardCostMode||'std')==='std'?getStdUnitCost:getUnitCost;
+              const cost=p?Math.round(_cf(p.id)*toN(it.qty)*100)/100:0;
+              const u=p?.capacityUnit||'';
+              return`${p?.name||'(已刪除)'} × ${it.qty}${u} = $${cost.toFixed(2)}`;
+            }).join('<br>'):'<span class="tm">（無材料）</span>'}</td>
+            <td class="an">$${fmt(fin.materialCost)}</td>
+          </tr>
+          ${toN(card.commissionRate)>0?`<tr><td><b>👩‍💼 老師抽成</b></td>
+            <td class="tm">售價 $${fmt(card.price||0)} × ${Math.round((card.commissionRate||0.6)*100)}%</td>
+            <td class="an">$${fmt(fin.commission)}</td>
+          </tr>`:`<tr><td><b>👩‍💼 抽成</b></td>
+            <td class="tm">個人工作室模式：抽成進自己口袋，不計為成本</td>
+            <td class="an">$0</td>
+          </tr>`}
+          <tr><td><b>🏪 固定攤分</b></td>
+            <td class="tm">${fin.fixedSource==='custom'?'此服務自訂金額':fin.fixedSource==='hourly'?`床位 $${fmt(toN(S.data.settings?.bedHourlyRate))}/小時 × ${card.duration||0} 分`:'房租水電 ÷ 月服務數'}</td>
+            <td class="an">$${fmt(fin.fixed)}</td>
+          </tr>
+          <tr style="background:var(--bg2);font-weight:700;">
+            <td>總成本</td><td></td><td class="an">$${fmt(fin.totalCost)}</td>
+          </tr>
+          <tr style="background:${fin.companyNet>=0?'var(--grnL)':'var(--redL)'};font-weight:700;">
+            <td style="color:${profitColor};">淨利</td>
+            <td class="tm">售價 − 總成本</td>
+            <td style="color:${profitColor};">$${fmt(fin.companyNet)}　(${fin.netMargin}%)</td>
+          </tr>
+        </tbody>
+      </table></div>
+
+      ${fin.companyNet<0?`<div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:13px;margin-top:10px;">
+        ⚠️ <b>這項服務虧錢！</b>建議：① 降低材料用量　② 提高售價至 $${fmt(fin.suggestedPrice30)}　③ 降低抽成率
+      </div>`:fin.netMargin<10?`<div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;margin-top:10px;">
+        ⚠️ <b>淨利率偏低（${fin.netMargin}%）</b>建議售價調至 $${fmt(fin.suggestedPrice30)}
+      </div>`:`<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;margin-top:10px;">
+        ✅ <b>體質良好</b>　淨利率 ${fin.netMargin}%
+      </div>`}
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('courseSteps','${card.id}')">📖 看步驟</button>
+      <button class="btn btn-p" onclick="openM('editServiceCost','${card.id}')">✏️ 編輯</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── 📖 課程步驟（檢視／編輯）───
   if(m.t==='courseSteps'){
     const card=(S.data.serviceCosts||[]).find(x=>x.id===m.x)||{};
