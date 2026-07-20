@@ -3579,6 +3579,36 @@ function getUnitCost(productId){
   return totalCost;  // 沒填容量 → 整瓶當一個單位
 }
 
+// ── 標準成本（合約價）：用於定價，比較保守安全 ──
+// 優先用手動填的 product.cost（＝跟廠商簽的合約價，如售價五折）
+// 沒填的話，退回實際加權平均成本
+function getStdCost(pid){
+  const p=(S.data.products||[]).find(x=>x.id===pid);
+  const std=toN(p?.cost);
+  if(std>0)return std;
+  return getAvgCost(pid);  // 沒填標準成本 → 用實際成本
+}
+
+// 標準成本的每單位（每 ml / 每 g）成本
+function getStdUnitCost(productId){
+  const p=(S.data.products||[]).find(x=>x.id===productId);
+  if(!p)return 0;
+  const totalCost=getStdCost(productId);
+  const capacity=toN(p.capacity);
+  if(capacity>0)return totalCost/capacity;
+  return totalCost;
+}
+
+// 採購效益：標準成本 vs 實際成本的差（正數＝你買得比合約便宜）
+function getPurchaseBenefit(pid){
+  const std=getStdCost(pid);
+  const act=getAvgCost(pid);
+  if(std<=0||act<=0)return{diff:0,pct:0,hasBoth:false};
+  const diff=std-act;
+  const pct=Math.round(diff/std*1000)/10;
+  return{diff,pct,std,act,hasBoth:true};
+}
+
 function calcServiceCardFinancials(card,fixedPerSvc){
   const products=S.data.products||[];
   // 材料成本：用「單位成本」× 用量
@@ -5246,6 +5276,10 @@ function pgSettings(){
           <div class="tm" style="font-size:11px;margin-top:4px;">檢查產品清單、庫存、進貨的資料筆數，確認到底有沒有資料。庫存盤點空白時先點這個看診斷</div>
         </div>
         <div>
+          <button class="btn" style="background:var(--gold);color:#fff;" onclick="recalcAvgCost()">💰 重算加權平均成本</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">用所有進貨紀錄重新計算每個產品的平均成本（總成本÷總數量）。手動改錯成本、或進貨資料修正後，用這個同步回正確數字</div>
+        </div>
+        <div>
           <button class="btn" style="background:var(--grn);color:#fff;" onclick="rebuildInventoryFromPurchases()">🔧 從進貨重建庫存</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">如果產品清單/庫存不見了，但進貨紀錄還在，用這個從進貨紀錄反推重建產品和庫存（只補回缺的，不動現有資料）</div>
         </div>
@@ -6642,6 +6676,20 @@ function renderModal(){
       <input type="text" id="m_sp_name" placeholder="如：深層清潔護膚 90 分鐘" value="${S.modal.spName||''}" oninput="S.modal.spName=this.value;">
     </div>
 
+    <!-- 成本模式切換 -->
+    <div style="background:var(--goldL);padding:10px 12px;border-radius:8px;margin-top:12px;">
+      <div style="font-size:13px;font-weight:700;color:var(--goldDk);margin-bottom:6px;">💰 用哪種成本算？</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm ${(S.modal.spCostMode||'std')==='std'?'btn-p':'btn-s'}" onclick="setSoloCostMode('std')">📋 標準成本（合約價）</button>
+        <button class="btn btn-sm ${S.modal.spCostMode==='act'?'btn-p':'btn-s'}" onclick="setSoloCostMode('act')">🛒 實際進貨均價</button>
+      </div>
+      <div class="tm" style="font-size:11px;margin-top:6px;">
+        ${(S.modal.spCostMode||'std')==='std'?
+          '✅ <b>定價建議用這個</b>。合約價穩定，不會因為這次特價、下次沒特價而變。特價省下的錢就是你的額外利潤。':
+          '⚠️ 這是你實際買到的價（含特價）。適合看真實毛利，但<b>不建議用來定價</b> —— 哪天沒特價，利潤會被吃掉。'}
+      </div>
+    </div>
+
     <!-- 材料用量 -->
     <div style="background:var(--bluL);padding:12px;border-radius:8px;margin-top:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -6767,7 +6815,40 @@ function renderModal(){
       </div>
       <div class="fgrp"><label>產品系列（如：保濕系列、抗老系列）</label><input type="text" id="m_prSeries" value="${pr.series||''}" placeholder="選填，可以分組顯示"></div>
       <div class="fgrp"><label>售價</label><input type="number" id="m_pr2" value="${pr.price||0}"></div>
-      <div class="fgrp"><label>成本</label><input type="number" id="m_pr3" value="${pr.cost||0}"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;border-left:3px solid var(--gold);">
+        <label style="color:var(--goldDk);font-weight:700;">💰 雙成本設定（定價用標準、算利潤用實際）</label>
+        <div class="fg fg2" style="margin-top:6px;">
+          <div class="fgrp" style="margin:0;">
+            <label style="font-size:12px;">📋 標準成本（合約價）</label>
+            <input type="number" id="m_pr3" value="${pr.cost||0}" step="0.01">
+            <div class="tm" style="font-size:10px;margin-top:2px;">跟廠商簽的價，如售價五折</div>
+          </div>
+          <div class="fgrp" style="margin:0;">
+            <label style="font-size:12px;">🛒 實際進貨均價</label>
+            <input type="number" id="m_prAvgCost" value="${Math.round(getAvgCost(pr.id)*100)/100}" step="0.01">
+            <div class="tm" style="font-size:10px;margin-top:2px;">你挑特價實際買到的</div>
+          </div>
+        </div>
+        ${(()=>{
+          const b=getPurchaseBenefit(pr.id);
+          const purCount=(S.data.purchases||[]).filter(p=>p.productId===pr.id).length;
+          if(b.hasBoth&&b.diff>0){
+            return`<div style="margin-top:8px;padding:8px 10px;background:var(--grnL);border-radius:6px;font-size:12px;color:var(--grn);">
+              🎯 <b>採購效益：每單位省 $${fmt(Math.round(b.diff))}（比合約價低 ${b.pct}%）</b><br>
+              <span style="font-size:11px;">你挑特價進貨的本事，讓每一瓶都多賺這些。定價時用標準成本算，這筆就是額外利潤。</span>
+            </div>`;
+          }
+          if(b.hasBoth&&b.diff<0){
+            return`<div style="margin-top:8px;padding:8px 10px;background:var(--redL);border-radius:6px;font-size:12px;color:var(--red);">
+              ⚠️ <b>實際進貨比合約價高 $${fmt(Math.round(-b.diff))}</b><br>
+              <span style="font-size:11px;">可能是運費、小量加價，或標準成本填錯了，建議確認一下。</span>
+            </div>`;
+          }
+          return`<div class="tm" style="font-size:11px;margin-top:6px;line-height:1.7;">
+            ${purCount>0?`已有 ${purCount} 筆進貨。填上「標準成本」後，這裡會顯示你的採購效益。`:'還沒有進貨紀錄。填「標準成本」後，定價規劃器就能用它算出安全的建議售價。'}
+          </div>`;
+        })()}
+      </div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
         <label style="color:var(--blu);font-weight:700;">📏 容量／規格（重要！用於服務成本卡的單位成本計算）</label>
         <div style="display:flex;gap:8px;margin-top:6px;">
@@ -9579,10 +9660,11 @@ window.renderSoloItems=()=>{
   }
   wrap.innerHTML=items.map((it,i)=>{
     const p=allProds.find(x=>x.id===it.productId);
-    const unitCost=it.productId?getUnitCost(it.productId):0;
+    const mode=S.modal.spCostMode||'std';
+    const unitCost=it.productId?(mode==='std'?getStdUnitCost(it.productId):getUnitCost(it.productId)):0;
     const unit=p?.capacityUnit||'個';
     const cap=toN(p?.capacity);
-    const bottleCost=it.productId?getAvgCost(it.productId):0;
+    const bottleCost=it.productId?(mode==='std'?getStdCost(it.productId):getAvgCost(it.productId)):0;
     const itemCost=Math.round(unitCost*toN(it.qty)*100)/100;
     return`<div style="background:#fff;padding:10px;border-radius:6px;margin-bottom:6px;">
       <div style="display:flex;gap:6px;align-items:center;">
@@ -9604,21 +9686,40 @@ window.renderSoloItems=()=>{
   }).join('');
 };
 
+window.setSoloCostMode=(mode)=>{
+  if(!S.modal)return;
+  S.modal.spCostMode=mode;
+  const inn=$('modal-inner');
+  if(inn){
+    inn.innerHTML=renderModal();
+    setTimeout(()=>{renderSoloItems();calcSoloPricing();},30);
+  }
+};
+
 window.calcSoloPricing=()=>{
   const box=$('m_sp_result');
   if(!box||!S.modal)return;
   const items=S.modal.spItems||[];
   const ratio=parseFloat($('m_sp_ratio')?.value)||8;
   const fixed=parseFloat($('m_sp_fixed')?.value)||0;
+  const mode=S.modal.spCostMode||'std';
   S.modal.spRatio=ratio;
   S.modal.spFixed=fixed;
 
-  // 1. 材料成本
+  // 1. 材料成本（依模式選用標準或實際）
+  const costFn=mode==='std'?getStdUnitCost:getUnitCost;
   const materialCost=items.reduce((s,it)=>{
     if(!it.productId)return s;
-    return s+getUnitCost(it.productId)*toN(it.qty);
+    return s+costFn(it.productId)*toN(it.qty);
   },0);
   const matCost=Math.round(materialCost*100)/100;
+
+  // 另一種成本，用來對照採購效益
+  const otherFn=mode==='std'?getUnitCost:getStdUnitCost;
+  const otherCost=Math.round(items.reduce((s,it)=>{
+    if(!it.productId)return s;
+    return s+otherFn(it.productId)*toN(it.qty);
+  },0)*100)/100;
 
   if(matCost<=0){
     box.innerHTML=`<div class="empty" style="padding:20px;"><p class="tm">選好材料、填上用量後，這裡會自動算出建議售價</p></div>`;
@@ -9633,15 +9734,19 @@ window.calcSoloPricing=()=>{
   const netProfit=suggested-matCost-fixed;
   const netMargin=Math.round(netProfit/suggested*1000)/10;
 
-  // 3. 儲值方案下的實際毛利（用系統的三個方案）
+  // 採購效益：同樣售價下，用實際成本能多賺多少
+  const benefit=mode==='std'?Math.round((matCost-otherCost)*100)/100:0;
+  const realMargin=mode==='std'&&otherCost>0?Math.round((suggested-otherCost)/suggested*1000)/10:0;
+
+  // 3. 儲值方案下的實際毛利
   const plans=[
     {name:'入門',actual:10000,face:11000},
     {name:'主力',actual:20000,face:23000},
     {name:'尊榮',actual:38000,face:45000},
   ];
   const planRows=plans.map(pl=>{
-    const rate=pl.actual/pl.face;              // 實收比例
-    const received=Math.round(suggested*rate); // 這堂課實際收到的錢
+    const rate=pl.actual/pl.face;
+    const received=Math.round(suggested*rate);
     const gp=received-matCost;
     const gm=received>0?Math.round(gp/received*1000)/10:0;
     const discount=Math.round(rate*1000)/10;
@@ -9656,15 +9761,27 @@ window.calcSoloPricing=()=>{
   box.innerHTML=`
     <!-- 建議售價 -->
     <div style="background:linear-gradient(135deg,var(--goldL),#fff);padding:16px;border-radius:10px;border-left:4px solid var(--gold);margin-bottom:12px;">
-      <div style="font-size:13px;color:var(--mut);margin-bottom:4px;">材料成本 $${matCost.toFixed(2)}　佔售價 ${ratio}%</div>
+      <div style="font-size:13px;color:var(--mut);margin-bottom:4px;">
+        ${mode==='std'?'📋 標準成本':'🛒 實際成本'} $${matCost.toFixed(2)}　佔售價 ${ratio}%
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
         <span style="font-size:15px;font-weight:700;color:var(--goldDk);">💰 建議售價</span>
         <span style="font-size:32px;font-weight:900;color:var(--gold);">$${fmt(suggested)}</span>
       </div>
-      <div class="tm" style="font-size:12px;margin-top:6px;">
-        精算值 $${Math.round(rawPrice)}，已進位到百元好報價
-      </div>
+      <div class="tm" style="font-size:12px;margin-top:6px;">精算值 $${Math.round(rawPrice)}，已進位到百元好報價</div>
     </div>
+
+    ${mode==='std'&&benefit>0?`<div style="background:var(--grnL);padding:12px;border-radius:8px;border-left:4px solid var(--grn);margin-bottom:12px;">
+      <div style="font-weight:700;color:var(--grn);font-size:14px;">🎯 你的採購效益</div>
+      <div style="font-size:13px;line-height:1.8;margin-top:4px;color:var(--grn);">
+        用合約價算，這堂課材料成本 $${matCost.toFixed(0)}<br>
+        但你挑特價實際只花 <b>$${otherCost.toFixed(0)}</b>，每堂多賺 <b style="font-size:16px;">$${benefit.toFixed(0)}</b><br>
+        <span style="font-size:12px;">→ 實際毛利率其實是 <b>${realMargin}%</b>（而不是 ${grossMargin}%）</span>
+      </div>
+      <div class="tm" style="font-size:11px;margin-top:6px;color:var(--grn);">
+        💡 定價照合約價算是對的，這樣哪天沒特價你也不會虧。省下的就是你的本事錢。
+      </div>
+    </div>`:''}
 
     <!-- 這個價格的體質 -->
     <div class="sg sg3" style="margin-bottom:12px;">
@@ -9674,7 +9791,7 @@ window.calcSoloPricing=()=>{
     </div>
     ${grossMargin>=90?
       `<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✅ 毛利率 ${grossMargin}%，達到你的 90% 目標，體質健康</div>`:
-      `<div class="notice" style="background:#fef3c7;border-left-color:#d97706;color:#92400e;font-size:13px;">⚠️ 毛利率 ${grossMargin}% 未達 90%。想拉高的話：把「目標材料佔比」調到 10% 以下，或換更省成本的產品</div>`}
+      `<div class="notice" style="background:#fef3c7;border-left-color:#d97706;color:#92400e;font-size:13px;">⚠️ 毛利率 ${grossMargin}% 未達 90%。想拉高：把「目標材料佔比」調低，或換更省成本的產品</div>`}
     ${fixed>0?`<div class="tm" style="font-size:12px;margin:8px 0;padding:8px;background:var(--bg2);border-radius:6px;">
       扣掉每堂固定成本 $${fmt(fixed)} 後 → 淨利 <b style="color:var(--grn);">$${fmt(Math.round(netProfit))}</b>（淨利率 ${netMargin}%）
     </div>`:''}
@@ -9702,8 +9819,7 @@ window.calcSoloPricing=()=>{
         </tbody>
       </table></div>
       <div class="tm" style="font-size:11px;margin-top:8px;color:var(--pur);">
-        💡 因為你自己做、材料成本很低，就算給到尊榮方案的折扣，毛利率還是很漂亮 ——
-        這就是為什麼「做臉儲值可以大方給折扣」。
+        💡 因為你自己做、材料成本很低，就算給到尊榮方案的折扣，毛利率還是很漂亮 —— 這就是為什麼「做臉儲值可以大方給折扣」。
       </div>
     </div>
 
@@ -9720,7 +9836,7 @@ window.calcSoloPricing=()=>{
         ─────────────<br>
         ＝ 你實拿 <b style="color:${empProfit>0?'var(--grn)':'var(--red)'};font-size:16px;">$${fmt(Math.round(empProfit))}</b>（利潤率 ${empMargin}%）
         <div class="tm" style="font-size:11px;margin-top:8px;">
-          從 ${grossMargin}% 掉到 ${empMargin}%，這就是你說的「從技術者變經營者」的結構變化。<br>
+          從 ${grossMargin}% 掉到 ${empMargin}%，這就是「從技術者變經營者」的結構變化。<br>
           到那時要靠<b>多床位 × 高客流</b>用量補回來，或調整抽成結構。
         </div>
       </div>
@@ -9736,7 +9852,9 @@ window.saveSoloAsCard=async()=>{
   if(items.length===0){alert('請至少加一項材料並填用量');return;}
   const ratio=parseFloat($('m_sp_ratio')?.value)||8;
   const fixed=parseFloat($('m_sp_fixed')?.value)||0;
-  const matCost=items.reduce((s,it)=>s+getUnitCost(it.productId)*toN(it.qty),0);
+  const mode=S.modal.spCostMode||'std';
+  const costFn=mode==='std'?getStdUnitCost:getUnitCost;
+  const matCost=items.reduce((s,it)=>s+costFn(it.productId)*toN(it.qty),0);
   const suggested=Math.ceil((matCost/(ratio/100))/100)*100;
   const card={
     id:uid(),
@@ -10578,6 +10696,71 @@ window.renameStaff=async()=>{
   }
 };
 
+// ─── 💰 從進貨紀錄重算加權平均成本 ───
+window.recalcAvgCost=async()=>{
+  const purchases=S.data.purchases||[];
+  const products=S.data.products||[];
+  if(purchases.length===0){
+    alert('沒有進貨紀錄，無法重算。');
+    return;
+  }
+  // 依產品彙總：總成本 ÷ 總數量
+  const agg={};
+  purchases.forEach(p=>{
+    const pid=p.productId;
+    if(!pid)return;
+    if(!agg[pid])agg[pid]={qty:0,cost:0,count:0};
+    agg[pid].qty+=toN(p.qty);
+    agg[pid].cost+=toN(p.totalCost);
+    agg[pid].count++;
+  });
+
+  // 算出新舊差異
+  const changes=[];
+  Object.entries(agg).forEach(([pid,a])=>{
+    if(a.qty<=0)return;
+    const newAvg=Math.round(a.cost/a.qty*100)/100;
+    const oldAvg=Math.round(toN(getInv(pid).avgCost)*100)/100;
+    if(Math.abs(newAvg-oldAvg)>=0.01){
+      const p=products.find(x=>x.id===pid);
+      changes.push({pid,name:p?.name||'(未知產品)',oldAvg,newAvg,count:a.count});
+    }
+  });
+
+  if(changes.length===0){
+    alert('✅ 所有產品的加權平均成本都已經是正確的，不需要重算。');
+    return;
+  }
+
+  const preview=changes.slice(0,12).map(c=>
+    `• ${c.name}：$${c.oldAvg} → $${c.newAvg}（${c.count} 筆進貨）`
+  ).join('\n');
+  const more=changes.length>12?`\n...還有 ${changes.length-12} 項`:'';
+
+  if(!confirm(`即將重算 ${changes.length} 個產品的加權平均成本：\n\n${preview}${more}\n\n算法：該產品所有進貨的總成本 ÷ 總數量\n\n⚠️ 這會覆蓋你手動改過的成本，確定要重算嗎？`))return;
+
+  setSyncing('syncing');
+  try{
+    let newInv=[...(S.data.inventory||[])];
+    changes.forEach(c=>{
+      const idx=newInv.findIndex(i=>i.productId===c.pid);
+      if(idx>=0){
+        newInv[idx]={...newInv[idx],avgCost:c.newAvg};
+      }else{
+        newInv.push({productId:c.pid,qty:0,minQty:1,avgCost:c.newAvg});
+      }
+    });
+    await saveMain({inventory:newInv});
+    setSyncing('synced');
+    alert(`✅ 已重算 ${changes.length} 個產品的加權平均成本。\n\n服務成本卡、定價規劃器的數字也會跟著更新。`);
+    render();
+  }catch(err){
+    setSyncing('error');
+    console.error('重算成本失敗',err);
+    alert('重算失敗：'+(err.message||err));
+  }
+};
+
 // ─── 🔍 庫存診斷 ───
 window.diagnoseInventory=()=>{
   const products=S.data.products||[];
@@ -11412,7 +11595,10 @@ window.updProduct=async(id)=>{
     note:$('m_pr6')?.value||''
   }:p);
   const oldInv=getInv(id);
-  const newInv=[...S.data.inventory.filter(i=>i.productId!==id),{...oldInv,productId:id,qty,minQty}];
+  // 加權平均成本：允許手動覆寫（改了才更新，沒改就維持原本的）
+  const inputAvg=$('m_prAvgCost')?.value;
+  const newAvgCost=inputAvg!==undefined&&inputAvg!==''?parseFloat(inputAvg)||0:toN(oldInv.avgCost);
+  const newInv=[...S.data.inventory.filter(i=>i.productId!==id),{...oldInv,productId:id,qty,minQty,avgCost:newAvgCost}];
   await saveMain({products:prods,inventory:newInv});toast('✅ 產品已更新');closeMod();
 };
 window.delProduct=async id=>{
