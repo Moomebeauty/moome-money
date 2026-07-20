@@ -3492,6 +3492,19 @@ function pgServiceCost(){
     </div>
   </div>
 
+  <div style="background:var(--goldL);padding:10px 12px;border-radius:8px;margin-bottom:12px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <span style="font-size:13px;font-weight:700;color:var(--goldDk);">💰 用哪種成本算：</span>
+      <button class="btn btn-sm ${(S.cardCostMode||'std')==='std'?'btn-p':'btn-s'}" onclick="setCardCostMode('std')">📋 標準成本</button>
+      <button class="btn btn-sm ${S.cardCostMode==='act'?'btn-p':'btn-s'}" onclick="setCardCostMode('act')">🛒 實際進貨均價</button>
+    </div>
+    <div class="tm" style="font-size:11px;margin-top:6px;">
+      ${(S.cardCostMode||'std')==='std'?
+        '目前用<b>合約價</b>算，跟定價規劃器一致，是保守安全的定價基準。':
+        '目前用<b>實際進貨均價</b>算，看得到你挑特價後的真實毛利。'}
+    </div>
+  </div>
+
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
     <button class="btn btn-p btn-sm" onclick="openM('soloPricing')" style="background:linear-gradient(135deg,var(--gold),var(--rose));">💎 個人工作室定價規劃器</button>
     <button class="btn btn-y btn-sm" onclick="openM('bedCostSetting')">🛏️ 床位成本設定</button>
@@ -3530,7 +3543,8 @@ function pgServiceCost(){
               <tr><td><b>📦 材料成本</b></td>
                 <td class="tm">${card.items?.length>0?card.items.map(it=>{
                   const p=products.find(x=>x.id===it.productId);
-                  const cost=p?Math.round(getUnitCost(p.id)*toN(it.qty)*100)/100:0;
+                  const _cf=(S.cardCostMode||'std')==='std'?getStdUnitCost:getUnitCost;
+                  const cost=p?Math.round(_cf(p.id)*toN(it.qty)*100)/100:0;
                   const u=p?.capacityUnit||'';
                   return`${p?.name||'(已刪除)'} × ${it.qty}${u} = $${cost.toFixed(2)}`;
                 }).join('　/　'):'<span class="tm">（無材料）</span>'}</td>
@@ -3610,13 +3624,16 @@ function getPurchaseBenefit(pid){
   return{diff,pct,std,act,hasBoth:true};
 }
 
-function calcServiceCardFinancials(card,fixedPerSvc){
+function calcServiceCardFinancials(card,fixedPerSvc,costMode){
   const products=S.data.products||[];
-  // 材料成本：用「單位成本」× 用量
-  const materialCost=(card.items||[]).reduce((s,it)=>{
-    const unitCost=getUnitCost(it.productId);
-    return s+Math.round(unitCost*toN(it.qty));
+  // 成本模式：預設跟定價規劃器一致，用「標準成本（合約價）」
+  const mode=costMode||S.cardCostMode||'std';
+  const costFn=mode==='std'?getStdUnitCost:getUnitCost;
+  // 材料成本：用「單位成本」× 用量（最後才四捨五入，避免累積誤差）
+  const materialCostRaw=(card.items||[]).reduce((s,it)=>{
+    return s+costFn(it.productId)*toN(it.qty);
   },0);
+  const materialCost=Math.round(materialCostRaw*100)/100;
   const price=toN(card.price);
   const commRate=card.commissionRate!==undefined?toN(card.commissionRate):0.6;
   const commission=Math.round(price*commRate);
@@ -10708,6 +10725,12 @@ window.renameStaff=async()=>{
     console.error('老師改名失敗',err);
     alert(`改名過程發生錯誤（已完成 ${done}/${total} 筆）：\n${err.message||err}\n\n可以再點一次按鈕，會繼續處理剩下的。`);
   }
+};
+
+// ─── 服務成本卡：切換成本模式 ───
+window.setCardCostMode=(mode)=>{
+  S.cardCostMode=mode;
+  render();
 };
 
 // ─── 💰 從進貨紀錄重算加權平均成本 ───
