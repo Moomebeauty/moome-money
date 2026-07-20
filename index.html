@@ -3493,8 +3493,9 @@ function pgServiceCost(){
   </div>
 
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <button class="btn btn-p btn-sm" onclick="openM('soloPricing')" style="background:linear-gradient(135deg,var(--gold),var(--rose));">💎 個人工作室定價規劃器</button>
     <button class="btn btn-y btn-sm" onclick="openM('bedCostSetting')">🛏️ 床位成本設定</button>
-    <button class="btn btn-y btn-sm" onclick="openM('priceCalculator')">📐 售價試算機</button>
+    <button class="btn btn-y btn-sm" onclick="openM('priceCalculator')">📐 售價試算機（含抽成）</button>
     <button class="btn btn-p btn-sm" onclick="openM('addServiceCost')">＋ 新增成本卡</button>
   </div>
 
@@ -6627,6 +6628,58 @@ function renderModal(){
   }
 
 
+  // ─── 💎 個人工作室定價規劃器 ───
+  if(m.t==='soloPricing'){
+    const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    if(!S.modal.spItems)S.modal.spItems=[];
+    c=`<div class="mttl">💎 個人工作室定價規劃器</div>
+    <div class="notice" style="background:linear-gradient(135deg,var(--goldL),var(--roseL));border-left-color:var(--gold);color:var(--goldDk);font-size:13px;">
+      💡 <b>個人工作室模式</b>：你自己做服務，抽成是進你自己口袋，不算成本流出。<br>
+      所以這裡只算「真實會花掉的錢」＝ 材料成本。目標是讓材料只佔售價的 5~10%。
+    </div>
+
+    <div class="fgrp" style="margin-top:12px;"><label>課程／服務名稱</label>
+      <input type="text" id="m_sp_name" placeholder="如：深層清潔護膚 90 分鐘" value="${S.modal.spName||''}" oninput="S.modal.spName=this.value;">
+    </div>
+
+    <!-- 材料用量 -->
+    <div style="background:var(--bluL);padding:12px;border-radius:8px;margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <b style="color:var(--blu);">🧴 這堂課要用到的材料</b>
+        <button class="btn btn-sm" style="background:var(--blu);color:#fff;" onclick="addSoloItem()">＋ 加材料</button>
+      </div>
+      <div class="tm" style="font-size:11px;margin-bottom:8px;">
+        選產品後會自動顯示「每 ml／每 g 成本」，你只要填這堂課用幾 ml 就好
+      </div>
+      <div id="m_sp_items">
+        ${S.modal.spItems.length===0?`<div class="empty" style="padding:16px;"><p class="tm">點「＋加材料」開始，例如：精華液 3ml、按摩油 10ml、紙褲 1件</p></div>`:''}
+      </div>
+    </div>
+
+    <!-- 目標設定 -->
+    <div class="fg fg2" style="margin-top:14px;">
+      <div class="fgrp">
+        <label>🎯 目標材料佔比（%）</label>
+        <input type="number" id="m_sp_ratio" value="${S.modal.spRatio||8}" min="1" max="50" step="1" oninput="calcSoloPricing()">
+        <div class="tm" style="font-size:11px;margin-top:2px;">你的目標是 5~10%，填 8 是中間值</div>
+      </div>
+      <div class="fgrp">
+        <label>🏠 每堂固定成本（選填）</label>
+        <input type="number" id="m_sp_fixed" value="${S.modal.spFixed||0}" min="0" oninput="calcSoloPricing()">
+        <div class="tm" style="font-size:11px;margin-top:2px;">店租水電分攤，自宅可填 0</div>
+      </div>
+    </div>
+
+    <div id="m_sp_result" style="margin-top:14px;"></div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn btn-p" onclick="saveSoloAsCard()">📝 存為服務成本卡</button>
+    </div>`;
+    S.modal.lg=true;
+    setTimeout(()=>{renderSoloItems();calcSoloPricing();},50);
+  }
+
   if(m.t==='priceCalculator'){
     const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
     if(!S.modal.calcItems)S.modal.calcItems=[];
@@ -9492,6 +9545,216 @@ window.delServiceCost=async(id)=>{
 };
 
 // ─── 售價試算機 ───
+// ═══ 💎 個人工作室定價規劃器 ═══
+window.addSoloItem=()=>{
+  if(!S.modal)return;
+  if(!S.modal.spItems)S.modal.spItems=[];
+  S.modal.spItems.push({productId:'',qty:0});
+  renderSoloItems();
+  calcSoloPricing();
+};
+
+window.removeSoloItem=(i)=>{
+  if(!S.modal||!S.modal.spItems)return;
+  S.modal.spItems.splice(i,1);
+  renderSoloItems();
+  calcSoloPricing();
+};
+
+window.updateSoloItem=(i,field,val)=>{
+  if(!S.modal||!S.modal.spItems||!S.modal.spItems[i])return;
+  S.modal.spItems[i][field]=field==='qty'?parseFloat(val)||0:val;
+  if(field==='productId')renderSoloItems();
+  calcSoloPricing();
+};
+
+window.renderSoloItems=()=>{
+  const wrap=$('m_sp_items');
+  if(!wrap||!S.modal)return;
+  const items=S.modal.spItems||[];
+  const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+  if(items.length===0){
+    wrap.innerHTML=`<div class="empty" style="padding:16px;"><p class="tm">點「＋加材料」開始，例如：精華液 3ml、按摩油 10ml、紙褲 1件</p></div>`;
+    return;
+  }
+  wrap.innerHTML=items.map((it,i)=>{
+    const p=allProds.find(x=>x.id===it.productId);
+    const unitCost=it.productId?getUnitCost(it.productId):0;
+    const unit=p?.capacityUnit||'個';
+    const cap=toN(p?.capacity);
+    const bottleCost=it.productId?getAvgCost(it.productId):0;
+    const itemCost=Math.round(unitCost*toN(it.qty)*100)/100;
+    return`<div style="background:#fff;padding:10px;border-radius:6px;margin-bottom:6px;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select onchange="updateSoloItem(${i},'productId',this.value)" style="flex:2;font-size:13px;">
+          <option value="">-- 選產品 --</option>
+          ${allProds.map(pp=>`<option value="${pp.id}"${pp.id===it.productId?' selected':''}>${pp.name}</option>`).join('')}
+        </select>
+        <input type="number" value="${it.qty||''}" placeholder="用量" step="0.1"
+          onchange="updateSoloItem(${i},'qty',this.value)" style="flex:1;font-size:13px;">
+        <span style="font-size:12px;color:var(--mut);min-width:24px;">${unit}</span>
+        <button class="bdel" onclick="removeSoloItem(${i})">×</button>
+      </div>
+      ${it.productId?`<div class="tm" style="font-size:11px;margin-top:4px;color:var(--blu);">
+        ${cap>0?`一瓶 ${cap}${unit} 成本 $${fmt(Math.round(bottleCost))} → 每 ${unit} $${(Math.round(unitCost*100)/100).toFixed(2)}`:`整${unit}成本 $${fmt(Math.round(bottleCost))}`}
+        ${toN(it.qty)>0?`　用 ${it.qty}${unit} = <b style="color:var(--red);">$${itemCost.toFixed(2)}</b>`:''}
+        ${cap<=0?'　⚠️ 這產品沒填容量，請到庫存盤點補上':''}
+      </div>`:''}
+    </div>`;
+  }).join('');
+};
+
+window.calcSoloPricing=()=>{
+  const box=$('m_sp_result');
+  if(!box||!S.modal)return;
+  const items=S.modal.spItems||[];
+  const ratio=parseFloat($('m_sp_ratio')?.value)||8;
+  const fixed=parseFloat($('m_sp_fixed')?.value)||0;
+  S.modal.spRatio=ratio;
+  S.modal.spFixed=fixed;
+
+  // 1. 材料成本
+  const materialCost=items.reduce((s,it)=>{
+    if(!it.productId)return s;
+    return s+getUnitCost(it.productId)*toN(it.qty);
+  },0);
+  const matCost=Math.round(materialCost*100)/100;
+
+  if(matCost<=0){
+    box.innerHTML=`<div class="empty" style="padding:20px;"><p class="tm">選好材料、填上用量後，這裡會自動算出建議售價</p></div>`;
+    return;
+  }
+
+  // 2. 反推建議售價（材料佔 ratio%）
+  const rawPrice=matCost/(ratio/100);
+  const suggested=Math.ceil(rawPrice/100)*100;  // 進位到百元
+  const grossProfit=suggested-matCost;
+  const grossMargin=Math.round(grossProfit/suggested*1000)/10;
+  const netProfit=suggested-matCost-fixed;
+  const netMargin=Math.round(netProfit/suggested*1000)/10;
+
+  // 3. 儲值方案下的實際毛利（用系統的三個方案）
+  const plans=[
+    {name:'入門',actual:10000,face:11000},
+    {name:'主力',actual:20000,face:23000},
+    {name:'尊榮',actual:38000,face:45000},
+  ];
+  const planRows=plans.map(pl=>{
+    const rate=pl.actual/pl.face;              // 實收比例
+    const received=Math.round(suggested*rate); // 這堂課實際收到的錢
+    const gp=received-matCost;
+    const gm=received>0?Math.round(gp/received*1000)/10:0;
+    const discount=Math.round(rate*1000)/10;
+    return{...pl,rate,received,gp,gm,discount};
+  });
+
+  // 4. 未來請員工的預覽（抽成 60%）
+  const empComm=Math.round(suggested*0.6);
+  const empProfit=suggested-matCost-empComm-fixed;
+  const empMargin=Math.round(empProfit/suggested*1000)/10;
+
+  box.innerHTML=`
+    <!-- 建議售價 -->
+    <div style="background:linear-gradient(135deg,var(--goldL),#fff);padding:16px;border-radius:10px;border-left:4px solid var(--gold);margin-bottom:12px;">
+      <div style="font-size:13px;color:var(--mut);margin-bottom:4px;">材料成本 $${matCost.toFixed(2)}　佔售價 ${ratio}%</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:15px;font-weight:700;color:var(--goldDk);">💰 建議售價</span>
+        <span style="font-size:32px;font-weight:900;color:var(--gold);">$${fmt(suggested)}</span>
+      </div>
+      <div class="tm" style="font-size:12px;margin-top:6px;">
+        精算值 $${Math.round(rawPrice)}，已進位到百元好報價
+      </div>
+    </div>
+
+    <!-- 這個價格的體質 -->
+    <div class="sg sg3" style="margin-bottom:12px;">
+      <div class="sc"><div class="sl">材料成本</div><div class="sv sm" style="color:var(--red);">$${matCost.toFixed(0)}</div></div>
+      <div class="sc"><div class="sl">毛利</div><div class="sv sm" style="color:var(--grn);">$${fmt(Math.round(grossProfit))}</div></div>
+      <div class="sc"><div class="sl">毛利率</div><div class="sv sm" style="color:${grossMargin>=90?'var(--grn)':grossMargin>=80?'var(--gold)':'var(--red)'};">${grossMargin}%</div></div>
+    </div>
+    ${grossMargin>=90?
+      `<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✅ 毛利率 ${grossMargin}%，達到你的 90% 目標，體質健康</div>`:
+      `<div class="notice" style="background:#fef3c7;border-left-color:#d97706;color:#92400e;font-size:13px;">⚠️ 毛利率 ${grossMargin}% 未達 90%。想拉高的話：把「目標材料佔比」調到 10% 以下，或換更省成本的產品</div>`}
+    ${fixed>0?`<div class="tm" style="font-size:12px;margin:8px 0;padding:8px;background:var(--bg2);border-radius:6px;">
+      扣掉每堂固定成本 $${fmt(fixed)} 後 → 淨利 <b style="color:var(--grn);">$${fmt(Math.round(netProfit))}</b>（淨利率 ${netMargin}%）
+    </div>`:''}
+
+    <!-- 儲值優惠後 -->
+    <div style="background:var(--purL);padding:14px;border-radius:10px;margin:14px 0;border-left:4px solid var(--pur);">
+      <div style="font-weight:700;color:var(--pur);font-size:15px;margin-bottom:4px;">💳 客人用儲值金做這堂課，你實拿多少？</div>
+      <div class="tm" style="font-size:11px;margin-bottom:10px;">儲值金按原價扣，但因為當初儲值有折扣，你實際收到的錢會少一點</div>
+      <div class="tw"><table style="font-size:13px;">
+        <thead><tr><th>方案</th><th class="tm">折數</th><th class="tm">你實收</th><th class="tm">毛利</th><th class="tm">毛利率</th></tr></thead>
+        <tbody>
+          <tr style="background:var(--bg2);">
+            <td><b>現金原價</b></td><td class="tm">10 折</td>
+            <td class="tm">$${fmt(suggested)}</td>
+            <td class="tm" style="color:var(--grn);">$${fmt(Math.round(grossProfit))}</td>
+            <td class="tm"><b>${grossMargin}%</b></td>
+          </tr>
+          ${planRows.map(r=>`<tr>
+            <td>${r.name}</td>
+            <td class="tm">${(r.discount/10).toFixed(1)} 折</td>
+            <td class="tm">$${fmt(r.received)}</td>
+            <td class="tm" style="color:${r.gp>0?'var(--grn)':'var(--red)'};">$${fmt(r.gp)}</td>
+            <td class="tm"><b style="color:${r.gm>=90?'var(--grn)':r.gm>=80?'var(--gold)':'var(--red)'};">${r.gm}%</b></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+      <div class="tm" style="font-size:11px;margin-top:8px;color:var(--pur);">
+        💡 因為你自己做、材料成本很低，就算給到尊榮方案的折扣，毛利率還是很漂亮 ——
+        這就是為什麼「做臉儲值可以大方給折扣」。
+      </div>
+    </div>
+
+    <!-- 未來請員工預覽 -->
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer;padding:10px 12px;background:var(--bg2);border-radius:8px;font-weight:700;color:var(--mut);font-size:13px;">
+        👀 未來請員工的話，同樣售價會變怎樣？
+      </summary>
+      <div style="padding:12px;background:#fff;border:1px solid var(--bdr);border-radius:8px;margin-top:6px;font-size:13px;line-height:1.9;">
+        售價 $${fmt(suggested)}<br>
+        － 材料成本 <span style="color:var(--red);">$${matCost.toFixed(0)}</span><br>
+        － 員工抽成 60% <span style="color:var(--red);">$${fmt(empComm)}</span><br>
+        ${fixed>0?`－ 固定成本 <span style="color:var(--red);">$${fmt(fixed)}</span><br>`:''}
+        ─────────────<br>
+        ＝ 你實拿 <b style="color:${empProfit>0?'var(--grn)':'var(--red)'};font-size:16px;">$${fmt(Math.round(empProfit))}</b>（利潤率 ${empMargin}%）
+        <div class="tm" style="font-size:11px;margin-top:8px;">
+          從 ${grossMargin}% 掉到 ${empMargin}%，這就是你說的「從技術者變經營者」的結構變化。<br>
+          到那時要靠<b>多床位 × 高客流</b>用量補回來，或調整抽成結構。
+        </div>
+      </div>
+    </details>
+  `;
+};
+
+window.saveSoloAsCard=async()=>{
+  if(!S.modal)return;
+  const name=$('m_sp_name')?.value?.trim();
+  if(!name){alert('請先填課程／服務名稱');return;}
+  const items=(S.modal.spItems||[]).filter(it=>it.productId&&toN(it.qty)>0);
+  if(items.length===0){alert('請至少加一項材料並填用量');return;}
+  const ratio=parseFloat($('m_sp_ratio')?.value)||8;
+  const fixed=parseFloat($('m_sp_fixed')?.value)||0;
+  const matCost=items.reduce((s,it)=>s+getUnitCost(it.productId)*toN(it.qty),0);
+  const suggested=Math.ceil((matCost/(ratio/100))/100)*100;
+  const card={
+    id:uid(),
+    name,
+    price:suggested,
+    items:items.map(it=>({productId:it.productId,qty:toN(it.qty)})),
+    commissionRate:0,        // 個人工作室：抽成給自己，不計為成本
+    fixedOverride:fixed,
+    soloMode:true,
+    targetRatio:ratio,
+    createdAt:today()
+  };
+  const cards=[...(S.data.serviceCosts||[]),card];
+  await saveMain({serviceCosts:cards});
+  toast(`✅ 已建立成本卡「${name}」，建議售價 $${fmt(suggested)}`);
+  closeMod();
+};
+
 window.addPricerItem=()=>{
   if(!S.modal.calcItems)S.modal.calcItems=[];
   S.modal.calcItems.push({productId:'',qty:1,unit:'g'});
