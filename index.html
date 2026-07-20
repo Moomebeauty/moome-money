@@ -3507,6 +3507,7 @@ function pgServiceCost(){
 
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
     <button class="btn btn-p btn-sm" onclick="openM('soloPricing')" style="background:linear-gradient(135deg,var(--gold),var(--rose));">💎 個人工作室定價規劃器</button>
+    <button class="btn btn-y btn-sm" onclick="openM('fixedCostCalc')">🏠 固定成本試算機</button>
     <button class="btn btn-y btn-sm" onclick="openM('bedCostSetting')">🛏️ 床位成本設定</button>
     <button class="btn btn-y btn-sm" onclick="openM('priceCalculator')">📐 售價試算機（含抽成）</button>
     <button class="btn btn-p btn-sm" onclick="openM('addServiceCost')">＋ 新增成本卡</button>
@@ -6618,6 +6619,76 @@ function renderModal(){
   }
 
   // ─── 床位成本設定 modal ───
+  // ─── 🏠 固定成本試算機 ───
+  if(m.t==='fixedCostCalc'){
+    if(!S.modal.fcItems){
+      // 預設帶入常見項目
+      S.modal.fcItems=S.data.settings?.fixedCostItems||[
+        {name:'租金',amount:0,months:1},
+        {name:'停車費',amount:0,months:1},
+        {name:'電費',amount:0,months:2},
+        {name:'水費',amount:0,months:2},
+        {name:'天然瓦斯',amount:0,months:2},
+        {name:'網路費',amount:0,months:1},
+      ];
+    }
+    c=`<div class="mttl">🏠 固定成本試算機</div>
+    <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
+      💡 把每月固定要付的錢列出來，系統換算成「每堂課要攤多少」，定價時才不會漏算。<br>
+      <b>⚠️ 你自己的抽成不要填進來</b> —— 那是你的勞務報酬，不是固定成本。
+    </div>
+
+    <div style="background:var(--goldL);padding:12px;border-radius:8px;margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <b style="color:var(--goldDk);">💵 固定支出明細</b>
+        <button class="btn btn-sm" style="background:var(--gold);color:#fff;" onclick="addFcItem()">＋ 加項目</button>
+      </div>
+      <div class="tm" style="font-size:11px;margin-bottom:8px;">
+        「幾個月」欄位：如果帳單是兩個月一期（水電瓦斯），填 2，系統會自動除以 2 換算成每月
+      </div>
+      <div id="m_fc_items"></div>
+    </div>
+
+    <!-- 設備折舊 -->
+    <div style="background:var(--purL);padding:12px;border-radius:8px;margin-top:12px;">
+      <div style="font-weight:700;color:var(--pur);margin-bottom:6px;">🛋️ 設備折舊（每月）</div>
+      <div class="tm" style="font-size:11px;margin-bottom:8px;line-height:1.7;">
+        設備買來會用好幾年，成本要分攤到每個月，這叫折舊。<br>
+        <b>算法：購入價 ÷（使用年限 × 12）</b><br>
+        例：美容儀 $60,000 用 5 年 → 60000 ÷ 60 = <b>$1,000/月</b>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="number" id="m_fc_equip" value="${S.modal.fcEquip!==undefined?S.modal.fcEquip:(toN(S.data.settings?.monthlyDepreciation)||0)}"
+          placeholder="每月折舊總額" oninput="calcFixedCost()" style="flex:1;min-width:120px;">
+        <button class="btn btn-s btn-sm" onclick="autoFillDepreciation()">📊 從設備清單自動帶入</button>
+      </div>
+      <div id="m_fc_equipNote" class="tm" style="font-size:11px;margin-top:6px;"></div>
+    </div>
+
+    <!-- 服務量 -->
+    <div class="fg fg2" style="margin-top:12px;">
+      <div class="fgrp">
+        <label>📅 每月預計服務堂數</label>
+        <input type="number" id="m_fc_count" value="${S.modal.fcCount||40}" min="1" oninput="calcFixedCost()">
+        <div class="tm" style="font-size:11px;margin-top:2px;">保守估，寧可少估</div>
+      </div>
+      <div class="fgrp">
+        <label>⏰ 每月可服務時數</label>
+        <input type="number" id="m_fc_hours" value="${S.modal.fcHours||125}" min="1" oninput="calcFixedCost()">
+        <div class="tm" style="font-size:11px;margin-top:2px;">如每天5小時×25天=125</div>
+      </div>
+    </div>
+
+    <div id="m_fc_result" style="margin-top:14px;"></div>
+
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="saveFixedCost()">✓ 儲存並套用</button>
+    </div>`;
+    S.modal.lg=true;
+    setTimeout(()=>{renderFcItems();calcFixedCost();},50);
+  }
+
   if(m.t==='bedCostSetting'){
     const cur=toN(S.data.settings?.bedHourlyRate);
     // 自動推算建議值
@@ -6731,8 +6802,12 @@ function renderModal(){
       </div>
       <div class="fgrp">
         <label>🏠 每堂固定成本（選填）</label>
-        <input type="number" id="m_sp_fixed" value="${S.modal.spFixed||0}" min="0" oninput="calcSoloPricing()">
-        <div class="tm" style="font-size:11px;margin-top:2px;">店租水電分攤，自宅可填 0</div>
+        <input type="number" id="m_sp_fixed" value="${S.modal.spFixed!==undefined?S.modal.spFixed:(toN(S.data.settings?.fixedCostPerService)||0)}" min="0" oninput="calcSoloPricing()">
+        <div class="tm" style="font-size:11px;margin-top:2px;">
+          ${toN(S.data.settings?.fixedCostPerService)>0?
+            `已自動帶入 $${fmt(S.data.settings.fixedCostPerService)}（來自固定成本試算機）`:
+            '店租水電分攤。可先用「🏠 固定成本試算機」算出來'}
+        </div>
       </div>
     </div>
 
@@ -10725,6 +10800,165 @@ window.renameStaff=async()=>{
     console.error('老師改名失敗',err);
     alert(`改名過程發生錯誤（已完成 ${done}/${total} 筆）：\n${err.message||err}\n\n可以再點一次按鈕，會繼續處理剩下的。`);
   }
+};
+
+// ═══ 🏠 固定成本試算機 ═══
+window.addFcItem=()=>{
+  if(!S.modal)return;
+  if(!S.modal.fcItems)S.modal.fcItems=[];
+  S.modal.fcItems.push({name:'',amount:0,months:1});
+  renderFcItems();
+  calcFixedCost();
+};
+
+window.removeFcItem=(i)=>{
+  if(!S.modal||!S.modal.fcItems)return;
+  S.modal.fcItems.splice(i,1);
+  renderFcItems();
+  calcFixedCost();
+};
+
+window.updateFcItem=(i,field,val)=>{
+  if(!S.modal||!S.modal.fcItems||!S.modal.fcItems[i])return;
+  S.modal.fcItems[i][field]=field==='name'?val:(parseFloat(val)||0);
+  calcFixedCost();
+};
+
+window.renderFcItems=()=>{
+  const wrap=$('m_fc_items');
+  if(!wrap||!S.modal)return;
+  const items=S.modal.fcItems||[];
+  if(items.length===0){
+    wrap.innerHTML=`<div class="empty" style="padding:14px;"><p class="tm">點「＋加項目」開始</p></div>`;
+    return;
+  }
+  wrap.innerHTML=items.map((it,i)=>{
+    const monthly=toN(it.months)>0?toN(it.amount)/toN(it.months):0;
+    return`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;background:#fff;padding:8px;border-radius:6px;">
+      <input type="text" value="${it.name||''}" placeholder="項目名稱"
+        onchange="updateFcItem(${i},'name',this.value)" style="flex:2;font-size:13px;">
+      <input type="number" value="${it.amount||''}" placeholder="金額"
+        oninput="updateFcItem(${i},'amount',this.value)" style="flex:1.2;font-size:13px;">
+      <select onchange="updateFcItem(${i},'months',this.value)" style="flex:1;font-size:12px;">
+        <option value="1"${toN(it.months)===1?' selected':''}>每月</option>
+        <option value="2"${toN(it.months)===2?' selected':''}>2個月</option>
+        <option value="3"${toN(it.months)===3?' selected':''}>季繳</option>
+        <option value="12"${toN(it.months)===12?' selected':''}>年繳</option>
+      </select>
+      <span style="font-size:12px;color:var(--grn);min-width:64px;text-align:right;">$${fmt(Math.round(monthly))}</span>
+      <button class="bdel" onclick="removeFcItem(${i})">×</button>
+    </div>`;
+  }).join('');
+};
+
+window.autoFillDepreciation=()=>{
+  const eq=S.data.equipment||[];
+  if(eq.length===0){
+    alert('設備清單是空的。\n\n你可以到「🛋️ 設備折舊」頁面新增設備，或直接手動填每月折舊金額。\n\n算法：購入價 ÷（使用年限 × 12）');
+    return;
+  }
+  const total=eq.reduce((s,e)=>{
+    const price=toN(e.price||e.cost||e.amount);
+    const years=toN(e.years||e.usefulLife)||5;
+    return s+price/(years*12);
+  },0);
+  const inp=$('m_fc_equip');
+  if(inp){inp.value=Math.round(total);calcFixedCost();}
+  const note=$('m_fc_equipNote');
+  if(note)note.innerHTML=`已從 ${eq.length} 項設備算出每月折舊 $${fmt(Math.round(total))}`;
+};
+
+window.calcFixedCost=()=>{
+  const box=$('m_fc_result');
+  if(!box||!S.modal)return;
+  const items=S.modal.fcItems||[];
+  const equip=parseFloat($('m_fc_equip')?.value)||0;
+  const count=parseFloat($('m_fc_count')?.value)||40;
+  const hours=parseFloat($('m_fc_hours')?.value)||125;
+  S.modal.fcEquip=equip;
+  S.modal.fcCount=count;
+  S.modal.fcHours=hours;
+
+  const monthlyBase=items.reduce((s,it)=>{
+    const mm=toN(it.months)||1;
+    return s+toN(it.amount)/mm;
+  },0);
+  const monthlyTotal=monthlyBase+equip;
+  const perService=count>0?monthlyTotal/count:0;
+  const perHour=hours>0?monthlyTotal/hours:0;
+
+  if(monthlyTotal<=0){
+    box.innerHTML=`<div class="empty" style="padding:16px;"><p class="tm">填入固定支出後，這裡會算出每堂課要攤多少</p></div>`;
+    return;
+  }
+
+  box.innerHTML=`
+    <div style="background:linear-gradient(135deg,var(--goldL),#fff);padding:16px;border-radius:10px;border-left:4px solid var(--gold);">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+        <span style="font-size:14px;font-weight:700;color:var(--goldDk);">每月固定成本合計</span>
+        <span style="font-size:26px;font-weight:900;color:var(--gold);">$${fmt(Math.round(monthlyTotal))}</span>
+      </div>
+      <div class="tm" style="font-size:12px;">
+        固定支出 $${fmt(Math.round(monthlyBase))}${equip>0?` ＋ 設備折舊 $${fmt(equip)}`:''}
+      </div>
+    </div>
+
+    <div class="sg sg2" style="margin-top:12px;">
+      <div class="sc gold">
+        <div class="sl">每堂課要攤</div>
+        <div class="sv gold sm">$${fmt(Math.round(perService))}</div>
+        <div class="ss">${monthlyTotal.toFixed(0)} ÷ ${count} 堂</div>
+      </div>
+      <div class="sc">
+        <div class="sl">床位每小時成本</div>
+        <div class="sv sm" style="color:var(--blu);">$${fmt(Math.round(perHour))}</div>
+        <div class="ss">${monthlyTotal.toFixed(0)} ÷ ${hours} 小時</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg2);padding:12px;border-radius:8px;margin-top:12px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">📊 不同時長的固定攤分</div>
+      <table style="width:100%;font-size:13px;">
+        <tbody>
+          ${[60,90,120].map(d=>`<tr>
+            <td style="padding:4px 0;">${d} 分鐘服務</td>
+            <td style="text-align:right;font-weight:700;color:var(--gold);">$${fmt(Math.round(perHour*d/60))}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:12px;margin-top:12px;">
+      💡 <b>損益兩平點</b>：每月要做滿 <b>${count}</b> 堂，才能把 $${fmt(Math.round(monthlyTotal))} 的固定成本賺回來。<br>
+      少於這個數字，你就是在虧租金。
+    </div>
+  `;
+};
+
+window.saveFixedCost=async()=>{
+  if(!S.modal)return;
+  const items=(S.modal.fcItems||[]).filter(it=>it.name&&toN(it.amount)>0);
+  const equip=parseFloat($('m_fc_equip')?.value)||0;
+  const count=parseFloat($('m_fc_count')?.value)||40;
+  const hours=parseFloat($('m_fc_hours')?.value)||125;
+  const monthlyBase=items.reduce((s,it)=>s+toN(it.amount)/(toN(it.months)||1),0);
+  const monthlyTotal=monthlyBase+equip;
+  const perHour=hours>0?Math.round(monthlyTotal/hours):0;
+  const perService=count>0?Math.round(monthlyTotal/count):0;
+
+  const settings={
+    ...(S.data.settings||{}),
+    fixedCostItems:items,
+    monthlyDepreciation:equip,
+    monthlyFixedCost:Math.round(monthlyTotal),
+    monthlyServiceCount:count,
+    monthlyServiceHours:hours,
+    bedHourlyRate:perHour,
+    fixedCostPerService:perService
+  };
+  await saveMain({settings});
+  toast(`✅ 已套用：每堂攤 $${fmt(perService)}、床位 $${fmt(perHour)}/小時`);
+  closeMod();
 };
 
 // ─── 服務成本卡：切換成本模式 ───
