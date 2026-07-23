@@ -210,30 +210,71 @@ const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 // 試用包 GPT 生圖指令預設模板（可在系統內修改）
-const DEFAULT_TRIALPACK_PROMPT=`請幫我製作一張美容保養品試用包的使用說明圖卡，風格溫柔、乾淨、專業，適合傳給客人看。
+const DEFAULT_TRIALPACK_PROMPT=`請幫我製作一張「護膚後居家保養叮嚀」圖卡，要傳給剛做完療程的客人看。
+
+【最重要的原則】
+這張圖卡不是廣告，也不是推銷產品。
+目的只有一個：讓客人回家後知道要怎麼照顧自己的皮膚。
+語氣像朋友在關心，溫暖、有耐心。
+不要寫任何產品功效、效果承諾或誇大形容詞，讓客人自己去感受變化。
 
 【圖卡內容】
-標題：{名稱}
-適用：{適用}
 
-內容物：
+━━ 第一區：護膚後的叮嚀 ━━
+{護膚叮嚀}
+
+━━ 第二區：這次給你的試用包 ━━
+{名稱}
+
+裡面有：
 {內容物}
 
-使用方式：
+怎麼用：
 {使用方式}
 
-預期功效：
-{功效}
-
-建議使用：{天數}
-注意事項：{注意}
+用多久：{天數}
+小提醒：{注意}
 
 【設計要求】
-- 直式圖卡，適合手機閱讀
-- 米色／淺粉色系，溫柔質感
-- 中文字要清晰正確、大小適中
-- 步驟用數字編號清楚呈現
-- 整體簡潔、留白舒服，不要太花俏`;
+- 直式長圖，適合手機閱讀
+- 不要放任何產品照片、示意圖或裝飾插畫，純文字排版就好
+- 字要大、行距要寬，眼睛不好的人也能輕鬆看
+- 米色、淺粉色系，乾淨溫柔
+- 每個重點前面用 ♥ 或簡單符號，層次一眼看得出來
+- 中文字必須正確清晰，不可有錯字或變形
+- 整體感覺要像「店家親手寫的叮嚀」，不是印刷品或廣告 DM`;
+
+
+// 護膚後叮嚀範本（可在系統內編輯、新增其他療程的版本）
+const DEFAULT_AFTERCARE=[{
+  id:'facial',
+  name:'做臉後',
+  text:`🪧美容護膚後の保養叮嚀
+🏷️以【不留疤】為前提
+採用地毯式搜索清粉刺
+能清的都會盡量清乾淨
+但如果是🔺粉刺卡太緊🔺
+或痘痘還沒成熟，就不會硬清
+以免在肌膚上留下疤痕
+
+♥ 每天早晚確實洗臉
+請勿用海綿或毛巾用力擦拭，輕輕壓乾即可，避免刺激肌膚。
+
+♥ 保養以保濕為主
+護理後肌膚處於不穩定狀態，不使用美白、抗老類產品，建議成分單純的保濕產品，這時的保養效果絕對會超級有感的！
+
+♥ 請勿以下動作
+手摸臉、寢具未洗、口罩沒有更換等等，會跟肌膚接觸到的生活用品，也是讓肌膚長粉刺痘痘的原因，記得要避免！
+
+♥ 第一週，是修復期
+在修復期間，若有紅熱感、癢、灼熱感、臉上緊繃、脫皮，這些症狀都是正常現象
+
+♥ 每天確實擦防曬
+紫外線對肌膚的傷害是非常巨大的，會讓毛孔粗大、長斑、曬黑、曬傷、曬老等等各種肌膚問題，不可輕忽！
+
+♥ 養成良好飲食習慣
+甜點炸物零食容易長粉刺痘痘，也會加快老化速度，多吃蔬果多喝水，養出好膚質`
+}];
 
 const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
 const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
@@ -6638,6 +6679,54 @@ function renderModal(){
 
   // ─── 床位成本設定 modal ───
   // ─── 🏠 固定成本試算機 ───
+  // ─── 💌 護膚叮嚀範本管理 ───
+  if(m.t==='aftercareMgr'){
+    const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
+    c=`<div class="mttl">💌 護膚後叮嚀範本</div>
+    <div class="notice" style="background:var(--roseL);border-left-color:var(--rose);color:var(--roseDk);font-size:13px;">
+      做臉、熱蠟、霧眉、美體的術後叮嚀不一樣，可以各建一份。<br>
+      產生圖卡時選對療程，客人收到的就是對的叮嚀。
+    </div>
+    <button class="btn btn-p btn-sm" style="margin:12px 0;" onclick="openM('editAftercare','__new__')">＋ 新增叮嚀範本</button>
+    <div style="max-height:50vh;overflow-y:auto;">
+      ${cares.map(ca=>`
+        <div style="background:var(--bg2);padding:12px;border-radius:8px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <b style="font-size:15px;">${ca.name}</b>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-s btn-sm" onclick="openM('editAftercare','${ca.id}')">✏️</button>
+              ${cares.length>1?`<button class="bdel" onclick="delAftercare('${ca.id}')">×</button>`:''}
+            </div>
+          </div>
+          <div class="tm" style="font-size:12px;margin-top:6px;max-height:60px;overflow:hidden;">
+            ${(ca.text||'').replace(/\n/g,'　').substring(0,80)}...
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="openM('trialPackMgr')">返回</button></div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯叮嚀範本 ───
+  if(m.t==='editAftercare'){
+    const isNew=m.x==='__new__';
+    const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
+    const ca=isNew?{}:(cares.find(x=>x.id===m.x)||{});
+    c=`<div class="mttl">${isNew?'➕ 新增':'✏️ 編輯'}叮嚀範本</div>
+    <div class="fgrp"><label>範本名稱 *</label>
+      <input type="text" id="m_ac_name" value="${(ca.name||'').replace(/"/g,'&quot;')}" placeholder="如：做臉後、熱蠟後、霧眉後">
+    </div>
+    <div class="fgrp" style="margin-top:10px;"><label>叮嚀內容</label>
+      <textarea id="m_ac_text" rows="14" style="width:100%;font-size:13px;line-height:1.8;" placeholder="寫給客人看的術後照顧提醒...">${ca.text||''}</textarea>
+      <div class="tm" style="font-size:11px;margin-top:4px;">這段會原封不動放進圖卡，換行、符號都會保留</div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('aftercareMgr')">取消</button>
+      <button class="btn btn-p" onclick="saveAftercare('${isNew?'__new__':m.x}')">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── 🎁 試用包管理 ───
   if(m.t==='trialPackMgr'){
     const packs=S.data.trialPacks||[];
@@ -6647,7 +6736,8 @@ function renderModal(){
     </div>
     <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
       <button class="btn btn-p btn-sm" onclick="openM('editTrialPack','__new__')">＋ 新增試用包</button>
-      <button class="btn btn-y btn-sm" onclick="openM('trialPackPrompt')">📝 設定 GPT 指令模板</button>
+      <button class="btn btn-sm" style="background:var(--rose);color:#fff;" onclick="openM('aftercareMgr')">💌 護膚叮嚀範本</button>
+      <button class="btn btn-y btn-sm" onclick="openM('trialPackPrompt')">📝 GPT 指令模板</button>
     </div>
     ${packs.length===0?`<div class="empty" style="padding:30px;">
       <div class="empty-ico">🎁</div><p>還沒建立任何試用包</p>
@@ -6692,8 +6782,8 @@ function renderModal(){
       <div class="fgrp" style="grid-column:1/-1;"><label>使用方式</label>
         <textarea id="m_tp_usage" rows="4" placeholder="如：&#10;1. 洗臉後擦化妝水&#10;2. 取精華一包塗抹全臉&#10;3. 輕拍至吸收">${tp.usage||''}</textarea>
       </div>
-      <div class="fgrp" style="grid-column:1/-1;"><label>預期功效</label>
-        <textarea id="m_tp_benefits" rows="2" placeholder="如：加強保濕、緩解乾燥緊繃、延續護膚效果">${tp.benefits||''}</textarea>
+      <div class="fgrp" style="grid-column:1/-1;"><label>功效備註（自己看的，不會放進圖卡）</label>
+        <textarea id="m_tp_benefits" rows="2" placeholder="選填。留給自己記錄用，圖卡不會寫功效，讓客人自己感受">${tp.benefits||''}</textarea>
       </div>
       <div class="fg fg2" style="grid-column:1/-1;">
         <div class="fgrp"><label>建議使用天數</label>
@@ -6717,6 +6807,7 @@ function renderModal(){
     c=`<div class="mttl">📝 GPT 生圖指令模板</div>
     <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:12px;line-height:1.8;">
       把你的公版指令貼進來，用下面的變數標記要自動填入的地方：<br>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{護膚叮嚀}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{名稱}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{適用}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{內容物}</code>
@@ -11066,6 +11157,60 @@ window.renameStaff=async()=>{
   }
 };
 
+// 產生指令前：選這次是哪種療程的叮嚀
+function showAftercarePicker(packIds,cares){
+  const packNames=packIds.map(id=>(S.data.trialPacks||[]).find(t=>t.id===id)?.name||'').filter(x=>x);
+  const html=`<div class="mttl">這次是做什麼療程？</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      選對療程，圖卡上的叮嚀才會是對的內容 🌸<br>
+      <span style="font-size:12px;">試用包：${packNames.join('、')}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+      ${cares.map(ca=>`
+        <button class="btn btn-s" style="text-align:left;padding:14px;" onclick="genTrialPackPrompt(${JSON.stringify(packIds).replace(/"/g,'&quot;')},'${ca.id}')">
+          <b style="font-size:15px;">${ca.name}</b>
+          <div class="tm" style="font-size:11px;margin-top:4px;">${(ca.text||'').replace(/\n/g,' ').substring(0,40)}...</div>
+        </button>`).join('')}
+      <button class="btn btn-s" style="padding:12px;color:var(--mut);" onclick="genTrialPackPrompt(${JSON.stringify(packIds).replace(/"/g,'&quot;')},'__none__')">
+        略過，只做試用包說明
+      </button>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('trialPackMgr')">取消</button>
+      <button class="btn btn-y" onclick="openM('aftercareMgr')">✏️ 編輯叮嚀範本</button>
+    </div>`;
+  S.modal={t:'aftercarePicker',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+}
+
+// ═══ 護膚叮嚀範本管理 ═══
+window.saveAftercare=async(id)=>{
+  const name=$('m_ac_name')?.value?.trim();
+  const text=$('m_ac_text')?.value||'';
+  if(!name){alert('請填範本名稱');return;}
+  let cares=[...(S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE)];
+  if(id&&id!=='__new__'){
+    cares=cares.map(x=>x.id===id?{...x,name,text}:x);
+  }else{
+    cares.push({id:uid(),name,text});
+  }
+  const settings={...(S.data.settings||{}),aftercareTemplates:cares};
+  await saveMain({settings});
+  toast(`✅ 已儲存「${name}」`);
+  openM('aftercareMgr');
+};
+
+window.delAftercare=async(id)=>{
+  const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
+  const ca=cares.find(x=>x.id===id);
+  if(!confirm(`確定刪除叮嚀範本「${ca?.name||''}」？`))return;
+  const settings={...(S.data.settings||{}),aftercareTemplates:cares.filter(x=>x.id!==id)};
+  await saveMain({settings});
+  toast('已刪除');
+  openM('aftercareMgr');
+};
+
 // ═══ 🎁 試用包管理 ═══
 window.saveTrialPack=async(id)=>{
   const name=$('m_tp_name')?.value?.trim();
@@ -11115,8 +11260,9 @@ window.resetTrialPackPrompt=()=>{
 };
 
 // 把單一試用包資料填入模板
-function fillTrialPackTemplate(tmpl,tp){
+function fillTrialPackTemplate(tmpl,tp,aftercareText){
   return tmpl
+    .replace(/\{護膚叮嚀\}/g,aftercareText||'')
     .replace(/\{名稱\}/g,tp.name||'')
     .replace(/\{適用\}/g,tp.target||'一般膚質')
     .replace(/\{內容物\}/g,tp.contents||'')
@@ -11127,21 +11273,29 @@ function fillTrialPackTemplate(tmpl,tp){
 }
 
 // 產生 GPT 指令（支援單個或多個試用包）
-window.genTrialPackPrompt=(ids)=>{
+window.genTrialPackPrompt=(ids,aftercareId)=>{
   const idArr=Array.isArray(ids)?ids:[ids];
   const packs=idArr.map(id=>(S.data.trialPacks||[]).find(x=>x.id===id)).filter(x=>x);
   if(packs.length===0){alert('找不到試用包資料');return;}
   const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
+  const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
+  // 還沒選叮嚀 → 先讓使用者選
+  if(aftercareId===undefined&&cares.length>0){
+    showAftercarePicker(idArr,cares);
+    return;
+  }
+  const care=cares.find(x=>x.id===aftercareId);
+  const careText=care?care.text:'';
 
   // 單一試用包 → 直接顯示
   if(packs.length===1){
-    const filled=fillTrialPackTemplate(tmpl,packs[0]);
+    const filled=fillTrialPackTemplate(tmpl,packs[0],careText);
     showTrialPackPromptModal(`🤖 GPT 生圖指令：${packs[0].name}`,[{name:packs[0].name,text:filled}]);
     return;
   }
 
   // 多個試用包 → 個別版 + 合併版
-  const sections=packs.map(tp=>({name:tp.name,text:fillTrialPackTemplate(tmpl,tp)}));
+  const sections=packs.map(tp=>({name:tp.name,text:fillTrialPackTemplate(tmpl,tp,careText)}));
   // 合併版：把多個試用包的內容併成一份
   const merged={
     name:packs.map(p=>p.name).join('、'),
@@ -11152,7 +11306,7 @@ window.genTrialPackPrompt=(ids)=>{
     days:packs.map(p=>`${p.name}：${p.days||'依需求'}`).join('／'),
     note:[...new Set(packs.map(p=>p.note).filter(x=>x))].join('；')||'無特殊注意事項'
   };
-  sections.unshift({name:`🔗 合併成一張（${packs.length} 個一起）`,text:fillTrialPackTemplate(tmpl,merged),isMerged:true});
+  sections.unshift({name:`🔗 合併成一張（${packs.length} 個一起）`,text:fillTrialPackTemplate(tmpl,merged,careText),isMerged:true});
   showTrialPackPromptModal(`🤖 GPT 生圖指令（${packs.length} 個試用包）`,sections);
 };
 
