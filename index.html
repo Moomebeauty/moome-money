@@ -8369,7 +8369,7 @@ window.saveOrder=async(type,continueInput)=>{
       if(tpIds.length>0){
         setTimeout(()=>{
           if(confirm(`已記錄給 ${customer||'客戶'} 的試用包：${saleData.trialPackNames.join('、')}\n\n要現在產生使用說明的 GPT 指令嗎？`)){
-            genTrialPackPrompt(tpIds[0]);
+            genTrialPackPrompt(tpIds);
           }
         },400);
       }
@@ -11114,12 +11114,9 @@ window.resetTrialPackPrompt=()=>{
   toast('已還原，記得按儲存');
 };
 
-// 產生 GPT 指令（把試用包資料填入模板）
-window.genTrialPackPrompt=(id)=>{
-  const tp=(S.data.trialPacks||[]).find(x=>x.id===id);
-  if(!tp){alert('找不到這個試用包');return;}
-  const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
-  const filled=tmpl
+// 把單一試用包資料填入模板
+function fillTrialPackTemplate(tmpl,tp){
+  return tmpl
     .replace(/\{名稱\}/g,tp.name||'')
     .replace(/\{適用\}/g,tp.target||'一般膚質')
     .replace(/\{內容物\}/g,tp.contents||'')
@@ -11127,23 +11124,64 @@ window.genTrialPackPrompt=(id)=>{
     .replace(/\{功效\}/g,tp.benefits||'')
     .replace(/\{天數\}/g,tp.days||'依個人需求')
     .replace(/\{注意\}/g,tp.note||'無特殊注意事項');
+}
 
-  const html=`<div class="mttl">🤖 GPT 生圖指令：${tp.name}</div>
+// 產生 GPT 指令（支援單個或多個試用包）
+window.genTrialPackPrompt=(ids)=>{
+  const idArr=Array.isArray(ids)?ids:[ids];
+  const packs=idArr.map(id=>(S.data.trialPacks||[]).find(x=>x.id===id)).filter(x=>x);
+  if(packs.length===0){alert('找不到試用包資料');return;}
+  const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
+
+  // 單一試用包 → 直接顯示
+  if(packs.length===1){
+    const filled=fillTrialPackTemplate(tmpl,packs[0]);
+    showTrialPackPromptModal(`🤖 GPT 生圖指令：${packs[0].name}`,[{name:packs[0].name,text:filled}]);
+    return;
+  }
+
+  // 多個試用包 → 個別版 + 合併版
+  const sections=packs.map(tp=>({name:tp.name,text:fillTrialPackTemplate(tmpl,tp)}));
+  // 合併版：把多個試用包的內容併成一份
+  const merged={
+    name:packs.map(p=>p.name).join('、'),
+    target:[...new Set(packs.map(p=>p.target).filter(x=>x))].join('、')||'一般膚質',
+    contents:packs.map(p=>`【${p.name}】\n${p.contents||''}`).join('\n\n'),
+    usage:packs.map(p=>`【${p.name}】\n${p.usage||''}`).join('\n\n'),
+    benefits:packs.map(p=>`【${p.name}】${p.benefits||''}`).join('\n'),
+    days:packs.map(p=>`${p.name}：${p.days||'依需求'}`).join('／'),
+    note:[...new Set(packs.map(p=>p.note).filter(x=>x))].join('；')||'無特殊注意事項'
+  };
+  sections.unshift({name:`🔗 合併成一張（${packs.length} 個一起）`,text:fillTrialPackTemplate(tmpl,merged),isMerged:true});
+  showTrialPackPromptModal(`🤖 GPT 生圖指令（${packs.length} 個試用包）`,sections);
+};
+
+// 顯示指令（可多份，各自有複製鈕）
+function showTrialPackPromptModal(title,sections){
+  const html=`<div class="mttl">${title}</div>
     <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">
-      複製下面的指令，貼到 ChatGPT 就能生成圖卡，再傳給客人 🌸
+      ${sections.length>1?
+        '可以選「合併成一張」做一張大卡，或分別產生各自的圖卡。複製後貼到 ChatGPT 即可生圖 🌸':
+        '複製下面的指令，貼到 ChatGPT 就能生成圖卡，再傳給客人 🌸'}
     </div>
-    <textarea id="m_tpg_text" rows="14" readonly style="width:100%;font-family:monospace;font-size:12px;line-height:1.6;margin-top:12px;background:var(--bg2);">${filled}</textarea>
-    <div class="mbtns">
-      <button class="btn btn-s" onclick="openM('trialPackMgr')">返回</button>
-      <button class="btn btn-p" onclick="copyTrialPackPrompt()">📋 複製指令</button>
-    </div>`;
+    <div style="max-height:58vh;overflow-y:auto;margin-top:12px;">
+      ${sections.map((s,i)=>`
+        <div style="margin-bottom:14px;${s.isMerged?'padding:10px;background:var(--goldL);border-radius:8px;border:1px solid var(--gold);':''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <b style="font-size:14px;color:${s.isMerged?'var(--goldDk)':'var(--pur)'};">${s.name}</b>
+            <button class="btn btn-sm ${s.isMerged?'btn-p':'btn-s'}" onclick="copyPromptSection(${i})">📋 複製</button>
+          </div>
+          <textarea id="m_tpg_text_${i}" rows="8" readonly style="width:100%;font-family:monospace;font-size:12px;line-height:1.6;background:#fff;">${s.text}</textarea>
+        </div>`).join('')}
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="openM('trialPackMgr')">返回</button></div>`;
   S.modal={t:'trialPackGen',html,lg:true};
   const bg=$('modal-bg'),inn=$('modal-inner');
   if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
-};
+}
 
-window.copyTrialPackPrompt=()=>{
-  const ta=$('m_tpg_text');
+window.copyPromptSection=(i)=>{
+  const ta=$(`m_tpg_text_${i}`);
   if(!ta)return;
   try{
     navigator.clipboard.writeText(ta.value);
