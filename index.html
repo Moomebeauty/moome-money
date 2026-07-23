@@ -209,6 +209,32 @@ const BACKEND_EMAIL='moome5391@gmail.com';
 const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
+// 試用包 GPT 生圖指令預設模板（可在系統內修改）
+const DEFAULT_TRIALPACK_PROMPT=`請幫我製作一張美容保養品試用包的使用說明圖卡，風格溫柔、乾淨、專業，適合傳給客人看。
+
+【圖卡內容】
+標題：{名稱}
+適用：{適用}
+
+內容物：
+{內容物}
+
+使用方式：
+{使用方式}
+
+預期功效：
+{功效}
+
+建議使用：{天數}
+注意事項：{注意}
+
+【設計要求】
+- 直式圖卡，適合手機閱讀
+- 米色／淺粉色系，溫柔質感
+- 中文字要清晰正確、大小適中
+- 步驟用數字編號清楚呈現
+- 整體簡潔、留白舒服，不要太花俏`;
+
 const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
 const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
 const SERVICE_PRESETS=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩','自訂項目'];
@@ -403,6 +429,7 @@ let S={
     advisorChats:[],
     learnGoals:[],
     appointments:[],
+    trialPacks:[],
     // 出貨記錄（客戶購買、自用、損耗、贈品）
     stockOuts:[],
     // 設備（含折舊）
@@ -446,7 +473,8 @@ function startSync(){
     S.data.settings=d.settings||{};
     S.data.assets=d.assets||[];
     S.data.equipment=d.equipment||[];  // 設備（每月折舊）
-    S.data.serviceCosts=d.serviceCosts||[];  // 服務成本卡
+    S.data.serviceCosts=d.serviceCosts||[];
+    S.data.trialPacks=d.trialPacks||[];  // 服務成本卡
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -2950,6 +2978,20 @@ function pgOrder(){
             <input type="text" id="m_od4_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
             <div id="m_od_hint" class="tm" style="margin-top:4px;"></div>
           </div>
+          <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
+            <label style="color:var(--pur);font-weight:700;">🎁 這次給客人的試用包（選填）</label>
+            ${(S.data.trialPacks||[]).length===0?
+              `<div class="tm" style="font-size:12px;margin-top:6px;">
+                還沒建立試用包。到「⚙️ 基本設定 → 🎁 試用包管理」新增，之後開單就能勾選。
+              </div>`:
+              `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                ${(S.data.trialPacks||[]).map(tp=>`
+                  <label style="padding:6px 12px;background:#fff;border:1px solid var(--bdr);border-radius:16px;cursor:pointer;font-size:13px;">
+                    <input type="checkbox" class="m_od_tp" value="${tp.id}" style="margin-right:4px;">${tp.name}
+                  </label>`).join('')}
+              </div>
+              <div class="tm" style="font-size:11px;margin-top:6px;">勾選後會記錄到客戶檔案，結帳完可一鍵產生使用說明給客人</div>`}
+          </div>
           <div class="fgrp"><label>服務老師</label><select id="m_od5">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
           <div class="fgrp"><label>付款方式</label>
             <select id="m_od6" onchange="updateBalanceHint('od')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
@@ -5216,6 +5258,18 @@ function pgSettings(){
     </div>
   </div>
 
+  <div class="card" style="background:var(--purL);border:1px solid var(--pur);margin-bottom:14px;">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--pur);">🎁 試用包管理</span>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;line-height:1.7;">
+        建立要送給客人的試用包（內容物、使用方式、預期功效）。開單時可勾選記錄給了誰，並一鍵產生「給 GPT 生圖的指令」，生成說明圖卡傳給客人。
+      </div>
+      <button class="btn" style="background:var(--pur);color:#fff;" onclick="openM('trialPackMgr')">🎁 管理試用包（${(S.data.trialPacks||[]).length} 個）</button>
+    </div>
+  </div>
+
   <div class="card" style="background:var(--bluL);border:1px solid var(--blu);">
     <div class="card-hd" style="background:transparent;border:none;">
       <span class="card-ttl" style="color:var(--blu);">🔧 資料修復工具</span>
@@ -6584,6 +6638,105 @@ function renderModal(){
 
   // ─── 床位成本設定 modal ───
   // ─── 🏠 固定成本試算機 ───
+  // ─── 🎁 試用包管理 ───
+  if(m.t==='trialPackMgr'){
+    const packs=S.data.trialPacks||[];
+    c=`<div class="mttl">🎁 試用包管理</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      建立試用包後，開單時就能勾選給了哪些，並一鍵產生「給 GPT 生圖的指令」傳給客人。
+    </div>
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
+      <button class="btn btn-p btn-sm" onclick="openM('editTrialPack','__new__')">＋ 新增試用包</button>
+      <button class="btn btn-y btn-sm" onclick="openM('trialPackPrompt')">📝 設定 GPT 指令模板</button>
+    </div>
+    ${packs.length===0?`<div class="empty" style="padding:30px;">
+      <div class="empty-ico">🎁</div><p>還沒建立任何試用包</p>
+      <div class="tm" style="font-size:13px;margin-top:6px;">例如：保濕修護包、美白亮膚包、術後舒緩包</div>
+    </div>`:`
+    <div style="max-height:55vh;overflow-y:auto;">
+      ${packs.map(tp=>`
+        <div style="background:var(--bg2);padding:12px;border-radius:8px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <b style="font-size:15px;">${tp.name}</b>
+              ${tp.target?`<span class="bdg" style="font-size:11px;margin-left:6px;">${tp.target}</span>`:''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn btn-sm" style="background:var(--grn);color:#fff;" onclick="genTrialPackPrompt('${tp.id}')">🤖 產生指令</button>
+              <button class="btn btn-s btn-sm" onclick="openM('editTrialPack','${tp.id}')">✏️</button>
+              <button class="bdel" onclick="delTrialPack('${tp.id}')">×</button>
+            </div>
+          </div>
+          ${tp.contents?`<div class="tm" style="font-size:12px;margin-top:6px;">📦 ${tp.contents}</div>`:''}
+        </div>`).join('')}
+    </div>`}
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯試用包 ───
+  if(m.t==='editTrialPack'){
+    const isNew=m.x==='__new__';
+    const tp=isNew?{}:((S.data.trialPacks||[]).find(x=>x.id===m.x)||{});
+    c=`<div class="mttl">${isNew?'➕ 新增':'✏️ 編輯'}試用包</div>
+    <div class="fg">
+      <div class="fgrp" style="grid-column:1/-1;"><label>試用包名稱 *</label>
+        <input type="text" id="m_tp_name" value="${(tp.name||'').replace(/"/g,'&quot;')}" placeholder="如：保濕修護試用包">
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;"><label>適用對象／時機</label>
+        <input type="text" id="m_tp_target" value="${(tp.target||'').replace(/"/g,'&quot;')}" placeholder="如：做臉後、乾燥缺水肌">
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;"><label>內容物</label>
+        <textarea id="m_tp_contents" rows="2" placeholder="如：修護精華 3ml × 2包、保濕面膜 1片">${tp.contents||''}</textarea>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;"><label>使用方式</label>
+        <textarea id="m_tp_usage" rows="4" placeholder="如：&#10;1. 洗臉後擦化妝水&#10;2. 取精華一包塗抹全臉&#10;3. 輕拍至吸收">${tp.usage||''}</textarea>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;"><label>預期功效</label>
+        <textarea id="m_tp_benefits" rows="2" placeholder="如：加強保濕、緩解乾燥緊繃、延續護膚效果">${tp.benefits||''}</textarea>
+      </div>
+      <div class="fg fg2" style="grid-column:1/-1;">
+        <div class="fgrp"><label>建議使用天數</label>
+          <input type="text" id="m_tp_days" value="${(tp.days||'').replace(/"/g,'&quot;')}" placeholder="如：連續3天">
+        </div>
+        <div class="fgrp"><label>注意事項</label>
+          <input type="text" id="m_tp_note" value="${(tp.note||'').replace(/"/g,'&quot;')}" placeholder="如：避開眼周">
+        </div>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('trialPackMgr')">取消</button>
+      <button class="btn btn-p" onclick="saveTrialPack('${isNew?'':m.x}')">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 📝 GPT 指令模板設定 ───
+  if(m.t==='trialPackPrompt'){
+    const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
+    c=`<div class="mttl">📝 GPT 生圖指令模板</div>
+    <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:12px;line-height:1.8;">
+      把你的公版指令貼進來，用下面的變數標記要自動填入的地方：<br>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{名稱}</code>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{適用}</code>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{內容物}</code>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{使用方式}</code>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{功效}</code>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{天數}</code>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{注意}</code>
+      <br>產生指令時，這些會自動換成該試用包的實際內容。
+    </div>
+    <div class="fgrp" style="margin-top:12px;">
+      <textarea id="m_tpp_text" rows="16" style="width:100%;font-family:monospace;font-size:13px;line-height:1.6;">${tmpl}</textarea>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('trialPackMgr')">取消</button>
+      <button class="btn btn-y" onclick="resetTrialPackPrompt()">↺ 還原預設</button>
+      <button class="btn btn-p" onclick="saveTrialPackPrompt()">✓ 儲存模板</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── 📊 成本卡明細 ───
   if(m.t==='cardDetail'){
     const card=(S.data.serviceCosts||[]).find(x=>x.id===m.x)||{};
@@ -8201,10 +8354,24 @@ window.saveOrder=async(type,continueInput)=>{
         saleData.depositOwner=depositOwner;
         saleData.depositFaceAmount=depositFaceAmount;
       }
+      // 🎁 記錄這次給的試用包
+      const tpIds=Array.from(document.querySelectorAll('.m_od_tp:checked')).map(cb=>cb.value);
+      if(tpIds.length>0){
+        saleData.trialPacks=tpIds;
+        saleData.trialPackNames=tpIds.map(id=>(S.data.trialPacks||[]).find(t=>t.id===id)?.name||'').filter(x=>x);
+      }
       await addSub('sales',saleData);
       if(customer&&!(S.data.customers||[]).find(c=>c.name===customer)){
         const customers=[...(S.data.customers||[]),{id:uid(),name:customer,phone:'',createdAt:today()}];
         await saveMain({customers});
+      }
+      // 給了試用包 → 提示可產生說明
+      if(tpIds.length>0){
+        setTimeout(()=>{
+          if(confirm(`已記錄給 ${customer||'客戶'} 的試用包：${saleData.trialPackNames.join('、')}\n\n要現在產生使用說明的 GPT 指令嗎？`)){
+            genTrialPackPrompt(tpIds[0]);
+          }
+        },400);
       }
       const ownerHint=depositOwner&&depositOwner!==customer?`（從 ${depositOwner} 共用儲值）`:'';
       const discountHint=payMethod==='儲值扣款'&&depositFaceAmount!==realRevenue?`扣儲值 $${fmt(depositFaceAmount)} → 認列營收 $${fmt(realRevenue)}`:`$${fmt(realRevenue)}`;
@@ -10896,6 +11063,94 @@ window.renameStaff=async()=>{
     setSyncing('error');
     console.error('老師改名失敗',err);
     alert(`改名過程發生錯誤（已完成 ${done}/${total} 筆）：\n${err.message||err}\n\n可以再點一次按鈕，會繼續處理剩下的。`);
+  }
+};
+
+// ═══ 🎁 試用包管理 ═══
+window.saveTrialPack=async(id)=>{
+  const name=$('m_tp_name')?.value?.trim();
+  if(!name){alert('請填試用包名稱');return;}
+  const data={
+    name,
+    target:$('m_tp_target')?.value?.trim()||'',
+    contents:$('m_tp_contents')?.value?.trim()||'',
+    usage:$('m_tp_usage')?.value?.trim()||'',
+    benefits:$('m_tp_benefits')?.value?.trim()||'',
+    days:$('m_tp_days')?.value?.trim()||'',
+    note:$('m_tp_note')?.value?.trim()||''
+  };
+  let packs=[...(S.data.trialPacks||[])];
+  if(id){
+    packs=packs.map(p=>p.id===id?{...p,...data}:p);
+  }else{
+    packs.push({id:uid(),...data,createdAt:today()});
+  }
+  await saveMain({trialPacks:packs});
+  toast(`✅ 已儲存「${name}」`);
+  openM('trialPackMgr');
+};
+
+window.delTrialPack=async(id)=>{
+  const tp=(S.data.trialPacks||[]).find(x=>x.id===id);
+  if(!confirm(`確定刪除試用包「${tp?.name||''}」？`))return;
+  const packs=(S.data.trialPacks||[]).filter(p=>p.id!==id);
+  await saveMain({trialPacks:packs});
+  toast('已刪除');
+  openM('trialPackMgr');
+};
+
+window.saveTrialPackPrompt=async()=>{
+  const text=$('m_tpp_text')?.value||'';
+  const settings={...(S.data.settings||{}),trialPackPrompt:text};
+  await saveMain({settings});
+  toast('✅ 指令模板已儲存');
+  openM('trialPackMgr');
+};
+
+window.resetTrialPackPrompt=()=>{
+  if(!confirm('還原成系統預設的指令模板？你目前的修改會消失。'))return;
+  const ta=$('m_tpp_text');
+  if(ta)ta.value=DEFAULT_TRIALPACK_PROMPT;
+  toast('已還原，記得按儲存');
+};
+
+// 產生 GPT 指令（把試用包資料填入模板）
+window.genTrialPackPrompt=(id)=>{
+  const tp=(S.data.trialPacks||[]).find(x=>x.id===id);
+  if(!tp){alert('找不到這個試用包');return;}
+  const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
+  const filled=tmpl
+    .replace(/\{名稱\}/g,tp.name||'')
+    .replace(/\{適用\}/g,tp.target||'一般膚質')
+    .replace(/\{內容物\}/g,tp.contents||'')
+    .replace(/\{使用方式\}/g,tp.usage||'')
+    .replace(/\{功效\}/g,tp.benefits||'')
+    .replace(/\{天數\}/g,tp.days||'依個人需求')
+    .replace(/\{注意\}/g,tp.note||'無特殊注意事項');
+
+  const html=`<div class="mttl">🤖 GPT 生圖指令：${tp.name}</div>
+    <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">
+      複製下面的指令，貼到 ChatGPT 就能生成圖卡，再傳給客人 🌸
+    </div>
+    <textarea id="m_tpg_text" rows="14" readonly style="width:100%;font-family:monospace;font-size:12px;line-height:1.6;margin-top:12px;background:var(--bg2);">${filled}</textarea>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('trialPackMgr')">返回</button>
+      <button class="btn btn-p" onclick="copyTrialPackPrompt()">📋 複製指令</button>
+    </div>`;
+  S.modal={t:'trialPackGen',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+};
+
+window.copyTrialPackPrompt=()=>{
+  const ta=$('m_tpg_text');
+  if(!ta)return;
+  try{
+    navigator.clipboard.writeText(ta.value);
+    toast('✅ 指令已複製，貼到 ChatGPT 即可生圖');
+  }catch(e){
+    ta.select();
+    try{document.execCommand('copy');toast('✅ 已複製');}catch(e2){alert('複製失敗，請手動選取');}
   }
 };
 
