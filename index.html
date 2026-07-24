@@ -210,49 +210,95 @@ const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 // 試用包 GPT 生圖指令預設模板（可在系統內修改）
-const DEFAULT_TRIALPACK_PROMPT=`請製作一張「護膚後的叮嚀」圖卡，要傳給剛做完療程的客人。
+const DEFAULT_TRIALPACK_PROMPT=`請生成一張柔美療癒風格的品牌形象保養叮嚀圖。
 
-【視覺風格要求】
-• 整體色調：奶茶米色、香檳金、淺褐、暖白為主，柔和低飽和，質感高級溫柔
-• 背景：淺米色到暖白的柔和漸層，右上角與左下角加入淡淡的乾燥花／滿天星剪影，透明度低（約 15-25%），不搶內容
-• 字體：中文使用細筆畫的優雅明體或細黑體，字距寬鬆，標題可加寬字距營造留白感
-• 標題文字用深褐／咖啡色，內文用中灰褐色，避免使用紅色與桃紅色
-• 圖示：使用細線條 line icon，放在圓形淺褐／淺米色底色圓圈內
-• 區塊：使用圓角矩形（圓角 16-24px），淺色描邊或極淡底色，區塊之間留白充足
-• 整體感覺：像高級美容品牌的形象簡介，乾淨、留白多、有呼吸感，不要密集擁擠
+【視覺風格】
+• 淡粉色與奶油白的乾燥感玫瑰／洋桔梗花朵，散落在畫面邊緣，帶自然彎曲的細長花莖與葉片
+• 背景是米粉色、帶紙質紋理的桌面，隱約可見手寫樂譜線條與泛黃的舊書頁
+• 柔焦鏡頭感、淺景深、邊緣輕微模糊
+• 柔霧奶茶粉、米白、淡玫瑰粉的統一色系，低飽和度，柔和溫暖
+• 整張圖覆蓋一層朦朧的柔光霧面濾鏡，夢幻、寧靜、療癒、高級
+• 光線柔和擴散，沒有強烈陰影
+• 風格關鍵字：soft focus, dreamy, hazy pastel, dried flowers, vintage sheet music, aged paper texture, romantic, ethereal, muted rose and cream tones, gentle diffused light, editorial beauty branding
 
-【內容結構】
+【版面比例｜很重要】
+• 直式 4:5（像 IG 貼文），不要做成很長的長圖
+• 文字區塊集中在畫面中央，花朵與紋理在四周，不搶文字
+• 大量留白，一眼看完不費力
 
-頂部標題區：
-• 主標題「護膚後的叮嚀」
-• 副標「用心照顧肌膚，每一天都會更美好」
+【文字內容】
 
-第一區塊（用細線 icon + 圓圈）：
+主標題：護膚後的叮嚀
+副標：用心照顧肌膚，每一天都會更美好
+
+內容（每點只用一行小標 + 一到兩句話，文字精簡，不要整段照抄）：
 {護膚叮嚀}
 
-第二區塊：「這次給你的試用包」
-{試用包區塊}
+底部一行：有任何不適或疑問，歡迎隨時告訴我 ♡
 
-底部：「用心照顧肌膚，每一天都會更美好」＋「有任何不適或疑問，歡迎隨時聯繫我們」，加一個細線小愛心裝飾
-
-【注意】
-所有中文字必須正確、清晰、無錯字與亂碼，字級足夠大可清楚閱讀。`;
+【文字排版要求】
+• 中文使用細筆畫的優雅明體，字距寬鬆
+• 標題深褐／咖啡色，內文中灰褐色，不要紅色與桃紅色
+• 每個要點前加一個細線小符號（♥ 或簡單線條圖示）
+• 字級要夠大，手機上不用放大就能看清楚
+• 所有中文字必須正確、清晰、無錯字與亂碼`;
 
 
 // 護膚後叮嚀範本（可在系統內編輯、新增其他療程的版本）
 const DEFAULT_AFTERCARE=[{
   id:'facial',
   name:'做臉後',
-  text:`七個要點，每點一個小標題與一段說明：
+  text:`【以「不留疤」為前提】
+採用地毯式搜索清粉刺，能清的都會盡量清乾淨。
+但如果粉刺卡太緊、或痘痘還沒成熟，就不會硬清，以免留下疤痕。
 
-1. 以【不留疤】為前提 — 採用地毯式搜索清粉刺，可清的都會盡量清乾淨；但如果粉刺卡太緊或痘痘還沒成熟，就不會硬清，以免留下疤痕
-2. 每天早晚確實洗臉 — 請勿用海綿或毛巾用力擦拭，輕輕壓乾即可，避免刺激肌膚
-3. 保養以保濕為主 — 護理後肌膚處於不穩定狀態，不使用美白、抗老類產品，建議成分單純的保濕產品
-4. 請勿以下動作 — 手摸臉、寢具未洗、口罩沒更換等，會跟肌膚接觸的生活用品也是長粉刺痘痘的原因
-5. 第一週是修復期 — 若有紅熱感、癢、灼熱感、緊繃、脫皮，都是正常現象
-6. 每天確實擦防曬 — 紫外線會造成毛孔粗大、長斑、曬黑、曬傷、曬老等問題
-7. 養成良好飲食習慣 — 甜點炸物零食容易長粉刺痘痘也會加速老化，多吃蔬果多喝水`
+♥ 保養以保濕為主
+保濕可以讓皮膚「現在變好」！
+護理後肌膚處於修護階段，避免使用美白、酸類、去角質，建議成分單純的保濕產品。
+
+♥ 防曬，可以讓皮膚慢點變差
+看不到的紫外線，對肌膚的傷害非常巨大，會讓肌膚產生各種問題，不可輕忽。
+早上最重要的保養就是「防曬」。
+
+♥ 養成良好飲食習慣
+甜點、零食、油炸是常見的爆痘地雷，劣質油脂容易讓毛孔阻塞，也加快肌膚老化。
+外在保養加上多喝水、多蔬果，才能養出穩定好膚質。
+
+♥ 做臉第一週，是黃金修復期
+若有微泛紅、溫熱感、緊繃脫皮、輕癢感，都是修護過程中可能出現的反應，不需要太擔心。
+如果有任何讓您覺得不安心的狀況，歡迎隨時傳訊息詢問，我會陪您一起觀察肌膚狀況 ♡`
 }];
+
+
+// 試用包說明圖（第二張，跟叮嚀分開避免圖太長）
+const DEFAULT_TRIALPACK_CARD_PROMPT=`請生成一張柔美療癒風格的試用包使用說明圖，與品牌形象一致。
+
+【視覺風格】
+• 淡粉色與奶油白的乾燥感玫瑰／洋桔梗花朵，散落在畫面邊緣
+• 背景是米粉色、帶紙質紋理的桌面，隱約可見手寫樂譜線條與泛黃的舊書頁
+• 柔焦、淺景深、朦朧柔光霧面濾鏡
+• 柔霧奶茶粉、米白、淡玫瑰粉，低飽和度，夢幻寧靜療癒
+• 風格關鍵字：soft focus, dreamy, hazy pastel, dried flowers, vintage sheet music, aged paper texture, romantic, ethereal, muted rose and cream tones
+
+【版面比例｜很重要】
+• 直式 4:5（像 IG 貼文），不要做成很長的長圖
+• 大量留白，文字精簡，一眼看完
+
+【文字內容】
+
+主標題：這次給你的試用包
+副標：延續今天的保養，讓效果留久一點
+
+{試用包區塊}
+
+底部一行：使用上有任何問題，隨時傳訊息問我 ♡
+
+【文字排版要求】
+• 中文使用細筆畫的優雅明體，字距寬鬆
+• 標題深褐／咖啡色，內文中灰褐色
+• 步驟用細線數字圓圈標示，簡潔不擁擠
+• 字級夠大，手機直接看得清楚
+• 所有中文字必須正確、清晰、無錯字與亂碼`;
 
 const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
 const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
@@ -6786,8 +6832,15 @@ function renderModal(){
 
   // ─── 📝 GPT 指令模板設定 ───
   if(m.t==='trialPackPrompt'){
-    const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
+    const which=S.modal.promptWhich||'care';
+    const tmpl=which==='care'
+      ?(S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT)
+      :(S.data.settings?.trialPackCardPrompt||DEFAULT_TRIALPACK_CARD_PROMPT);
     c=`<div class="mttl">📝 GPT 生圖指令模板</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-sm ${which==='care'?'btn-p':'btn-s'}" onclick="switchPromptTab('care')">① 護膚叮嚀卡</button>
+      <button class="btn btn-sm ${which==='pack'?'btn-p':'btn-s'}" onclick="switchPromptTab('pack')">② 試用包說明卡</button>
+    </div>
     <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:12px;line-height:1.8;">
       把你的公版指令貼進來，用下面的變數標記要自動填入的地方：<br>
       <b>常用兩個：</b><br>
@@ -11236,9 +11289,19 @@ window.delTrialPack=async(id)=>{
   openM('trialPackMgr');
 };
 
+window.switchPromptTab=(w)=>{
+  if(!S.modal)return;
+  S.modal.promptWhich=w;
+  const inn=$('modal-inner');
+  if(inn)inn.innerHTML=renderModal();
+};
+
 window.saveTrialPackPrompt=async()=>{
   const text=$('m_tpp_text')?.value||'';
-  const settings={...(S.data.settings||{}),trialPackPrompt:text};
+  const which=S.modal?.promptWhich||'care';
+  const settings=which==='care'
+    ?{...(S.data.settings||{}),trialPackPrompt:text}
+    :{...(S.data.settings||{}),trialPackCardPrompt:text};
   await saveMain({settings});
   toast('✅ 指令模板已儲存');
   openM('trialPackMgr');
@@ -11246,8 +11309,9 @@ window.saveTrialPackPrompt=async()=>{
 
 window.resetTrialPackPrompt=()=>{
   if(!confirm('還原成系統預設的指令模板？你目前的修改會消失。'))return;
+  const which=S.modal?.promptWhich||'care';
   const ta=$('m_tpp_text');
-  if(ta)ta.value=DEFAULT_TRIALPACK_PROMPT;
+  if(ta)ta.value=which==='care'?DEFAULT_TRIALPACK_PROMPT:DEFAULT_TRIALPACK_CARD_PROMPT;
   toast('已還原，記得按儲存');
 };
 
@@ -11302,12 +11366,10 @@ function fillTrialPackTemplate(tmpl,packs,aftercareText){
     .replace(/\{注意\}/g,[...new Set(arr.map(p=>p.note).filter(x=>x))].join('／')||'無特殊注意事項');
 }
 
-// 產生 GPT 指令
+// 產生 GPT 指令（叮嚀卡 + 試用包卡，各自獨立避免圖太長）
 window.genTrialPackPrompt=(ids,aftercareId)=>{
   const idArr=Array.isArray(ids)?ids:[ids];
   const packs=idArr.map(id=>(S.data.trialPacks||[]).find(x=>x.id===id)).filter(x=>x);
-  if(packs.length===0){alert('找不到試用包資料');return;}
-  const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
   const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
   if(aftercareId===undefined&&cares.length>0){
     showAftercarePicker(idArr,cares);
@@ -11315,10 +11377,29 @@ window.genTrialPackPrompt=(ids,aftercareId)=>{
   }
   const care=cares.find(x=>x.id===aftercareId);
   const careText=care?care.text:'';
-  // 一次生成一張完整圖卡（叮嚀＋所有試用包）
-  const filled=fillTrialPackTemplate(tmpl,packs,careText);
-  const title=packs.length===1?`🤖 生圖指令：${packs[0].name}`:`🤖 生圖指令（${packs.length} 個試用包）`;
-  showTrialPackPromptModal(title,[{name:`${care?care.name+'　':''}${packs.map(p=>p.name).join('、')}`,text:filled,isMerged:true}]);
+  const sections=[];
+
+  // 第一張：護膚叮嚀卡
+  if(careText){
+    const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
+    sections.push({
+      name:`① 護膚叮嚀卡（${care.name}）`,
+      text:fillTrialPackTemplate(tmpl,packs,careText),
+      isMerged:true
+    });
+  }
+
+  // 第二張：試用包說明卡
+  if(packs.length>0){
+    const tpTmpl=S.data.settings?.trialPackCardPrompt||DEFAULT_TRIALPACK_CARD_PROMPT;
+    sections.push({
+      name:`② 試用包說明卡（${packs.map(p=>p.name).join('、')}）`,
+      text:fillTrialPackTemplate(tpTmpl,packs,careText)
+    });
+  }
+
+  if(sections.length===0){alert('沒有可產生的內容');return;}
+  showTrialPackPromptModal('🤖 生圖指令（分兩張，各自精簡好讀）',sections);
 };
 
 // 顯示指令（可多份，各自有複製鈕）
