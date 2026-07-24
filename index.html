@@ -210,70 +210,48 @@ const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 // 試用包 GPT 生圖指令預設模板（可在系統內修改）
-const DEFAULT_TRIALPACK_PROMPT=`請幫我製作一張「護膚後居家保養叮嚀」圖卡，要傳給剛做完療程的客人看。
+const DEFAULT_TRIALPACK_PROMPT=`請製作一張「護膚後的叮嚀」圖卡，要傳給剛做完療程的客人。
 
-【最重要的原則】
-這張圖卡不是廣告，也不是推銷產品。
-目的只有一個：讓客人回家後知道要怎麼照顧自己的皮膚。
-語氣像朋友在關心，溫暖、有耐心。
-不要寫任何產品功效、效果承諾或誇大形容詞，讓客人自己去感受變化。
+【視覺風格要求】
+• 整體色調：奶茶米色、香檳金、淺褐、暖白為主，柔和低飽和，質感高級溫柔
+• 背景：淺米色到暖白的柔和漸層，右上角與左下角加入淡淡的乾燥花／滿天星剪影，透明度低（約 15-25%），不搶內容
+• 字體：中文使用細筆畫的優雅明體或細黑體，字距寬鬆，標題可加寬字距營造留白感
+• 標題文字用深褐／咖啡色，內文用中灰褐色，避免使用紅色與桃紅色
+• 圖示：使用細線條 line icon，放在圓形淺褐／淺米色底色圓圈內
+• 區塊：使用圓角矩形（圓角 16-24px），淺色描邊或極淡底色，區塊之間留白充足
+• 整體感覺：像高級美容品牌的形象簡介，乾淨、留白多、有呼吸感，不要密集擁擠
 
-【圖卡內容】
+【內容結構】
 
-━━ 第一區：護膚後的叮嚀 ━━
+頂部標題區：
+• 主標題「護膚後的叮嚀」
+• 副標「用心照顧肌膚，每一天都會更美好」
+
+第一區塊（用細線 icon + 圓圈）：
 {護膚叮嚀}
 
-━━ 第二區：這次給你的試用包 ━━
-{名稱}
+第二區塊：「這次給你的試用包」
+{試用包區塊}
 
-裡面有：
-{內容物}
+底部：「用心照顧肌膚，每一天都會更美好」＋「有任何不適或疑問，歡迎隨時聯繫我們」，加一個細線小愛心裝飾
 
-怎麼用：
-{使用方式}
-
-用多久：{天數}
-小提醒：{注意}
-
-【設計要求】
-- 直式長圖，適合手機閱讀
-- 不要放任何產品照片、示意圖或裝飾插畫，純文字排版就好
-- 字要大、行距要寬，眼睛不好的人也能輕鬆看
-- 米色、淺粉色系，乾淨溫柔
-- 每個重點前面用 ♥ 或簡單符號，層次一眼看得出來
-- 中文字必須正確清晰，不可有錯字或變形
-- 整體感覺要像「店家親手寫的叮嚀」，不是印刷品或廣告 DM`;
+【注意】
+所有中文字必須正確、清晰、無錯字與亂碼，字級足夠大可清楚閱讀。`;
 
 
 // 護膚後叮嚀範本（可在系統內編輯、新增其他療程的版本）
 const DEFAULT_AFTERCARE=[{
   id:'facial',
   name:'做臉後',
-  text:`🪧美容護膚後の保養叮嚀
-🏷️以【不留疤】為前提
-採用地毯式搜索清粉刺
-能清的都會盡量清乾淨
-但如果是🔺粉刺卡太緊🔺
-或痘痘還沒成熟，就不會硬清
-以免在肌膚上留下疤痕
+  text:`七個要點，每點一個小標題與一段說明：
 
-♥ 每天早晚確實洗臉
-請勿用海綿或毛巾用力擦拭，輕輕壓乾即可，避免刺激肌膚。
-
-♥ 保養以保濕為主
-護理後肌膚處於不穩定狀態，不使用美白、抗老類產品，建議成分單純的保濕產品，這時的保養效果絕對會超級有感的！
-
-♥ 請勿以下動作
-手摸臉、寢具未洗、口罩沒有更換等等，會跟肌膚接觸到的生活用品，也是讓肌膚長粉刺痘痘的原因，記得要避免！
-
-♥ 第一週，是修復期
-在修復期間，若有紅熱感、癢、灼熱感、臉上緊繃、脫皮，這些症狀都是正常現象
-
-♥ 每天確實擦防曬
-紫外線對肌膚的傷害是非常巨大的，會讓毛孔粗大、長斑、曬黑、曬傷、曬老等等各種肌膚問題，不可輕忽！
-
-♥ 養成良好飲食習慣
-甜點炸物零食容易長粉刺痘痘，也會加快老化速度，多吃蔬果多喝水，養出好膚質`
+1. 以【不留疤】為前提 — 採用地毯式搜索清粉刺，可清的都會盡量清乾淨；但如果粉刺卡太緊或痘痘還沒成熟，就不會硬清，以免留下疤痕
+2. 每天早晚確實洗臉 — 請勿用海綿或毛巾用力擦拭，輕輕壓乾即可，避免刺激肌膚
+3. 保養以保濕為主 — 護理後肌膚處於不穩定狀態，不使用美白、抗老類產品，建議成分單純的保濕產品
+4. 請勿以下動作 — 手摸臉、寢具未洗、口罩沒更換等，會跟肌膚接觸的生活用品也是長粉刺痘痘的原因
+5. 第一週是修復期 — 若有紅熱感、癢、灼熱感、緊繃、脫皮，都是正常現象
+6. 每天確實擦防曬 — 紫外線會造成毛孔粗大、長斑、曬黑、曬傷、曬老等問題
+7. 養成良好飲食習慣 — 甜點炸物零食容易長粉刺痘痘也會加速老化，多吃蔬果多喝水`
 }];
 
 const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
@@ -1399,7 +1377,11 @@ function pgOverview(){
     </div>
   </div>
 
-  <!-- 財務體質指標 -->
+  <!-- 財務體質指標（累計狀態，不隨月份變動） -->
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+    <span style="font-size:13px;font-weight:700;color:var(--mut);">📌 目前狀態</span>
+    <span class="tm" style="font-size:11px;">（累計數字，不隨上方月份切換而改變）</span>
+  </div>
   <div class="sg sg3" style="margin-bottom:18px;">
     <div class="sc" style="border-top-color:var(--blu);">
       <div class="sl">💳 儲值負債餘額</div>
@@ -6722,6 +6704,7 @@ function renderModal(){
     </div>
     <div class="mbtns">
       <button class="btn btn-s" onclick="openM('aftercareMgr')">取消</button>
+      ${!isNew&&m.x==='facial'?`<button class="btn btn-y" onclick="resetAftercare()">↺ 還原預設</button>`:''}
       <button class="btn btn-p" onclick="saveAftercare('${isNew?'__new__':m.x}')">✓ 儲存</button>
     </div>`;
     S.modal.lg=true;
@@ -6807,12 +6790,14 @@ function renderModal(){
     c=`<div class="mttl">📝 GPT 生圖指令模板</div>
     <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:12px;line-height:1.8;">
       把你的公版指令貼進來，用下面的變數標記要自動填入的地方：<br>
-      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{護膚叮嚀}</code>
+      <b>常用兩個：</b><br>
+      <code style="background:#fff;padding:2px 6px;border-radius:3px;">{護膚叮嚀}</code> 依你選的療程自動帶入<br>
+      <code style="background:#fff;padding:2px 6px;border-radius:3px;">{試用包區塊}</code> 依勾選數量自動排版（1個→單張卡、2個→左右並排、3個以上→依序堆疊）<br>
+      <b style="margin-top:6px;display:inline-block;">其他可用：</b>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{名稱}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{適用}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{內容物}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{使用方式}</code>
-      <code style="background:#fff;padding:1px 5px;border-radius:3px;">{功效}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{天數}</code>
       <code style="background:#fff;padding:1px 5px;border-radius:3px;">{注意}</code>
       <br>產生指令時，這些會自動換成該試用包的實際內容。
@@ -11201,6 +11186,13 @@ window.saveAftercare=async(id)=>{
   openM('aftercareMgr');
 };
 
+window.resetAftercare=()=>{
+  if(!confirm('還原成系統預設的做臉叮嚀？目前的修改會消失。'))return;
+  const ta=$('m_ac_text');
+  if(ta)ta.value=DEFAULT_AFTERCARE[0].text;
+  toast('已還原，記得按儲存');
+};
+
 window.delAftercare=async(id)=>{
   const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
   const ca=cares.find(x=>x.id===id);
@@ -11259,55 +11251,74 @@ window.resetTrialPackPrompt=()=>{
   toast('已還原，記得按儲存');
 };
 
-// 把單一試用包資料填入模板
-function fillTrialPackTemplate(tmpl,tp,aftercareText){
-  return tmpl
-    .replace(/\{護膚叮嚀\}/g,aftercareText||'')
-    .replace(/\{名稱\}/g,tp.name||'')
-    .replace(/\{適用\}/g,tp.target||'一般膚質')
-    .replace(/\{內容物\}/g,tp.contents||'')
-    .replace(/\{使用方式\}/g,tp.usage||'')
-    .replace(/\{功效\}/g,tp.benefits||'')
-    .replace(/\{天數\}/g,tp.days||'依個人需求')
-    .replace(/\{注意\}/g,tp.note||'無特殊注意事項');
+// 把使用方式的多行轉成「1 洗臉 2 化妝水」的橫式寫法
+function inlineSteps(usage){
+  return (usage||'').split('\n').map(s=>s.trim()).filter(s=>s)
+    .map(s=>s.replace(/^(\d+)[\.、\)]\s*/,'$1 '))
+    .join('　');
 }
 
-// 產生 GPT 指令（支援單個或多個試用包）
+// 依勾選數量，動態生成「試用包區塊」的排版指示
+function buildTrialPackSection(packs){
+  if(packs.length===0)return'（這次沒有給試用包，這一區可以省略）';
+  const names=packs.map(p=>p.name).join('、');
+  const contents=packs.map(p=>`${p.name} ${(p.contents||'').replace(/\n/g,' ')}`).join('、');
+  const days=packs.map(p=>`${p.name}：${p.days||'依需求使用'}`).join('；');
+  const notes=[...new Set(packs.flatMap(p=>(p.note||'').split(/[、，,；;]/).map(s=>s.trim()).filter(s=>s)))].join('／');
+
+  let cards='';
+  if(packs.length===1){
+    const p=packs[0];
+    cards=`• 一張圓角卡片：怎麼用｜${p.name} → ${inlineSteps(p.usage)}`;
+  }else if(packs.length===2){
+    cards=`• 左右兩欄並排的圓角卡片：
+  • 左：怎麼用｜${packs[0].name} → ${inlineSteps(packs[0].usage)}
+  • 右：怎麼用｜${packs[1].name} → ${inlineSteps(packs[1].usage)}`;
+  }else{
+    cards=`• 依序排列的圓角卡片（每個試用包一張，上下堆疊）：
+${packs.map((p,i)=>`  • 卡片${i+1}：怎麼用｜${p.name} → ${inlineSteps(p.usage)}`).join('\n')}`;
+  }
+
+  return `• 副標：${names}
+• 內容物：${contents}
+${cards}
+• 用多久：${days}
+• 小提醒：${notes||'依個人膚況調整'}`;
+}
+
+// 把資料填入模板
+function fillTrialPackTemplate(tmpl,packs,aftercareText){
+  const arr=Array.isArray(packs)?packs:[packs];
+  const first=arr[0]||{};
+  return tmpl
+    .replace(/\{護膚叮嚀\}/g,aftercareText||'（這次不需要護膚叮嚀，這一區可以省略）')
+    .replace(/\{試用包區塊\}/g,buildTrialPackSection(arr))
+    .replace(/\{名稱\}/g,arr.map(p=>p.name).join('、'))
+    .replace(/\{適用\}/g,[...new Set(arr.map(p=>p.target).filter(x=>x))].join('、')||'一般膚質')
+    .replace(/\{內容物\}/g,arr.map(p=>`【${p.name}】${p.contents||''}`).join('\n'))
+    .replace(/\{使用方式\}/g,arr.map(p=>`【${p.name}】\n${p.usage||''}`).join('\n\n'))
+    .replace(/\{功效\}/g,arr.map(p=>p.benefits||'').filter(x=>x).join('\n'))
+    .replace(/\{天數\}/g,arr.map(p=>`${p.name}：${p.days||'依需求'}`).join('；'))
+    .replace(/\{注意\}/g,[...new Set(arr.map(p=>p.note).filter(x=>x))].join('／')||'無特殊注意事項');
+}
+
+// 產生 GPT 指令
 window.genTrialPackPrompt=(ids,aftercareId)=>{
   const idArr=Array.isArray(ids)?ids:[ids];
   const packs=idArr.map(id=>(S.data.trialPacks||[]).find(x=>x.id===id)).filter(x=>x);
   if(packs.length===0){alert('找不到試用包資料');return;}
   const tmpl=S.data.settings?.trialPackPrompt||DEFAULT_TRIALPACK_PROMPT;
   const cares=S.data.settings?.aftercareTemplates||DEFAULT_AFTERCARE;
-  // 還沒選叮嚀 → 先讓使用者選
   if(aftercareId===undefined&&cares.length>0){
     showAftercarePicker(idArr,cares);
     return;
   }
   const care=cares.find(x=>x.id===aftercareId);
   const careText=care?care.text:'';
-
-  // 單一試用包 → 直接顯示
-  if(packs.length===1){
-    const filled=fillTrialPackTemplate(tmpl,packs[0],careText);
-    showTrialPackPromptModal(`🤖 GPT 生圖指令：${packs[0].name}`,[{name:packs[0].name,text:filled}]);
-    return;
-  }
-
-  // 多個試用包 → 個別版 + 合併版
-  const sections=packs.map(tp=>({name:tp.name,text:fillTrialPackTemplate(tmpl,tp,careText)}));
-  // 合併版：把多個試用包的內容併成一份
-  const merged={
-    name:packs.map(p=>p.name).join('、'),
-    target:[...new Set(packs.map(p=>p.target).filter(x=>x))].join('、')||'一般膚質',
-    contents:packs.map(p=>`【${p.name}】\n${p.contents||''}`).join('\n\n'),
-    usage:packs.map(p=>`【${p.name}】\n${p.usage||''}`).join('\n\n'),
-    benefits:packs.map(p=>`【${p.name}】${p.benefits||''}`).join('\n'),
-    days:packs.map(p=>`${p.name}：${p.days||'依需求'}`).join('／'),
-    note:[...new Set(packs.map(p=>p.note).filter(x=>x))].join('；')||'無特殊注意事項'
-  };
-  sections.unshift({name:`🔗 合併成一張（${packs.length} 個一起）`,text:fillTrialPackTemplate(tmpl,merged,careText),isMerged:true});
-  showTrialPackPromptModal(`🤖 GPT 生圖指令（${packs.length} 個試用包）`,sections);
+  // 一次生成一張完整圖卡（叮嚀＋所有試用包）
+  const filled=fillTrialPackTemplate(tmpl,packs,careText);
+  const title=packs.length===1?`🤖 生圖指令：${packs[0].name}`:`🤖 生圖指令（${packs.length} 個試用包）`;
+  showTrialPackPromptModal(title,[{name:`${care?care.name+'　':''}${packs.map(p=>p.name).join('、')}`,text:filled,isMerged:true}]);
 };
 
 // 顯示指令（可多份，各自有複製鈕）
