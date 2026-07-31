@@ -420,6 +420,16 @@ const MOS=['一月','二月','三月','四月','五月','六月','七月','八�
 // ── 預設首次建檔健康問卷（完整版） ───────────────────────────
 // 題型：text(單行) / textarea(多行) / radio(單選) / checkbox_group(複選)
 //      section(章節標題)
+const DEFAULT_HEALTH_QUESTIONS_DECLARATION=`本人已就以上各項據實填寫，並了解：
+
+1. 所填寫資料為本人真實狀況。若因隱瞞或不實告知導致服務時產生不良反應或損害，由本人自行承擔責任。
+
+2. 如健康狀況、用藥、過敏等資料有變動，本人將主動告知工作室更新。
+
+3. 同意工作室依《個人資料保護法》於服務必要範圍內蒐集、處理及利用本人個資，保存期間為最後一次服務後 2 年。
+
+4. 了解每次接受不同服務時，將另行簽署該項服務之專屬同意書。`;
+
 const DEFAULT_HEALTH_QUESTIONS=[
   // ─── 第一部分：基本資料 ───
   {type:'section',label:'第一部分　基本資料'},
@@ -638,6 +648,10 @@ function render(){
   bindEvents();
   if(S.auth&&S.sync==='idle'&&auth.currentUser){
     startSync();
+  }
+  // 新客人填寫畫面：初始化簽名板
+  if(S.page==='treatment'&&S.treatment&&S.treatment.mode==='guestIntake'&&!S.treatment.guestSubmitted){
+    setTimeout(initSignatureCanvasInline,150);
   }
   // 進入銷售開單頁時，自動初始化購物車顯示
   if(S.auth&&S.page==='order'&&typeof renderCart==='function'){
@@ -971,7 +985,7 @@ function appHTML(){
   ];
   const curPage=PAGES.find(p=>p.id===S.page)||PAGES[0];
   // 判斷是否為客戶簽名模式（隱藏側邊欄與頂部欄，全螢幕沉浸體驗）
-  const isCustomerMode=S.page==='treatment'&&S.treatment&&(S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'||S.treatment.mode==='depositCustomer');
+  const isCustomerMode=S.page==='treatment'&&S.treatment&&(S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'||S.treatment.mode==='depositCustomer'||S.treatment.mode==='guestIntake');
   return`
 <div class="app${isCustomerMode?' customer-mode':''}">
   ${isCustomerMode?'':`<nav class="sidebar">
@@ -1382,6 +1396,11 @@ function pgOverview(){
   return`
   <div class="pg-ttl">📊 工作室總覽</div>
   <div class="pg-sub">${yr()}年 ${MOS[S.month-1]}　第 ${curQ} 季</div>
+
+  <button onclick="startNewGuestFlow()" style="width:100%;background:linear-gradient(135deg,var(--rose),var(--gold));color:#fff;border:none;padding:16px;border-radius:14px;font-size:17px;font-weight:700;margin-bottom:14px;box-shadow:0 4px 16px rgba(217,154,87,0.25);cursor:pointer;">
+    🌸 接待新客人（填同意書）
+    <div style="font-size:12px;font-weight:400;opacity:0.9;margin-top:4px;">一鍵切到客戶填寫畫面，客人看不到任何財務資料</div>
+  </button>
   <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>📊 <b>日常儀表板</b>：每天/每週打開，看本月即時狀態 — 營收、支出、警示、待辦</div>
     <div style="display:flex;gap:6px;">
@@ -3774,6 +3793,7 @@ function pgTreatment(){
   }
   const t=S.treatment;
   if(t.mode==='customer')return pgTreatmentCustomerView(t);
+  if(t.mode==='guestIntake')return pgGuestIntakeView(t);
   if(t.mode==='newCustomer')return pgTreatmentNewCustomerView(t);
   if(t.mode==='depositCustomer')return pgDepositCustomerView(t);
   return pgTreatmentStaffView(t);
@@ -4279,6 +4299,180 @@ function pgTreatmentCustomerView(t){
   </div>
   `;
 }
+
+// ───── 🌸 接待新客人：純客戶填寫畫面（無任何財務資料）─────
+function pgGuestIntakeView(t){
+  const studioName='沐蜜美學';
+  const healthQuestions=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const termsMap=S.data.settings?.termsMap||{};
+  const baseTerms=termsMap['預設（通用）']||DEFAULT_HEALTH_QUESTIONS_DECLARATION;
+  const done=t.guestSubmitted;
+
+  // 完成畫面
+  if(done){
+    return`
+    <button onclick="switchTreatmentMode('staff')" title="返回" style="position:fixed;top:14px;right:14px;z-index:100;background:rgba(255,255,255,0.6);backdrop-filter:blur(8px);border:1px solid var(--bdr);color:var(--mut);padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;opacity:0.4;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.4">老師返回</button>
+    <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#fff5f0,#fff);padding:20px;">
+      <div style="background:#fff;padding:40px 30px;border-radius:20px;text-align:center;max-width:420px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <div style="font-size:56px;margin-bottom:14px;">🌸</div>
+        <div style="font-size:22px;font-weight:700;color:var(--roseDk);margin-bottom:10px;">謝謝您，${t.guestName} ♡</div>
+        <div style="color:var(--mut);font-size:15px;line-height:1.8;">
+          資料已經填寫完成囉！<br>
+          接下來我會依您的膚況與需求，<br>為您規劃最適合的保養～<br><br>
+          現在請把裝置交回給美容師 🌸
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return`
+  <button onclick="cancelGuestIntake()" title="取消" style="position:fixed;top:14px;right:14px;z-index:100;background:rgba(255,255,255,0.6);backdrop-filter:blur(8px);border:1px solid var(--bdr);color:var(--mut);padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;opacity:0.35;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.35">取消</button>
+
+  <div style="max-width:640px;margin:0 auto;padding:20px 16px 60px;">
+    <!-- 歡迎 -->
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-family:'Noto Serif TC',serif;font-size:28px;font-weight:900;color:var(--roseDk);letter-spacing:0.1em;">${studioName}</div>
+      <div style="color:var(--mut);font-size:15px;margin-top:8px;">歡迎您 🌸 初次見面，先讓我更認識您</div>
+      <div style="color:var(--mut);font-size:13px;margin-top:4px;">以下資料只用於為您安全地服務，我們會妥善保密</div>
+    </div>
+
+    <!-- 姓名聯絡 -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd" style="background:var(--roseL);"><span class="card-ttl" style="color:var(--roseDk);">👤 基本聯絡</span></div>
+      <div class="card-bd">
+        <div class="fgrp"><label>您的稱呼／姓名 *</label>
+          <input type="text" id="g_name" value="${(t.guestName||'').replace(/"/g,'&quot;')}" placeholder="怎麼稱呼您呢？" style="font-size:16px;" oninput="S.treatment.guestName=this.value;">
+        </div>
+        <div class="fgrp" style="margin-top:10px;"><label>聯絡電話 *</label>
+          <input type="tel" id="g_phone" value="${(t.guestPhone||'').replace(/"/g,'&quot;')}" placeholder="例：0912-345-678" style="font-size:16px;" oninput="S.treatment.guestPhone=this.value;">
+        </div>
+      </div>
+    </div>
+
+    <!-- 健康問卷 -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">📋 健康小問卷</span></div>
+      <div class="card-bd">
+        <div class="tm" style="font-size:13px;margin-bottom:14px;">這些幫助我避開可能讓您不適的狀況，讓服務更安全 ♡</div>
+        ${healthQuestions.map(q=>renderGuestQuestion(q,t)).join('')}
+      </div>
+    </div>
+
+    <!-- 同意書 -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd" style="background:var(--goldL);"><span class="card-ttl" style="color:var(--goldDk);">📜 服務同意</span></div>
+      <div class="card-bd">
+        <div style="background:var(--bg2);padding:14px;border-radius:10px;font-size:13px;line-height:1.9;white-space:pre-wrap;max-height:260px;overflow-y:auto;">${baseTerms}</div>
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;cursor:pointer;padding:12px;background:var(--goldL);border-radius:10px;">
+          <input type="checkbox" id="g_agree" style="margin-top:3px;transform:scale(1.3);" ${t.healthAgreed?'checked':''} onchange="S.treatment.healthAgreed=this.checked;">
+          <span style="font-size:14px;font-weight:700;color:var(--goldDk);">我已詳閱並同意上述內容，所填資料屬實</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 簽名 -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">✍️ 簽名</span></div>
+      <div class="card-bd">
+        <div class="tm" style="text-align:center;margin-bottom:8px;font-size:13px;">請在下方簽名確認</div>
+        <div style="background:linear-gradient(180deg,#fff 0%,#fffaf3 100%);border:3px dashed var(--gold);border-radius:12px;padding:10px;">
+          <canvas id="t_guest_sign_canvas" width="600" height="180" style="width:100%;height:180px;cursor:crosshair;touch-action:none;display:block;background:#fff;border-radius:8px;"></canvas>
+        </div>
+        <div style="display:flex;justify-content:center;margin-top:10px;">
+          <button class="btn btn-y" onclick="clearSignature()">🗑️ 清除重簽</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin:24px 0;">
+      <button class="btn btn-pur" style="background:linear-gradient(135deg,var(--gold),var(--rose));color:#fff;font-size:18px;font-weight:700;padding:16px 44px;border-radius:30px;box-shadow:0 4px 16px rgba(217,154,87,0.3);" onclick="submitGuestIntake()">
+        ✓ 完成填寫 ✨
+      </button>
+    </div>
+  </div>`;
+}
+
+// 渲染單一問卷題目（客戶填寫用）
+function renderGuestQuestion(q,t){
+  if(q.type==='section'){
+    return`<div style="font-weight:700;color:var(--roseDk);font-size:15px;margin:18px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--roseL);">${q.label}</div>`;
+  }
+  const v=t.healthForm?.[q.key];
+  if(q.type==='text'){
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <input type="text" value="${(v||'').replace(/"/g,'&quot;')}" placeholder="${q.placeholder||''}" oninput="setGuestForm('${q.key}',this.value)"></div>`;
+  }
+  if(q.type==='textarea'){
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <textarea rows="2" placeholder="${q.placeholder||''}" oninput="setGuestForm('${q.key}',this.value)">${v||''}</textarea></div>`;
+  }
+  if(q.type==='radio'){
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+        ${(q.options||[]).map(o=>`<label style="padding:6px 14px;background:${v===o?'var(--rose)':'var(--bg2)'};color:${v===o?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="g_${q.key}" style="display:none;" onchange="setGuestForm('${q.key}','${o}')">${o}</label>`).join('')}
+      </div></div>`;
+  }
+  if(q.type==='checkbox_group'){
+    const arr=Array.isArray(v)?v:[];
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+        ${(q.options||[]).map(o=>`<label style="padding:6px 12px;background:${arr.includes(o)?'var(--blu)':'var(--bg2)'};color:${arr.includes(o)?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" style="display:none;" ${arr.includes(o)?'checked':''} onchange="toggleGuestCheck('${q.key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
+      </div></div>`;
+  }
+  return'';
+}
+
+window.setGuestForm=(key,val)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.healthForm)S.treatment.healthForm={};
+  S.treatment.healthForm[key]=val;
+};
+
+window.toggleGuestCheck=(key,opt)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.healthForm)S.treatment.healthForm={};
+  const arr=Array.isArray(S.treatment.healthForm[key])?S.treatment.healthForm[key]:[];
+  const i=arr.indexOf(opt);
+  if(i>=0)arr.splice(i,1);else arr.push(opt);
+  S.treatment.healthForm[key]=arr;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
+};
+
+window.cancelGuestIntake=()=>{
+  if(confirm('確定取消？已填寫的內容不會儲存。'))
+    switchTreatmentMode('staff');
+};
+
+window.submitGuestIntake=async()=>{
+  const t=S.treatment;
+  if(!t)return;
+  const name=(t.guestName||$('g_name')?.value||'').trim();
+  const phone=(t.guestPhone||$('g_phone')?.value||'').trim();
+  if(!name){alert('請填寫您的稱呼／姓名');return;}
+  if(!phone){alert('請填寫聯絡電話');return;}
+  if(!t.healthAgreed&&!$('g_agree')?.checked){alert('請勾選「同意」才能完成');return;}
+  if(!_sigCanvas||!_sigHasContent){alert('請簽名確認');return;}
+  const signature=_sigCanvas.toDataURL('image/png');
+
+  // 建客戶檔 + 存首次同意紀錄
+  const custId=uid();
+  const customers=[...(S.data.customers||[]),{
+    id:custId,name,phone,
+    createdAt:today(),
+    healthForm:t.healthForm||{},
+    healthAgreed:true,healthAgreedAt:new Date().toISOString(),
+    intakeSignature:signature
+  }];
+  await saveMain({customers});
+
+  t.guestName=name;
+  t.guestSubmitted=true;
+  toast(`✅ ${name} 的同意書已完成`);
+  render();
+};
 
 // ───── 首次建檔模式（健康問卷 + 服務同意書）─────
 function pgTreatmentNewCustomerView(t){
@@ -9007,8 +9201,8 @@ window.delTreatment=async(id)=>{
 // ─── 簽名功能（Canvas）───────────────────
 let _sigCanvas=null,_sigCtx=null,_sigDrawing=false,_sigHasContent=false;
 
-window.initSignatureCanvas=()=>{
-  const canvas=$('m_sign_canvas');
+window.initSignatureCanvas=(canvasId)=>{
+  const canvas=$(canvasId||'m_sign_canvas');
   if(!canvas)return;
   _sigCanvas=canvas;
   // 設定高解析度
@@ -9681,8 +9875,8 @@ window.showServiceHealth=(id)=>{
 };
 
 // 重新渲染後重新初始化簽名 canvas
-function initSignatureCanvasInline(){
-  const canvas=$('t_sign_canvas');
+function initSignatureCanvasInline(canvasId){
+  const canvas=$(canvasId||'t_sign_canvas')||$('t_guest_sign_canvas');
   if(!canvas)return;
   _sigCanvas=canvas;
   const dpr=window.devicePixelRatio||1;
@@ -9722,6 +9916,26 @@ window.resetTreatment=()=>{
   if(!confirm('確認清空目前所有資料，重新開始？'))return;
   S.treatment=null;
   render();
+};
+
+// ─── 🌸 接待新客人：一鍵進入純客戶填寫畫面 ───
+window.startNewGuestFlow=()=>{
+  S.treatment={
+    mode:'guestIntake',
+    customer:'',        // 客人自己填
+    date:today(),
+    staff:TEACHERS[0]||'于蜜',
+    services:[],products:[],
+    skinCondition:'',feedback:'',nextSuggestion:'',
+    payMethod:'轉帳',agreed:false,signature:null,
+    isFirstVisit:true,
+    healthForm:{},healthAgreed:false,
+    skinCheck:{},serviceHealthAnswers:{},
+    guestName:'',guestPhone:''
+  };
+  S.page='treatment';
+  render();
+  setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},150);
 };
 
 window.switchTreatmentMode=(mode)=>{
