@@ -2895,8 +2895,101 @@ function pgCustomerDetail(c){
     </table></div>
   </div>`:''}
 
+  ${(() => {
+    // 初次建檔的同意書與健康檔案（從客戶檔案讀取）
+    const cust=(S.data.customers||[]).find(x=>x.name===c.name)||{};
+    const hasHealth=cust.healthForm&&Object.keys(cust.healthForm).length>0;
+    const hasSvcHealth=cust.serviceHealthAnswers&&Object.keys(cust.serviceHealthAnswers).length>0;
+    const hasSign=!!cust.intakeSignature;
+    if(!hasHealth&&!hasSvcHealth&&!hasSign)return'';
+    return`<div class="sec" style="margin-top:20px;">
+      <div class="sec-hd">
+        <span class="sec-ttl">📜 初次同意書與健康檔案</span>
+        ${cust.healthAgreedAt?`<span class="tm" style="font-size:11px;">簽署於 ${new Date(cust.healthAgreedAt).toLocaleDateString('zh-TW')}</span>`:''}
+      </div>
+      <div class="card">
+        <div class="card-bd">
+          ${cust.serviceCats&&cust.serviceCats.length>0?`<div style="margin-bottom:10px;"><b style="font-size:13px;">本次服務：</b>${cust.serviceCats.map(s=>`<span class="bdg gold" style="margin-right:4px;">${s}</span>`).join('')}</div>`:''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${hasHealth?`<button class="btn btn-s btn-sm" onclick="showCustomerIntake('${c.name}')">📋 看健康問卷</button>`:''}
+            ${hasSvcHealth?`<button class="btn btn-s btn-sm" onclick="showCustomerServiceHealth('${c.name}')">🔹 看服務專屬確認</button>`:''}
+            ${hasSign?`<button class="btn btn-s btn-sm" onclick="showCustomerSignature('${c.name}')">✍️ 看簽名</button>`:''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  })()}
+
   ${pgTreatmentRecords(c)}`;
 }
+
+// 看初次健康問卷
+window.showCustomerIntake=(name)=>{
+  const cust=(S.data.customers||[]).find(x=>x.name===name);
+  if(!cust||!cust.healthForm){alert('沒有健康問卷資料');return;}
+  const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const rows=qs.filter(q=>q.type!=='section'&&q.type!=='declaration').map(q=>{
+    let v=cust.healthForm[q.key];
+    if(Array.isArray(v))v=v.join('、');
+    if(!v||v==='')return'';
+    return`<tr><td style="padding:6px 8px;color:var(--mut);font-size:13px;">${q.label}</td><td style="padding:6px 8px;font-size:13px;font-weight:600;">${v}</td></tr>`;
+  }).filter(x=>x).join('');
+  const html=`<div class="mttl">📋 ${name} 的健康問卷</div>
+    <div style="max-height:65vh;overflow-y:auto;">
+      <table style="width:100%;border-collapse:collapse;">${rows||'<tr><td class="tm">（客戶未填寫任何項目）</td></tr>'}</table>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+  S.modal={t:'customerIntake',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+};
+
+// 看服務專屬確認
+window.showCustomerServiceHealth=(name)=>{
+  const cust=(S.data.customers||[]).find(x=>x.name===name);
+  if(!cust||!cust.serviceHealthAnswers){alert('沒有服務專屬確認資料');return;}
+  const svcQs=S.data.settings?.serviceHealthQuestions||{};
+  const rows=Object.entries(cust.serviceHealthAnswers).map(([key,val])=>{
+    // key 格式：svc_分類_題目key
+    const parts=key.split('_');
+    const cat=parts[1]||'';
+    let label=key;
+    // 找回題目標籤
+    if(svcQs[cat]){
+      const q=svcQs[cat].find((qq,i)=>`svc_${cat}_${qq.key||i}`===key);
+      if(q)label=`【${cat}】${q.label}`;
+    }
+    let v=Array.isArray(val)?val.join('、'):val;
+    if(!v)return'';
+    return`<tr><td style="padding:6px 8px;color:var(--mut);font-size:13px;">${label}</td><td style="padding:6px 8px;font-size:13px;font-weight:600;">${v}</td></tr>`;
+  }).filter(x=>x).join('');
+  const html=`<div class="mttl">🔹 ${name} 的服務專屬確認</div>
+    <div style="max-height:65vh;overflow-y:auto;">
+      <table style="width:100%;border-collapse:collapse;">${rows||'<tr><td class="tm">（無資料）</td></tr>'}</table>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+  S.modal={t:'customerSvcHealth',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+};
+
+// 看簽名
+window.showCustomerSignature=(name)=>{
+  const cust=(S.data.customers||[]).find(x=>x.name===name);
+  if(!cust||!cust.intakeSignature){alert('沒有簽名資料');return;}
+  const html=`<div class="mttl">✍️ ${name} 的同意書簽名</div>
+    <div style="text-align:center;padding:10px;">
+      ${cust.healthAgreedAt?`<div class="tm" style="font-size:13px;margin-bottom:10px;">簽署時間：${new Date(cust.healthAgreedAt).toLocaleString('zh-TW')}</div>`:''}
+      <div style="background:#fff;border:2px solid var(--gold);border-radius:12px;padding:10px;display:inline-block;">
+        <img src="${cust.intakeSignature}" style="max-width:100%;height:auto;" alt="簽名">
+      </div>
+      <div class="tm" style="font-size:12px;margin-top:10px;">✓ 客戶已於上述時間簽名同意</div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+  S.modal={t:'customerSign',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+};
 
 // ─── 療程紀錄區塊（客戶詳情頁專用）───
 function pgTreatmentRecords(c){
