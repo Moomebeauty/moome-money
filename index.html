@@ -471,7 +471,6 @@ const DEFAULT_HEALTH_QUESTIONS=[
   {type:'section',label:'第五部分　本次服務目標'},
   {key:'concerns',label:'本次最想改善的問題',type:'textarea',placeholder:'例：黑眼圈、痘痘、暗沉、緊繃感、肩頸痠痛'},
   {key:'expectation',label:'對本次服務的期待',type:'textarea',placeholder:'例：放鬆、改善膚況、學會正確保養方法'},
-  {key:'marketingOptIn',label:'是否同意接收優惠活動／新品介紹',type:'radio',options:['同意','不同意']},
 
   // ─── 第六部分：客戶聲明與簽名 ───
   {type:'section',label:'第六部分　客戶聲明與簽名'},
@@ -4409,8 +4408,7 @@ function renderGuestQuestion(q,t){
   if(q.type==='radio'){
     return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-        ${(q.options||[]).map(o=>`<label style="padding:6px 14px;background:${v===o?'var(--rose)':'var(--bg2)'};color:${v===o?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;">
-          <input type="radio" name="g_${q.key}" style="display:none;" onchange="setGuestForm('${q.key}','${o}')">${o}</label>`).join('')}
+        ${(q.options||[]).map(o=>`<label style="padding:8px 16px;background:${v===o?'var(--rose)':'var(--bg2)'};color:${v===o?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:14px;font-weight:${v===o?'700':'400'};" onclick="pickGuestRadio('${q.key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
       </div></div>`;
   }
   if(q.type==='checkbox_group'){
@@ -4428,6 +4426,14 @@ window.setGuestForm=(key,val)=>{
   if(!S.treatment)return;
   if(!S.treatment.healthForm)S.treatment.healthForm={};
   S.treatment.healthForm[key]=val;
+};
+
+window.pickGuestRadio=(key,val)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.healthForm)S.treatment.healthForm={};
+  S.treatment.healthForm[key]=val;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
 };
 
 window.toggleGuestCheck=(key,opt)=>{
