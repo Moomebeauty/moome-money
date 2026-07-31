@@ -4328,6 +4328,23 @@ function pgGuestIntakeView(t){
   <button onclick="cancelGuestIntake()" title="取消" style="position:fixed;top:14px;right:14px;z-index:100;background:rgba(255,255,255,0.6);backdrop-filter:blur(8px);border:1px solid var(--bdr);color:var(--mut);padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;opacity:0.35;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.35">取消</button>
 
   <div style="max-width:640px;margin:0 auto;padding:20px 16px 60px;">
+    <!-- 老師先選這次服務（交給客人前先點好）-->
+    <div style="background:var(--goldL);border:2px dashed var(--gold);border-radius:12px;padding:12px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:var(--goldDk);margin-bottom:8px;">👩‍💼 美容師：先選這次要做的服務（交給客人前點好）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${(() => {
+          const cats=Object.keys(S.data.settings?.serviceHealthQuestions||{});
+          const allCats=cats.length>0?cats:['美容做臉','熱蠟除毛','霧眉霧唇','美體按摩'];
+          const chosen=t.guestServiceCats||[];
+          return allCats.map(cat=>`
+            <label style="padding:8px 14px;background:${chosen.includes(cat)?'var(--gold)':'#fff'};color:${chosen.includes(cat)?'#fff':'var(--txt)'};border:1px solid var(--gold);border-radius:16px;cursor:pointer;font-size:13px;font-weight:${chosen.includes(cat)?'700':'400'};" onclick="toggleGuestServiceCat('${cat}')">
+              ${chosen.includes(cat)?'✓ ':''}${cat}
+            </label>`).join('');
+        })()}
+      </div>
+      <div class="tm" style="font-size:11px;margin-top:6px;">選了哪個，下面就會出現那項服務的專屬健康確認題目</div>
+    </div>
+
     <!-- 歡迎 -->
     <div style="text-align:center;margin-bottom:24px;">
       <div style="font-family:'Noto Serif TC',serif;font-size:28px;font-weight:900;color:var(--roseDk);letter-spacing:0.1em;">${studioName}</div>
@@ -4356,6 +4373,21 @@ function pgGuestIntakeView(t){
         ${healthQuestions.map(q=>renderGuestQuestion(q,t)).join('')}
       </div>
     </div>
+
+    <!-- 服務專屬健康確認（依老師選的服務顯示）-->
+    ${(() => {
+      const svcQs=S.data.settings?.serviceHealthQuestions||{};
+      const chosen=t.guestServiceCats||[];
+      const blocks=chosen.filter(cat=>svcQs[cat]&&svcQs[cat].length>0).map(cat=>`
+        <div class="card" style="margin-bottom:16px;border-left:4px solid var(--rose);">
+          <div class="card-hd" style="background:var(--roseL);"><span class="card-ttl" style="color:var(--rose);">🔹 ${cat} 專屬確認</span></div>
+          <div class="card-bd">
+            <div class="tm" style="font-size:12px;margin-bottom:10px;">為了您的安全，本次「${cat}」服務需要確認以下狀況 ♡</div>
+            ${svcQs[cat].map((q,i)=>renderGuestServiceQuestion(cat,q,i,t)).join('')}
+          </div>
+        </div>`);
+      return blocks.join('');
+    })()}
 
     <!-- 同意書 -->
     <div class="card" style="margin-bottom:16px;">
@@ -4428,6 +4460,68 @@ window.setGuestForm=(key,val)=>{
   S.treatment.healthForm[key]=val;
 };
 
+// 老師選這次的服務類別（會帶出對應專屬確認題目）
+window.toggleGuestServiceCat=(cat)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.guestServiceCats)S.treatment.guestServiceCats=[];
+  const arr=S.treatment.guestServiceCats;
+  const i=arr.indexOf(cat);
+  if(i>=0)arr.splice(i,1);else arr.push(cat);
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
+};
+
+// 渲染單一「服務專屬確認」題目
+function renderGuestServiceQuestion(cat,q,i,t){
+  const key=`svc_${cat}_${q.key||i}`;
+  const v=t.serviceHealthAnswers&&t.serviceHealthAnswers[key];
+  if(q.type==='radio'){
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+        ${(q.options||['否','是']).map(o=>`<label style="padding:8px 16px;background:${v===o?'var(--rose)':'var(--bg2)'};color:${v===o?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:14px;font-weight:${v===o?'700':'400'};" onclick="pickGuestServiceAns('${key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
+      </div></div>`;
+  }
+  if(q.type==='checkbox'||q.type==='checkbox_group'){
+    const arr=Array.isArray(v)?v:[];
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+        ${(q.options||[]).map(o=>`<label style="padding:6px 12px;background:${arr.includes(o)?'var(--blu)':'var(--bg2)'};color:${arr.includes(o)?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="toggleGuestServiceCheck('${key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
+      </div></div>`;
+  }
+  if(q.type==='textarea'){
+    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+      <textarea rows="2" placeholder="${q.placeholder||''}" oninput="setGuestServiceAns('${key}',this.value)">${v||''}</textarea></div>`;
+  }
+  // text
+  return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+    <input type="text" value="${(v||'').replace(/"/g,'&quot;')}" placeholder="${q.placeholder||''}" oninput="setGuestServiceAns('${key}',this.value)"></div>`;
+}
+
+window.pickGuestServiceAns=(key,val)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.serviceHealthAnswers)S.treatment.serviceHealthAnswers={};
+  S.treatment.serviceHealthAnswers[key]=val;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
+};
+
+window.setGuestServiceAns=(key,val)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.serviceHealthAnswers)S.treatment.serviceHealthAnswers={};
+  S.treatment.serviceHealthAnswers[key]=val;
+};
+
+window.toggleGuestServiceCheck=(key,opt)=>{
+  if(!S.treatment)return;
+  if(!S.treatment.serviceHealthAnswers)S.treatment.serviceHealthAnswers={};
+  const arr=Array.isArray(S.treatment.serviceHealthAnswers[key])?S.treatment.serviceHealthAnswers[key]:[];
+  const i=arr.indexOf(opt);
+  if(i>=0)arr.splice(i,1);else arr.push(opt);
+  S.treatment.serviceHealthAnswers[key]=arr;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
+};
+
 window.pickGuestRadio=(key,val)=>{
   if(!S.treatment)return;
   if(!S.treatment.healthForm)S.treatment.healthForm={};
@@ -4469,6 +4563,8 @@ window.submitGuestIntake=async()=>{
     id:custId,name,phone,
     createdAt:today(),
     healthForm:t.healthForm||{},
+    serviceHealthAnswers:t.serviceHealthAnswers||{},
+    serviceCats:t.guestServiceCats||[],
     healthAgreed:true,healthAgreedAt:new Date().toISOString(),
     intakeSignature:signature
   }];
