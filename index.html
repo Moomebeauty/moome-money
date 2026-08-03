@@ -311,6 +311,10 @@ const DEFAULT_DEPOSIT_SIGN_THRESHOLD=1;  // 任何儲值都簽（門檻=1元，�
 const DEFAULT_DEPOSIT_TERMS=`【沐蜜美學・服務儲值方案契約書】
 
 ═══════════════════════════════════════
+【契約審閱期間】
+本契約及其附件於甲方簽署前，已提供甲方至少三日之審閱期間，供甲方攜回詳閱、諮詢家人或專業人士。甲方確認已充分審閱、了解本契約全部內容並同意後始行簽署。
+
+═══════════════════════════════════════
 【店家（乙方）資訊】
 店家名稱：沐蜜美學
 負責人：＿＿＿＿＿＿　統一編號：＿＿＿＿＿＿
@@ -371,7 +375,9 @@ const DEFAULT_DEPOSIT_TERMS=`【沐蜜美學・服務儲值方案契約書】
 【健康狀況告知】
 1. 乙方已於簽約前詢問甲方之身體健康狀況，包含過敏體質、肌膚敏感、疾病治療、懷孕等情形。
 2. 甲方應據實告知個人健康狀況；如因甲方未誠實告知致生損害，乙方不負相關責任。
-3. 接受服務期間，任一方如發現甲方身體有異狀，應即告知對方，乙方並應中止服務、採取適當處理措施。
+3. 接受服務期間，任一方如發現甲方身體有異狀（如紅腫、搔癢、灼熱、疼痛等），應即告知對方，乙方並應立即中止服務、採取適當處理措施，不得以「即將完成」等理由繼續。
+4. 如因服務致甲方身體不適需就醫，乙方應協助陪同就醫，就診醫療院所由甲方自行選擇；於甲方康復前，儲值權益之使用期間得順延。
+5. 惟如甲方未據實告知健康狀況，或損害非因本服務所致者，相關醫療費用由甲方自行負擔。
 
 ═══════════════════════════════════════
 【特殊情境退費】
@@ -7359,6 +7365,14 @@ function renderModal(){
     </div>
     <div style="max-height:65vh;overflow-y:auto;margin-top:12px;">
 
+      <div style="background:linear-gradient(135deg,var(--roseL),var(--goldL));padding:14px;border-radius:12px;margin-bottom:10px;border:1px solid var(--rose);">
+        <div style="font-weight:700;color:var(--roseDk);font-size:15px;margin-bottom:6px;">📄 0. 先給審閱期（簽約前必做！）</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「這份契約您可以<b>帶回家看，至少看三天</b>，可以給家人看、慢慢想。<b>不用今天急著簽</b>，等您看清楚、確定沒問題了再簽都可以 🌸」<br>
+          <span style="color:var(--roseDk);font-size:12px;">⚠️ 這條保護的是你自己——有給審閱期，客人事後就不能說「被逼著當場簽」。</span>
+        </div>
+      </div>
+
       <div style="background:var(--goldL);padding:14px;border-radius:12px;margin-bottom:10px;">
         <div style="font-weight:700;color:var(--goldDk);font-size:15px;margin-bottom:6px;">💰 1. 儲值優惠怎麼算</div>
         <div style="font-size:14px;line-height:1.8;color:var(--txt);">
@@ -7404,7 +7418,14 @@ function renderModal(){
       <div style="background:var(--purL);padding:14px;border-radius:12px;margin-bottom:10px;">
         <div style="font-weight:700;color:var(--pur);font-size:15px;margin-bottom:6px;">🩺 7. 健康狀況要誠實說</div>
         <div style="font-size:14px;line-height:1.8;color:var(--txt);">
-          「服務前我會問您的健康狀況（過敏、懷孕、皮膚敏感等），請一定<b>據實告訴我</b>，這是為了您的安全。過程中有任何不舒服，隨時跟我說，我會馬上停下來處理。」
+          「服務前我會問您的健康狀況（過敏、懷孕、皮膚敏感等），請一定<b>據實告訴我</b>，這是為了您的安全。過程中有任何不舒服，隨時跟我說，我會<b>馬上停下來</b>處理，不會硬做完。萬一需要看醫生，我會<b>陪您去</b>，看哪位醫生您自己決定。」
+        </div>
+      </div>
+
+      <div style="background:var(--bluL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--blu);font-size:15px;margin-bottom:6px;">⭐ 8. 您是會員，權益只會更好</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「儲值之後您就是我的會員，享的優惠<b>只會比一般客人更好</b>，不會更差。而且您隨時可以查自己用了多少、還剩多少。」
         </div>
       </div>
 
@@ -7430,7 +7451,7 @@ function renderModal(){
       </div>
 
       <div class="notice" style="background:#fff;border:1px dashed var(--mut);color:var(--mut);font-size:12px;">
-        💡 <b>小訣竅</b>：不用每條都念。重點講「優惠怎麼算、漲價保護、沒期限、七天可退」這四個客人最在意的，其他讓客人自己看契約就好。
+        💡 <b>小訣竅</b>：不用每條都念。<b>一定要做的是「先給審閱期」</b>（保護你自己）。講解時重點講「優惠怎麼算、漲價保護、沒期限、七天可退」這四個客人最在意的，其他讓客人自己看契約就好。
       </div>
     </div>
     <div class="mbtns"><button class="btn btn-p" onclick="closeMod()">我準備好了 ✓</button></div>`;
