@@ -3161,12 +3161,10 @@ function pgOrder(){
           <div class="fgrp"><label>服務細項備註</label><input type="text" id="m_odNote" placeholder="如：第3次療程、加購精油等"></div>
           <div class="fgrp"><label>金額</label><input type="number" id="m_od3" placeholder="0"></div>
           <div class="fgrp"><label>客戶姓名</label>
-            <select id="m_od4" onchange="updateBalanceHint('od')">
-              <option value="">-- 選擇客戶 --</option>
-              ${getAllCustomerNames().map(name=>`<option value="${name}">${name}（餘額 $${fmt(getCustomerBalance(name))}）</option>`).join('')}
-              <option value="__new__">+ 新客戶（直接輸入）</option>
-            </select>
-            <input type="text" id="m_od4_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+            <input type="text" id="m_od4" list="od4_list" placeholder="打字搜尋或選擇客戶" autocomplete="off" oninput="onCustomerPick('od')" style="width:100%;">
+            <datalist id="od4_list">
+              ${getAllCustomerNames().map(name=>`<option value="${name}">餘額 $${fmt(getCustomerBalance(name))}</option>`).join('')}
+            </datalist>
             <div id="m_od_hint" class="tm" style="margin-top:4px;"></div>
           </div>
           <div class="fgrp" style="grid-column:1/-1;background:var(--purL);padding:10px;border-radius:8px;border-left:3px solid var(--pur);">
@@ -3244,12 +3242,10 @@ function pgOrder(){
         <div class="fg">
           <div class="fgrp"><label>細項備註</label><input type="text" id="m_pdNote" placeholder="選填"></div>
           <div class="fgrp"><label>客戶</label>
-            <select id="m_pd5" onchange="updateBalanceHint('pd')">
-              <option value="">-- 選擇客戶 --</option>
-              ${getAllCustomerNames().map(name=>`<option value="${name}">${name}（餘額 $${fmt(getCustomerBalance(name))}）</option>`).join('')}
-              <option value="__new__">+ 新客戶（直接輸入）</option>
-            </select>
-            <input type="text" id="m_pd5_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+            <input type="text" id="m_pd5" list="pd5_list" placeholder="打字搜尋或選擇客戶" autocomplete="off" oninput="onCustomerPick('pd')" style="width:100%;">
+            <datalist id="pd5_list">
+              ${getAllCustomerNames().map(name=>`<option value="${name}">餘額 $${fmt(getCustomerBalance(name))}</option>`).join('')}
+            </datalist>
             <div id="m_pd_hint" class="tm" style="margin-top:4px;"></div>
           </div>
           <div class="fgrp"><label>服務老師</label><select id="m_pd6">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
@@ -3986,12 +3982,10 @@ function pgTreatmentStaffView(t){
     <div class="card-bd">
       <div class="fg fg2">
         <div class="fgrp"><label>客戶姓名 *</label>
-          <select id="t_customer" onchange="updateTreatment('customer',this.value)">
-            <option value="">-- 選擇客戶 --</option>
-            ${customers.map(n=>`<option value="${n}"${t.customer===n?' selected':''}>${n}（餘額 $${fmt(getCustomerBalance(n))}）</option>`).join('')}
-            <option value="__new__"${t.customer&&!customers.includes(t.customer)?' selected':''}>＋ 新客戶</option>
-          </select>
-          <input type="text" id="t_customer_new" placeholder="新客戶姓名" oninput="updateTreatment('customer',this.value,'input')" value="${t.customer&&!customers.includes(t.customer)?t.customer:''}" style="margin-top:6px;display:${t.customer&&!customers.includes(t.customer)?'block':'none'};">
+          <input type="text" id="t_customer" list="t_customer_list" value="${(t.customer||'').replace(/"/g,'&quot;')}" placeholder="打字搜尋或選擇客戶" autocomplete="off" oninput="updateTreatment('customer',this.value,'input')" onchange="updateTreatment('customer',this.value)" style="width:100%;">
+          <datalist id="t_customer_list">
+            ${customers.map(n=>`<option value="${n}">餘額 $${fmt(getCustomerBalance(n))}</option>`).join('')}
+          </datalist>
           ${balance>0?`<div class="tm" style="margin-top:4px;color:var(--gold);">💳 此客戶儲值餘額：<b>$${fmt(balance)}</b></div>`:''}
         </div>
         <div class="fgrp"><label>日期</label>
@@ -4439,7 +4433,8 @@ function pgDepositSignView(t){
     <div style="max-width:600px;margin:0 auto;padding:20px 16px 60px;">
       <div style="background:var(--bluL);border:2px dashed var(--blu);border-radius:12px;padding:14px;margin-bottom:18px;">
         <div style="font-size:15px;font-weight:700;color:var(--blu);margin-bottom:4px;">👩‍💼 美容師操作區（交給客人前先設定好）</div>
-        <div class="tm" style="font-size:12px;">選好客人和方案後，點最下面「交給客人簽名」</div>
+        <div class="tm" style="font-size:12px;margin-bottom:8px;">選好客人和方案後，點最下面「交給客人簽名」</div>
+        <button class="btn btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('contractGuide')">📖 契約講解重點卡（不會講先看這個）</button>
       </div>
 
       <div class="card" style="margin-bottom:16px;">
@@ -7356,6 +7351,92 @@ function renderModal(){
   }
 
   // ─── 🎁 試用包管理 ───
+  // ─── 📖 定型化契約講解重點卡 ───
+  if(m.t==='contractGuide'){
+    c=`<div class="mttl">📖 定型化契約・講解重點卡</div>
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:13px;">
+      跟客人講解契約時，照著這張卡念就好。用客人聽得懂的白話，不用背條款 🌸
+    </div>
+    <div style="max-height:65vh;overflow-y:auto;margin-top:12px;">
+
+      <div style="background:var(--goldL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--goldDk);font-size:15px;margin-bottom:6px;">💰 1. 儲值優惠怎麼算</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「您實際付 <b>OO 元</b>，可以用到 <b>XX 元</b>的服務，等於<b>多送您 △△ 元</b>。這個優惠是合法範圍內的（不超過 2 成）。」
+        </div>
+      </div>
+
+      <div style="background:var(--bluL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--blu);font-size:15px;margin-bottom:6px;">📋 2. 可以用在哪些服務</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「這筆儲值金<b>做臉、熱蠟、美體</b>都可以用。每次來就照『當下的原價』扣，扣多少您都會簽名確認。」
+        </div>
+      </div>
+
+      <div style="background:var(--grnL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--grn);font-size:15px;margin-bottom:6px;">🔒 3. 漲價保護（賣點！）</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「就算以後我這邊服務<b>漲價</b>了，您現在儲值的金額<b>還是照現在的價格</b>算，不會被影響。等於現在存就鎖住現在的價格。」
+        </div>
+      </div>
+
+      <div style="background:var(--roseL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--roseDk);font-size:15px;margin-bottom:6px;">♾️ 4. 沒有使用期限</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「這筆錢<b>沒有使用期限</b>，您慢慢用、用到用完為止，不會過期。」
+        </div>
+      </div>
+
+      <div style="background:var(--bluL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--blu);font-size:15px;margin-bottom:6px;">📅 5. 七日鑑賞期</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「儲值後<b>七天內</b>，只要您<b>還沒用過任何服務</b>，可以反悔全額退費，我會在 15 天內退給您。這是消保法保障您的權利。」
+        </div>
+      </div>
+
+      <div style="background:var(--goldL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--goldDk);font-size:15px;margin-bottom:6px;">💸 6. 中途想退費怎麼算</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「如果用到一半想退，<b>已經用掉的</b>照原價算，<b>剩下的</b>按您實付的比例退還，扣一個 10% 手續費（這是法律上限）。優惠的部分因為沒用完，會取消。」
+        </div>
+      </div>
+
+      <div style="background:var(--purL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--pur);font-size:15px;margin-bottom:6px;">🩺 7. 健康狀況要誠實說</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「服務前我會問您的健康狀況（過敏、懷孕、皮膚敏感等），請一定<b>據實告訴我</b>，這是為了您的安全。過程中有任何不舒服，隨時跟我說，我會馬上停下來處理。」
+        </div>
+      </div>
+
+      <div style="background:var(--grnL);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--grn);font-size:15px;margin-bottom:6px;">🛡️ 8. 特殊情況保障</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「如果是因為<b>懷孕、重病</b>這種不可抗力，或是我這邊<b>停業</b>了，剩下的錢會退給您，<b>不扣手續費</b>。」
+        </div>
+      </div>
+
+      <div style="background:var(--bg2);padding:14px;border-radius:12px;margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--mut);font-size:15px;margin-bottom:6px;">🔐 9. 個資保護</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「您的個資我只用在服務上，<b>絕不轉賣</b>，服務結束後保存 2 年，您隨時可以要求查看或刪除。」
+        </div>
+      </div>
+
+      <div style="background:linear-gradient(135deg,var(--goldL),var(--roseL));padding:14px;border-radius:12px;margin-bottom:10px;border:1px solid var(--gold);">
+        <div style="font-weight:700;color:var(--goldDk);font-size:15px;margin-bottom:6px;">✨ 講解完的收尾</div>
+        <div style="font-size:14px;line-height:1.8;color:var(--txt);">
+          「這些都是為了保障您的權益，白紙黑字寫清楚，您可以放心。有任何問題都可以問我，沒問題的話我們就簽名確認囉 🌸」
+        </div>
+      </div>
+
+      <div class="notice" style="background:#fff;border:1px dashed var(--mut);color:var(--mut);font-size:12px;">
+        💡 <b>小訣竅</b>：不用每條都念。重點講「優惠怎麼算、漲價保護、沒期限、七天可退」這四個客人最在意的，其他讓客人自己看契約就好。
+      </div>
+    </div>
+    <div class="mbtns"><button class="btn btn-p" onclick="closeMod()">我準備好了 ✓</button></div>`;
+    S.modal.lg=true;
+  }
+
   if(m.t==='trialPackMgr'){
     const packs=S.data.trialPacks||[];
     c=`<div class="mttl">🎁 試用包管理</div>
@@ -8035,6 +8116,7 @@ function renderModal(){
 
   // ─── 客戶儲值入帳 ───
   if(m.t==='addDeposit'){c=`<div class="mttl">💳 客戶儲值入帳</div>
+    <div style="margin-bottom:10px;"><button class="btn btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('contractGuide')">📖 契約講解重點卡</button></div>
     <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;">
       💡 儲值金「面額」=客戶可消費的額度，「實收」=沐蜜真實收到的現金。<br>
       消費時系統會自動按比例認列營收（避免虛胖）。
@@ -8042,12 +8124,10 @@ function renderModal(){
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_dp0" value="${today()}"></div>
       <div class="fgrp"><label>客戶</label>
-        <select id="m_dp1">
-          <option value="">-- 選擇客戶 --</option>
-          ${getAllCustomerNames().map(name=>`<option value="${name}">${name}（目前餘額 $${fmt(getCustomerBalance(name))}）</option>`).join('')}
-          <option value="__new__">+ 新客戶（直接輸入）</option>
-        </select>
-        <input type="text" id="m_dp1_new" placeholder="新客戶姓名" style="display:none;margin-top:6px;">
+        <input type="text" id="m_dp1" list="dp1_list" placeholder="打字搜尋或選擇客戶" autocomplete="off" style="width:100%;">
+        <datalist id="dp1_list">
+          ${getAllCustomerNames().map(name=>`<option value="${name}">目前餘額 $${fmt(getCustomerBalance(name))}</option>`).join('')}
+        </datalist>
       </div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:12px;border-radius:8px;border-left:3px solid var(--gold);">
         <label style="color:var(--goldDk);font-weight:700;">📦 儲值方案（一鍵套用）</label>
@@ -8925,8 +9005,7 @@ window.saveCartOrder=async(continueInput)=>{
     if(items.length===0){alert('購物車內所有商品都還沒填寫名稱或價格');return;}
     const date=$('m_pd0')?.value||today();
     const totalAmount=items.reduce((s,it)=>s+toN(it.price)*toN(it.qty),0);
-    let customer=$('m_pd5')?.value||'';
-    if(customer==='__new__')customer=$('m_pd5_new')?.value?.trim()||'';
+    let customer=$('m_pd5')?.value?.trim()||'';
     const payMethod=$('m_pd7')?.value||'';
     let depositOwner='';
     let depositFaceAmount=0;
@@ -9020,7 +9099,7 @@ window.saveCartOrder=async(continueInput)=>{
     if(continueInput){
       ['m_pdNote'].forEach(id=>{if($(id))$(id).value='';});
       if($('m_pd5'))$('m_pd5').value='';
-      if($('m_pd5_new')){$('m_pd5_new').value='';$('m_pd5_new').style.display='none';}
+
       if($('m_pd_hint'))$('m_pd_hint').innerHTML='';
       if($('m_pd_owner_wrap'))$('m_pd_owner_wrap').style.display='none';
       renderCart();
@@ -9043,8 +9122,7 @@ window.saveOrder=async(type,continueInput)=>{
       if(!inputAmount||inputAmount<=0){alert('請輸入金額（必須大於 0）');return;}
       const sel=$('m_od1')?.value||'';
       const item=sel==='自訂項目'?($('m_od2')?.value?.trim()||'自訂服務'):sel;
-      let customer=$('m_od4')?.value||'';
-      if(customer==='__new__')customer=$('m_od4_new')?.value?.trim()||'';
+      let customer=$('m_od4')?.value?.trim()||'';
       const payMethod=$('m_od6')?.value||'';
       let depositOwner='';
       let depositFaceAmount=0;
@@ -9107,7 +9185,6 @@ window.saveOrder=async(type,continueInput)=>{
       if(continueInput){
         ['m_od2','m_odNote','m_od3'].forEach(id=>{if($(id))$(id).value='';});
         if($('m_od4'))$('m_od4').value='';
-        if($('m_od4_new')){$('m_od4_new').value='';$('m_od4_new').style.display='none';}
         if($('m_od_hint'))$('m_od_hint').innerHTML='';
         if($('m_od_owner_wrap'))$('m_od_owner_wrap').style.display='none';
         $('m_od2')?.focus();
@@ -13645,13 +13722,7 @@ window.delGhostCustomer=async(name)=>{
 
 // ── 儲值入帳 ──
 function bindDepositCustomerToggle(){
-  setTimeout(()=>{
-    const sel=$('m_dp1');
-    if(sel)sel.onchange=()=>{
-      const newInput=$('m_dp1_new');
-      if(newInput)newInput.style.display=sel.value==='__new__'?'block':'none';
-    };
-  },50);
+  // 客戶欄已改為可搜尋輸入框，不需切換邏輯
 }
 
 window.setDepositPlan=(actual,face)=>{
@@ -13691,8 +13762,7 @@ window.calcDiscountRate=()=>{
 
 window.saveDeposit=async()=>{
   try{
-    let customer=$('m_dp1')?.value||'';
-    if(customer==='__new__')customer=$('m_dp1_new')?.value?.trim()||'';
+    let customer=$('m_dp1')?.value?.trim()||'';
     const date=$('m_dp0')?.value;
     const amount=parseFloat($('m_dp2')?.value)||0;
     const actualReceived=parseFloat($('m_dp_actual')?.value)||amount;
@@ -14353,6 +14423,11 @@ window.updDeposit=async(id)=>{
 };
 
 // ── 銷售開單時即時顯示客戶儲值餘額 ──
+// 可搜尋客戶輸入框：打字或選擇後更新餘額提示
+window.onCustomerPick=(prefix)=>{
+  updateBalanceHint(prefix);
+};
+
 window.updateBalanceHint=(prefix)=>{
   const sel=$('m_'+prefix+'4')||$('m_'+prefix+'5');
   const newInput=$('m_'+prefix+'4_new')||$('m_'+prefix+'5_new');
