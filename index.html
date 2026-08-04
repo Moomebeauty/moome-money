@@ -2793,6 +2793,14 @@ function pgCustomersList(customerStats,totalLiability,totalCustomers){
 }
 
 function pgCustomerDetail(c){
+  // 🔍 儲值對帳：面額進 / 面額出 / 服務歷史顯示金額
+  const _faceIn=(c.deposits||[]).reduce((a,d)=>a+toN(d.amount),0);
+  const _mine=(c.services||[]).filter(x=>x.payMethod==='儲值扣款'&&((x.depositOwner||x.customer||'').trim()===(c.name||'').trim()));
+  const _faceOut=_mine.reduce((a,x)=>a+toN(x.depositFaceAmount||x.amount),0)
+                +(c.usedByOthers||[]).reduce((a,x)=>a+toN(x.depositFaceAmount||x.amount),0);
+  const _shownOut=_mine.reduce((a,x)=>a+toN(x.amount),0)
+                +(c.usedByOthers||[]).reduce((a,x)=>a+toN(x.amount),0);
+  const _gap=_faceOut-_shownOut;
   // 取得共用群組資訊
   const group=getSharedGroup(c.name).filter(n=>n!==c.name);
   const sharedMembersInfo=group.map(n=>({name:n,balance:getCustomerBalance(n)}));
@@ -2816,7 +2824,8 @@ function pgCustomerDetail(c){
     <div class="sc gold">
       <div class="sl">💳 個人儲值餘額</div>
       <div class="sv gold">$${fmt(c.balance)}</div>
-      <div class="ss">累計儲值 - 已用</div>
+      <div class="ss">面額 $${fmt(_faceIn)} − 已扣 $${fmt(_faceOut)}</div>
+      ${_gap!==0?`<div class="ss" style="color:var(--red);font-weight:700;">⚠️ 實扣面額比服務歷史顯示多 $${fmt(_gap)}</div>`:''}
     </div>
     <div class="sc pur">
       <div class="sl">📌 最後造訪</div>
@@ -2887,7 +2896,7 @@ function pgCustomerDetail(c){
           c.services.map(s=>`<tr>
             <td>${s.date}</td>
             <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}${s.payMethod==='儲值扣款'&&s.depositOwner&&s.depositOwner!==c.name?`<div class="tm" style="color:var(--pur);">🔗 從 ${s.depositOwner} 共用儲值扣款</div>`:''}</td>
-            <td class="ap">$${fmt(s.amount)}</td>
+            <td class="ap">$${fmt(s.amount)}${s.payMethod==='儲值扣款'&&toN(s.depositFaceAmount)&&toN(s.depositFaceAmount)!==toN(s.amount)?`<div class="tm" style="color:var(--red);font-weight:700;">實扣 $${fmt(toN(s.depositFaceAmount))}</div>`:''}</td>
             <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
             <td class="tm">${s.staff||''}</td>
             <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
