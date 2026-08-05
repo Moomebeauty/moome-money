@@ -562,11 +562,14 @@ function startSync(){
       // 主文件有 customers → 以主文件為主
       S.data.customers=d.customers;
     }
+    S.data.lastBackupMonth=d.lastBackupMonth||'';
+    S.data.lastBackupDate=d.lastBackupDate||'';
     // 首次登入時，自動建立預設資料
     if(!d.initialized){
       await initDefaults();
     }
     setSyncing('synced');render();
+    if(!_backupChecked){_backupChecked=true;setTimeout(checkBackupReminder,1200);}
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
 
@@ -1005,6 +1008,7 @@ function appHTML(){
         <div id="sync-dot" class="sync-dot"></div>
         <button class="btn-out" onclick="openSearch()" style="background:linear-gradient(135deg,var(--pur),var(--blu));color:#fff;border:none;">🔍 搜尋</button>
         <button class="btn-out" onclick="exportXLSX()">⬇ 匯出</button>
+        <button class="btn-out" onclick="backupJSON()" style="background:var(--grn);color:#fff;border:none;" title="下載完整備份（含簽名、問卷）">💾 備份</button>
         <button class="btn-out" onclick="doOut()">登出</button>
       </div>
     </div>`}
@@ -5981,6 +5985,17 @@ function pgSettings(){
         <div>
           <button class="btn" style="background:var(--gold);color:#fff;" onclick="depositHealthCheck()">🩺 儲值資料健檢</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">全面掃描所有儲值的潛在問題：餘額異常、共用群組錯亂、孤兒紀錄、扣款歸屬錯誤等，並提供完整對帳報告</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--grn);color:#fff;" onclick="backupJSON()">💾 一鍵完整備份</button>
+          <div style="margin-top:6px;font-size:12px;font-weight:700;color:${(S.data.lastBackupMonth||'')===today().slice(0,7)?'var(--grn)':'var(--red)'};">
+            ${S.data.lastBackupDate?((S.data.lastBackupMonth||'')===today().slice(0,7)?'✅ 本月已備份（'+S.data.lastBackupDate+'）':'⚠️ 本月尚未備份　上次：'+S.data.lastBackupDate):'⚠️ 從未備份過'}
+          </div>
+          <div class="tm" style="font-size:11px;margin-top:4px;">下載一個 JSON 檔，包含資料庫裡<b>每一筆</b>東西（客戶健康問卷、電子簽名、契約、療程紀錄、試用包、所有設定）。每月做一次，存到 3 個地方。系統萬一出事，這個檔案能把一切還原回來。</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--red);color:#fff;" onclick="restoreJSON()">♻️ 從備份還原</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">⚠️ 只有在資料出事時才用。選一個備份 JSON 檔，把資料寫回雲端。<b>執行前一定要先做一次完整備份。</b></div>
         </div>
         <div>
           <button class="btn" style="background:var(--pur);color:#fff;" onclick="renameStaff()">🔄 老師改名工具</button>
@@ -14845,6 +14860,135 @@ window.doOut=async()=>{
   S.auth=false;
   S.sync='idle';
   render();
+};
+
+// ── 🔔 每月備份提醒 ──
+let _backupChecked=false;
+
+function checkBackupReminder(){
+  try{
+    if(!S.auth)return;
+    const ym=today().slice(0,7);
+    if((S.data.lastBackupMonth||'')===ym)return;        // 這個月已經備份過了
+    let snooze='';try{snooze=localStorage.getItem('mumei_backup_snooze')||'';}catch(e){}
+    if(snooze===today())return;                          // 今天按過「晚點再說」
+    showBackupReminder();
+  }catch(e){console.warn('備份提醒失敗',e);}
+}
+
+function showBackupReminder(){
+  const last=S.data.lastBackupDate||'';
+  const ymLabel=today().slice(0,7).replace('-','年')+'月';
+  let gapMsg='';
+  if(last){
+    const days=Math.round((new Date(today())-new Date(last))/86400000);
+    gapMsg='上次備份：'+last+'（'+days+' 天前）';
+  }else{
+    gapMsg='⚠️ 目前還沒有做過任何備份';
+  }
+  const html=`
+  <div class="mttl">🔔 該備份了</div>
+  <div style="background:var(--goldL);border-left:4px solid var(--gold);padding:14px 16px;border-radius:10px;margin-bottom:16px;">
+    <div style="font-size:15px;font-weight:700;color:var(--goldDk);margin-bottom:6px;">${ymLabel}還沒備份</div>
+    <div class="tm" style="font-size:13px;">${gapMsg}</div>
+  </div>
+  <div style="font-size:14px;line-height:1.9;margin-bottom:16px;">
+    點下面的按鈕會下載兩個檔案，然後請存到 <b>3 個地方</b>：
+    <div style="margin-top:8px;padding-left:4px;">
+      ☁️ Google Drive　💻 電腦　📱 LINE 傳給自己
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <button class="btn" style="background:var(--grn);color:#fff;font-size:16px;padding:14px;" onclick="doMonthlyBackup()">💾 現在備份（JSON + Excel）</button>
+    <button class="btn btn-s" onclick="snoozeBackup()">⏰ 晚點再說（明天再提醒）</button>
+  </div>`;
+  S.modal={t:'backupReminder',html};
+  const bg=$('modal-bg');const inner=$('modal-inner');
+  if(inner)inner.innerHTML=html;
+  if(bg)bg.className='modal-bg open';
+}
+
+window.snoozeBackup=()=>{
+  try{localStorage.setItem('mumei_backup_snooze',today());}catch(e){}
+  closeMod();
+  toast('⏰ 好，明天再提醒你');
+};
+
+window.doMonthlyBackup=()=>{
+  closeMod();
+  backupJSON();
+  setTimeout(()=>{try{exportXLSX();}catch(e){}},600);
+};
+
+// ── 💾 完整備份 / 還原（JSON）──
+const BACKUP_SUBS=['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments'];
+
+window.backupJSON=()=>{
+  try{
+    const snapshot=JSON.parse(JSON.stringify(S.data||{}));
+    const counts={};let total=0;
+    Object.keys(snapshot).forEach(k=>{
+      const v=snapshot[k];
+      if(Array.isArray(v)){counts[k]=v.length;total+=v.length;}
+      else if(v&&typeof v==='object'){counts[k]=Object.keys(v).length;}
+    });
+    const payload={_meta:{system:'沐蜜美學財務系統',format:'full-backup-v1',
+      exportedAt:new Date().toISOString(),date:today(),counts},data:snapshot};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='沐蜜完整備份_'+today()+'.json';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    const ym=today().slice(0,7);
+    saveMain({lastBackupMonth:ym,lastBackupDate:today()});
+    S.data.lastBackupMonth=ym;S.data.lastBackupDate=today();
+    try{localStorage.removeItem('mumei_backup_snooze');}catch(e){}
+    alert('✅ 完整備份已下載\n\n檔名：沐蜜完整備份_'+today()+'.json\n\n共 '+fmt(total)+' 筆紀錄\n（含客戶健康問卷、電子簽名、契約、療程紀錄、試用包、設定）\n\n👉 請存到 3 個地方：\n① Google Drive（或雲端硬碟）\n② 電腦\n③ 手機或隨身碟\n\n三份分開放，才是真的安全。');
+  }catch(e){alert('❌ 備份失敗：'+(e&&e.message||e));}
+};
+
+window.restoreJSON=()=>{
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.json,application/json';
+  inp.onchange=async()=>{
+    const f=inp.files&&inp.files[0];if(!f)return;
+    let payload=null;
+    try{payload=JSON.parse(await f.text());}
+    catch(e){alert('❌ 檔案讀不開，這可能不是備份檔（要選 .json 檔）');return;}
+    const d=(payload&&payload.data&&typeof payload.data==='object')?payload.data:payload;
+    if(!d||typeof d!=='object'||(!Array.isArray(d.sales)&&!Array.isArray(d.customers))){
+      alert('❌ 這不像是沐蜜系統的備份檔');return;}
+    const when=(payload&&payload._meta&&payload._meta.date)||'未知日期';
+    const lines=[];let tot=0;
+    [['sales','銷售'],['deposits','儲值'],['customers','客戶'],['expenses','支出'],
+     ['purchases','進貨'],['treatmentRecords','療程紀錄'],['trialPacks','試用包']].forEach(([k,lbl])=>{
+      if(Array.isArray(d[k])){lines.push('• '+lbl+'：'+d[k].length+' 筆');tot+=d[k].length;}
+    });
+    if(!confirm('⚠️ 準備還原備份\n\n備份日期：'+when+'\n'+lines.join('\n')+
+      '\n\n【重要】這會用備份檔覆蓋目前的資料。\n備份檔裡沒有、但現在有的紀錄，會保留不動。\n\n強烈建議：先按「💾 完整備份」把現在的存一份！\n\n要繼續嗎？'))return;
+    if(!confirm('🚨 最後確認\n\n按下確定後就開始寫入，過程中請不要關掉頁面。\n\n真的要執行還原嗎？'))return;
+    let ok=0,fail=0;
+    try{
+      const main={};
+      Object.keys(d).forEach(k=>{if(!BACKUP_SUBS.includes(k))main[k]=d[k];});
+      await saveMain(main);
+      for(const col of BACKUP_SUBS){
+        const rows=Array.isArray(d[col])?d[col]:[];
+        for(let i=0;i<rows.length;i++){
+          const r=rows[i]||{};
+          const rid=r.id||uid();
+          const body={...r};delete body.id;
+          try{await setSub(col,rid,body);ok++;}catch(e){fail++;}
+          if(ok%50===0)toast('還原中… '+ok+'/'+tot);
+        }
+      }
+      alert('✅ 還原完成！\n\n成功寫入 '+fmt(ok)+' 筆'+(fail?('\n失敗 '+fail+' 筆'):'')+
+        '\n\n👉 請按 Cmd+Shift+R 強制重新整理，確認資料都回來了。');
+      render();
+    }catch(e){alert('❌ 還原中斷：'+(e&&e.message||e)+'\n\n已寫入 '+ok+' 筆。可以再執行一次，不會重複。');}
+  };
+  inp.click();
 };
 
 // ── Export ──
