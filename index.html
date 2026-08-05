@@ -1017,7 +1017,8 @@ function appHTML(){
 </div>
 <div class="modal-bg${S.modal?' open':''}" id="modal-bg">
   <div class="modal${S.modal&&S.modal.lg?' lg':''}" id="modal-inner">${renderModal()}</div>
-</div>`;
+</div>
+${prodDatalistHTML()}`;
 }
 
 function renderPage(){
@@ -3248,14 +3249,14 @@ function pgOrder(){
             <!-- 購物車項目會顯示在這裡 -->
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <select id="m_pd_pick" style="flex:1;min-width:200px;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;">
-              <option value="">+ 從保養品清單加入...</option>
-              ${products.filter(p=>p.category==='保養品販售').map(p=>{const inv=getInv(p.id);return`<option value="${p.id}" data-price="${p.price}" data-name="${p.name}" data-qty="${inv.qty}">${p.name}（庫存 ${inv.qty}）$${fmt(p.price)}</option>`;}).join('')}
-            </select>
+            <input type="text" id="m_pd_pick_txt" list="dl_cartprods" placeholder="🔍 打字搜尋產品（全部 ${products.length} 項都可選）" autocomplete="off" onfocus="this.select()" onkeydown="if(event.key==='Enter'){event.preventDefault();addProductToCart();}" style="flex:1;min-width:200px;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;">
+            <datalist id="dl_cartprods">
+              ${(buildProdIndex(),products.slice().sort((a,b)=>(a.category==='保養品販售'?0:1)-(b.category==='保養品販售'?0:1)||(a.name||'').localeCompare(b.name||'')).map(p=>{const inv=getInv(p.id);return`<option value="${(_PRODLBL[p.id]||p.name||'').replace(/"/g,'&quot;')}">庫存 ${inv.qty}　$${fmt(p.price)}</option>`;}).join(''))}
+            </datalist>
             <button class="btn btn-s btn-sm" onclick="addProductToCart()">＋ 加入購物車</button>
             <button class="btn btn-y btn-sm" onclick="addCustomProductRow()">✏️ 新增自訂產品</button>
           </div>
-          <div class="tm" style="font-size:11px;margin-top:8px;">💡 下拉只顯示「保養品販售」類別的商品。臨時/特殊商品用「新增自訂產品」直接輸入名稱與價格</div>
+          <div class="tm" style="font-size:11px;margin-top:8px;">💡 打字就會跳出候選（保養品排前面），選好按「＋ 加入購物車」或直接按 Enter。臨時商品用「新增自訂產品」</div>
         </div>
 
         <div class="fg">
@@ -6251,10 +6252,8 @@ function renderModal(){
       <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${today()}"></div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;border-left:3px solid var(--gold);">
         <label style="color:var(--goldDk);font-weight:700;">🔍 選擇現有產品（避免重複建立）</label>
-        <select id="m_pPick" onchange="onPurchaseProdSelect(this)" style="width:100%;margin-top:4px;">
-          <option value="">＋ 新增產品（手動輸入下方）</option>
-          ${allProds.map(p=>`<option value="${p.id}" data-cat="${p.category||''}" data-name="${p.name||''}" data-price="${p.price||0}" data-supplier="${p.supplier||''}">${p.name}（${p.category||''}）${p.supplier?' · '+p.supplier:''}</option>`).join('')}
-        </select>
+        ${prodPick('m_pPick_id',"",{cb:'purchaseProdPick',style:'width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;'})}
+        <div class="tm" style="font-size:11px;margin-top:4px;">打字搜尋現有產品；留空＝新增產品（手動填下方）</div>
       </div>
       <div class="fgrp"><label>產品類別</label><select id="m_pCat">${PRODUCT_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="fgrp"><label>產品名稱</label><input type="text" id="m_p2" placeholder="如：玻尿酸精華液"></div>
@@ -7001,10 +7000,7 @@ function renderModal(){
     c=`<div class="mttl">🛍️ 加入產品</div>
     <div class="fg">
       <div class="fgrp"><label>選擇產品 *</label>
-        <select id="m_tap_pid" onchange="onTreatmentProductPick(this)">
-          <option value="">-- 選擇 --</option>
-          ${allProds.filter(p=>p.category==='保養品販售').map(p=>`<option value="${p.id}" data-price="${p.price||0}" data-name="${p.name}">${p.name}　$${fmt(p.price||0)}（庫存 ${getInv(p.id).qty||0}）</option>`).join('')}
-        </select>
+        ${prodPick('m_tap_pid',"",{cb:'treatmentProdPick',style:'width:100%;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;'})}
       </div>
       <div class="fgrp"><label>產品名稱</label><input type="text" id="m_tap_name" placeholder="自訂名稱"></div>
       <div class="fgrp"><label>售價</label><input type="number" id="m_tap_price" placeholder="0"></div>
@@ -7035,10 +7031,7 @@ function renderModal(){
             const prod=allProds.find(p=>p.id===it.productId);
             return`<div class="etp_item" data-idx="${i}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
               <div style="flex:2;min-width:140px;">
-                <select class="etpi_pid" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-                  <option value="">-- 選 --</option>
-                  ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}${p.capacity?'（'+p.capacity+(p.capacityUnit||'')+'）':''}</option>`).join('')}
-                </select>
+                ${prodPick('etpi_pid',it.productId)}
               </div>
               <div style="flex:1;min-width:70px;">
                 <input type="number" class="etpi_qty" value="${it.qty||''}" placeholder="用量" step="0.1" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
@@ -8580,10 +8573,8 @@ function batchRowHTML(r,i,isGroup){
   if(isGroup){
     return`<div class="batch-row" data-idx="${i}">
       <div class="fgrp" style="grid-column:1/-1"><label>選擇現有產品（避免重複建立）</label>
-        <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="width:100%;">
-          <option value="">＋ 新增此產品（手動輸入下方）</option>
-          ${productOptions}
-        </select>
+        ${prodPick('bp_prod',r.productId,{cb:'batchProdPick',attr:' data-idx="'+i+'"',style:'width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;'})}
+        <div class="tm" style="font-size:11px;">打字搜尋現有產品；留空＝新增產品（手動填下方）</div>
       </div>
       <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
       <div class="fgrp"><label>類別</label>
@@ -8599,10 +8590,8 @@ function batchRowHTML(r,i,isGroup){
   }
   return`<div class="batch-row" data-idx="${i}">
     <div class="fgrp" style="grid-column:1/-1"><label>選擇現有產品（避免重複建立）</label>
-      <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="width:100%;">
-        <option value="">＋ 新增此產品（手動輸入下方）</option>
-        ${productOptions}
-      </select>
+      ${prodPick('bp_prod',r.productId,{cb:'batchProdPick',attr:' data-idx="'+i+'"',style:'width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;'})}
+      <div class="tm" style="font-size:11px;">打字搜尋現有產品；留空＝新增產品（手動填下方）</div>
     </div>
     <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
     <div class="fgrp"><label>類別</label>
@@ -8962,17 +8951,31 @@ window.delSale=async id=>{
 S.cart=S.cart||[];
 
 window.addProductToCart=()=>{
-  const sel=$('m_pd_pick');
-  if(!sel||!sel.value)return;
-  const opt=sel.options[sel.selectedIndex];
-  const id=opt.value;
-  const name=opt.dataset.name||opt.text.split('（')[0];
-  const price=parseFloat(opt.dataset.price)||0;
+  const box=$('m_pd_pick_txt');
+  if(!box)return;
+  const v=(box.value||'').trim();
+  if(!v)return;
+  const all=S.data.products||[];
+  buildProdIndex();
+  let p=null;
+  const pid=_PRODBYLBL[v];
+  if(pid)p=all.find(x=>x.id===pid);
+  if(!p){
+    const hits=all.filter(x=>(x.name||'').trim()===v);
+    if(hits.length===1)p=hits[0];
+    else if(hits.length>1){toast('⚠️ 有多個同名產品，請從清單點選');box.style.borderColor='var(--red)';return;}
+  }
+  if(!p){toast('⚠️ 找不到這個產品，請從清單選擇');box.style.borderColor='var(--red)';box.style.background='#FFF4F4';return;}
+  box.style.borderColor='var(--bdr)';box.style.background='';
+  const id=p.id;
+  const name=p.name||'';
+  const price=toN(p.price)||0;
   // 檢查是否已加過 → 數量 +1
   const existed=S.cart.find(it=>it.id===id&&!it.custom);
   if(existed){existed.qty++;}
   else{S.cart.push({id,name,price,qty:1,custom:false,type:'product'});}
-  sel.value='';
+  box.value='';
+  box.focus();
   renderCart();
 };
 
@@ -9609,10 +9612,7 @@ function renderTreatItem(it,idx,allProds){
   const prod=allProds.find(p=>p.id===it.productId);
   return`<div class="tr_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
     <div style="flex:2;min-width:140px;">
-      <select class="tri_pid" style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-        <option value="">-- 選產品 --</option>
-        ${allProds.map(p=>`<option value="${p.id}"${it.productId===p.id?' selected':''}>${p.name}</option>`).join('')}
-      </select>
+      ${prodPick('tri_pid',it.productId,{style:'width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;'})}
     </div>
     <div style="flex:1;min-width:60px;">
       <input type="number" class="tri_qty" value="${it.qty||''}" placeholder="用量" step="0.1" style="width:100%;padding:5px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
@@ -9866,16 +9866,7 @@ function renderServiceCardItem(it,idx,allProds){
   return`<div class="sc_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
     <div style="flex:2;min-width:140px;">
       <label style="font-size:11px;color:var(--mut);">產品（顯示單位成本）</label>
-      <select class="sci_pid" onchange="updateServiceCardItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-        <option value="">-- 選擇產品 --</option>
-        ${allProds.map(p=>{
-          const pUnit=getUnitCost(p.id);
-          const pCap=toN(p.capacity);
-          const pCapUnit=p.capacityUnit||'';
-          const lbl=pCap>0?`${p.name}（$${fmt(Math.round(pUnit*100)/100)}/${pCapUnit}）`:`${p.name}（成本 $${fmt(pUnit)}）`;
-          return`<option value="${p.id}"${it.productId===p.id?' selected':''}>${lbl}</option>`;
-        }).join('')}
-      </select>
+      ${prodPick('sci_pid',it.productId,{cb:'sciProdPick',attr:' data-idx="'+idx+'"',style:'width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;'})}
     </div>
     <div style="flex:1;min-width:80px;">
       <label style="font-size:11px;color:var(--mut);">用量${capacityHint}</label>
@@ -11004,10 +10995,7 @@ window.renderSoloItems=()=>{
     const itemCost=Math.round(unitCost*toN(it.qty)*100)/100;
     return`<div style="background:#fff;padding:10px;border-radius:6px;margin-bottom:6px;">
       <div style="display:flex;gap:6px;align-items:center;">
-        <select onchange="updateSoloItem(${i},'productId',this.value)" style="flex:2;font-size:13px;">
-          <option value="">-- 選產品 --</option>
-          ${allProds.map(pp=>`<option value="${pp.id}"${pp.id===it.productId?' selected':''}>${pp.name}</option>`).join('')}
-        </select>
+        <span style="flex:2;display:flex;">${prodPick('solo_pid_'+i,it.productId,{cb:'soloProdPick',attr:' data-idx="'+i+'"',style:'width:100%;font-size:13px;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;'})}</span>
         <input type="number" value="${it.qty||''}" placeholder="用量" step="0.1"
           onchange="updateSoloItem(${i},'qty',this.value)" style="flex:1;font-size:13px;">
         <span style="font-size:12px;color:var(--mut);min-width:24px;">${unit}</span>
@@ -11240,16 +11228,7 @@ function renderPricerItem(it,idx,allProds){
   const capacityHint=prod&&toN(prod.capacity)>0?`（${prod.capacity}${prod.capacityUnit||''}）`:'';
   return`<div class="pc_item" data-idx="${idx}" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;background:var(--card);padding:8px;border-radius:6px;">
     <div style="flex:2;min-width:140px;">
-      <select class="pci_pid" onchange="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
-        <option value="">-- 選擇產品 --</option>
-        ${allProds.map(p=>{
-          const pUnit=getUnitCost(p.id);
-          const pCap=toN(p.capacity);
-          const pCapUnit=p.capacityUnit||'';
-          const lbl=pCap>0?`${p.name}（$${fmt(Math.round(pUnit*100)/100)}/${pCapUnit}）`:`${p.name}（$${fmt(pUnit)}）`;
-          return`<option value="${p.id}"${it.productId===p.id?' selected':''}>${lbl}</option>`;
-        }).join('')}
-      </select>
+      ${prodPick('pci_pid',it.productId,{cb:'pciProdPick',attr:' data-idx="'+idx+'"',style:'width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;'})}
     </div>
     <div style="flex:1;min-width:70px;">
       <input type="number" class="pci_qty" value="${it.qty||''}" placeholder="用量${capacityHint}" step="0.1" oninput="updatePricerItem(${idx})" style="width:100%;padding:4px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;">
@@ -14860,6 +14839,74 @@ window.doOut=async()=>{
   S.auth=false;
   S.sync='idle';
   render();
+};
+
+// ── 🔍 產品打字搜尋（共用元件）──
+let _PRODLBL={},_PRODBYLBL={};
+function buildProdIndex(){
+  _PRODLBL={};_PRODBYLBL={};
+  const used={};
+  (S.data.products||[]).slice()
+    .sort((a,b)=>(a.category||'').localeCompare(b.category||'')||(a.name||'').localeCompare(b.name||''))
+    .forEach(p=>{
+      let l=p.name||'(未命名)';
+      if(p.capacity)l+=' '+p.capacity+(p.capacityUnit||'');
+      if(p.category)l+='｜'+p.category;
+      if(used[l]){used[l]++;l=l+' #'+used[l];}else used[l]=1;
+      _PRODLBL[p.id]=l;_PRODBYLBL[l]=p.id;
+    });
+}
+function prodDatalistHTML(){
+  buildProdIndex();
+  return '<datalist id="dl_products">'+Object.keys(_PRODBYLBL).map(l=>`<option value="${l.replace(/"/g,'&quot;')}">`).join('')+'</datalist>';
+}
+// 產生一組「搜尋框 + 隱藏 id 欄位」；cls 就是原本 select 的 class，讀值程式不用改
+function prodPick(cls,curId,opts){
+  opts=opts||{};
+  if(!Object.keys(_PRODLBL).length)buildProdIndex();
+  const lbl=_PRODLBL[curId]||'';
+  const cb=opts.cb?` data-cb="${opts.cb}"`:'';
+  const attr=opts.attr||'';
+  const st=opts.style||'width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:4px;font-size:13px;';
+  return `<input type="text" class="prodpick" list="dl_products" value="${lbl.replace(/"/g,'&quot;')}" placeholder="🔍 打字搜尋產品…" oninput="resolveProd(this)" onfocus="this.select()" autocomplete="off" style="${st}"${cb}${attr}>`
+       + `<input type="hidden" class="${cls}" value="${curId||''}">`;
+}
+window.purchaseProdPick=(inp,id)=>{
+  const p=(S.data.products||[]).find(x=>x.id===id);if(!p)return;
+  const fake={dataset:{cat:p.category||'',name:p.name||'',price:p.price||0,supplier:p.supplier||''}};
+  if(typeof onPurchaseProdSelect==='function')onPurchaseProdSelect({value:id,selectedOptions:[fake],dataset:fake.dataset});
+};
+window.treatmentProdPick=(inp,id)=>{
+  const p=(S.data.products||[]).find(x=>x.id===id);if(!p)return;
+  const fake={dataset:{price:p.price||0,name:p.name||''}};
+  if($('m_tap_pid'))$('m_tap_pid').value=id;
+  if(typeof onTreatmentProductPick==='function')onTreatmentProductPick({value:id,selectedOptions:[fake],dataset:fake.dataset});
+};
+window.batchProdPick=(inp,id)=>{
+  const hid=inp.nextElementSibling;
+  if(hid&&typeof onBatchProdSelect==='function')onBatchProdSelect(hid,parseInt(inp.dataset.idx,10)||0);
+};
+window.sciProdPick=inp=>{const i=parseInt(inp.dataset.idx,10);
+  if(!isNaN(i)&&typeof updateServiceCardItem==='function')updateServiceCardItem(i);};
+window.pciProdPick=inp=>{const i=parseInt(inp.dataset.idx,10);
+  if(!isNaN(i)&&typeof updatePricerItem==='function')updatePricerItem(i);};
+window.soloProdPick=(inp,id)=>{
+  const i=parseInt(inp.dataset.idx,10);
+  if(!isNaN(i)&&typeof updateSoloItem==='function')updateSoloItem(i,'productId',id);
+};
+window.resolveProd=inp=>{
+  const hid=inp.nextElementSibling;
+  const v=(inp.value||'').trim();
+  let id=_PRODBYLBL[v]||'';
+  if(!id&&v){ // 允許只打產品名，若唯一就自動對上
+    const hits=Object.keys(_PRODBYLBL).filter(l=>l===v||l.split('｜')[0].trim()===v);
+    if(hits.length===1)id=_PRODBYLBL[hits[0]];
+  }
+  if(hid&&hid.type==='hidden')hid.value=id;
+  inp.style.borderColor=v&&!id?'var(--red)':'var(--bdr)';
+  inp.style.background=v&&!id?'#FFF4F4':'';
+  const cb=inp.dataset.cb;
+  if(id&&cb&&typeof window[cb]==='function')window[cb](inp,id);
 };
 
 // ── 🔔 每月備份提醒 ──
