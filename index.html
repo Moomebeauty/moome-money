@@ -2412,6 +2412,14 @@ function pgAdvisor(){
 // ─── 客戶管理 ──────────────────────────────────────────────
 // 標準化姓名（去除前後空白、半形/全形空白）
 function normalizeName(s){return(s||'').toString().trim().replace(/[\u3000\s]+/g,'');}
+// 依姓名找客戶檔：忽略空白/全形差異；同名時優先取有同意書資料的那筆
+function findCustByName(name){
+  const t=normalizeName(name);
+  if(!t)return null;
+  const cands=(S.data.customers||[]).filter(x=>normalizeName(x.name)===t);
+  if(!cands.length)return null;
+  return cands.find(x=>x.intakeSignature||(x.healthForm&&Object.keys(x.healthForm).length))||cands[0];
+}
 
 // ─── 📅 預約管理 ────────────────────────────────────────
 function pgAppointments(){
@@ -2928,11 +2936,20 @@ function pgCustomerDetail(c){
 
   ${(() => {
     // 初次建檔的同意書與健康檔案（從客戶檔案讀取）
-    const cust=(S.data.customers||[]).find(x=>x.name===c.name)||{};
+    const cust=findCustByName(c.name)||{};
     const hasHealth=cust.healthForm&&Object.keys(cust.healthForm).length>0;
     const hasSvcHealth=cust.serviceHealthAnswers&&Object.keys(cust.serviceHealthAnswers).length>0;
     const hasSign=!!cust.intakeSignature;
-    if(!hasHealth&&!hasSvcHealth&&!hasSign)return'';
+    if(!hasHealth&&!hasSvcHealth&&!hasSign){
+      // 沒有同意書資料時也要說清楚，不要靜默消失
+      return`<div class="sec" style="margin-top:20px;">
+        <div class="sec-hd"><span class="sec-ttl">📜 初次同意書與健康檔案</span></div>
+        <div class="card"><div class="card-bd">
+          <div class="tm" style="font-size:13px;">這位客戶${c.ghost?'還沒有客戶檔（是從消費紀錄自動帶出的）':'目前沒有同意書與健康問卷紀錄'}。</div>
+          <div class="tm" style="font-size:12px;margin-top:6px;">如果你記得有填過，可能是<b>名字打得不一樣</b>（例如多空格、或後來改過名）而分成兩筆客戶檔。可以到「🔧 資料工具」用「檢查同意書」找出來。</div>
+        </div></div>
+      </div>`;
+    }
     return`<div class="sec" style="margin-top:20px;">
       <div class="sec-hd">
         <span class="sec-ttl">📜 初次同意書與健康檔案</span>
@@ -2956,7 +2973,7 @@ function pgCustomerDetail(c){
 
 // 看初次健康問卷
 window.showCustomerIntake=(name)=>{
-  const cust=(S.data.customers||[]).find(x=>x.name===name);
+  const cust=findCustByName(name);
   if(!cust||!cust.healthForm){alert('沒有健康問卷資料');return;}
   const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
   const rows=qs.filter(q=>q.type!=='section'&&q.type!=='declaration').map(q=>{
@@ -2977,7 +2994,7 @@ window.showCustomerIntake=(name)=>{
 
 // 看服務專屬確認
 window.showCustomerServiceHealth=(name)=>{
-  const cust=(S.data.customers||[]).find(x=>x.name===name);
+  const cust=findCustByName(name);
   if(!cust||!cust.serviceHealthAnswers){alert('沒有服務專屬確認資料');return;}
   const svcQs=S.data.settings?.serviceHealthQuestions||{};
   const rows=Object.entries(cust.serviceHealthAnswers).map(([key,val])=>{
@@ -3006,7 +3023,7 @@ window.showCustomerServiceHealth=(name)=>{
 
 // 看簽名
 window.showCustomerSignature=(name)=>{
-  const cust=(S.data.customers||[]).find(x=>x.name===name);
+  const cust=findCustByName(name);
   if(!cust||!cust.intakeSignature){alert('沒有簽名資料');return;}
   const html=`<div class="mttl">✍️ ${name} 的同意書簽名</div>
     <div style="text-align:center;padding:10px;">
@@ -5986,6 +6003,10 @@ function pgSettings(){
         <div>
           <button class="btn" style="background:var(--gold);color:#fff;" onclick="depositHealthCheck()">🩺 儲值資料健檢</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">全面掃描所有儲值的潛在問題：餘額異常、共用群組錯亂、孤兒紀錄、扣款歸屬錯誤等，並提供完整對帳報告</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--blu);color:#fff;" onclick="checkIntakeRecords()">📜 檢查同意書（找不到時用）</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">列出所有填過同意書／健康問卷的客戶，並找出名字重複、可能導致「看不到」的客戶檔。</div>
         </div>
         <div>
           <button class="btn" style="background:var(--grn);color:#fff;" onclick="backupJSON()">💾 一鍵完整備份</button>
@@ -14954,6 +14975,35 @@ function showBackupReminder(){
   if(inner)inner.innerHTML=html;
   if(bg)bg.className='modal-bg open';
 }
+
+window.checkIntakeRecords=()=>{
+  const cs=S.data.customers||[];
+  const withIntake=cs.filter(c=>c.intakeSignature||(c.healthForm&&Object.keys(c.healthForm).length)||(c.serviceHealthAnswers&&Object.keys(c.serviceHealthAnswers).length));
+  // 找出正規化後同名的群組（可能造成看不到）
+  const g={};cs.forEach(c=>{const k=normalizeName(c.name);(g[k]=g[k]||[]).push(c);});
+  const dup=Object.keys(g).filter(k=>g[k].length>1);
+  const rows=withIntake.sort((a,b)=>(b.healthAgreedAt||'').localeCompare(a.healthAgreedAt||'')).map(c=>{
+    const d=c.healthAgreedAt?new Date(c.healthAgreedAt).toLocaleString('zh-TW'):(c.createdAt||'—');
+    const tags=[];
+    if(c.intakeSignature)tags.push('<span class="bdg gold">簽名</span>');
+    if(c.healthForm&&Object.keys(c.healthForm).length)tags.push('<span class="bdg grn">健康問卷</span>');
+    if(c.serviceHealthAnswers&&Object.keys(c.serviceHealthAnswers).length)tags.push('<span class="bdg">服務確認</span>');
+    const cats=(c.agreedTerms||c.serviceCats||[]).join('、');
+    return`<tr><td><b>${c.name}</b>${normalizeName(c.name)!==c.name?'<br><span class="tm" style="font-size:11px;color:var(--red);">⚠️ 名字含空白</span>':''}</td>
+      <td class="tm" style="font-size:12px;">${d}</td><td>${cats||'—'}</td><td>${tags.join(' ')||'—'}</td>
+      <td><button class="btn btn-s btn-sm" onclick="closeMod();selectCustomer('${(c.name||'').replace(/'/g,"\\'")}')">查看</button></td></tr>`;
+  }).join('');
+  const html=`<div class="mttl">📜 同意書檢查</div>
+    <div style="background:var(--goldL);padding:12px;border-radius:8px;margin-bottom:14px;">
+      <b>目前共有 ${withIntake.length} 位客戶填過同意書／健康問卷</b>
+      ${dup.length?`<div style="color:var(--red);font-weight:700;margin-top:6px;">⚠️ 發現 ${dup.length} 組名字重複的客戶檔：${dup.map(k=>g[k].map(x=>x.name).join(' / ')).join('；')}<br><span class="tm">同意書可能記在其中一筆上，點「查看」確認。</span></div>`:''}
+    </div>
+    ${withIntake.length?`<div class="tw"><table><thead><tr><th>客戶</th><th>填寫時間</th><th>服務類別</th><th>內容</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="tm">目前沒有任何同意書紀錄。</div>'}`;
+  S.modal={t:'intakeCheck',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(inn){inn.innerHTML=html;inn.className='modal lg';}
+  if(bg)bg.className='modal-bg open';
+};
 
 window.snoozeBackup=()=>{
   try{localStorage.setItem('mumei_backup_snooze',today());}catch(e){}
