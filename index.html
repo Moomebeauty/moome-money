@@ -3035,6 +3035,9 @@ function pgCustomerDetail(c){
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
               <button class="btn btn-s btn-sm" onclick="viewPassContract('${p.id}')">📜 看合約</button>
               <button class="btn btn-s btn-sm" onclick="viewPassSignature('${p.id}')">✍️ 看簽名</button>
+              <button class="btn btn-sm" style="background:var(--gold);color:#fff;" onclick="openM('editPass','${p.id}')">✏️ 編輯</button>
+              ${!p.deposited?`<button class="btn btn-sm" style="background:var(--grn);color:#fff;" onclick="depositPassContract('${p.id}')">💰 補入帳</button>`:'<span class="bdg grn" style="align-self:center;">✓ 已入帳</span>'}
+              <button class="bdel" onclick="delPassContract('${p.id}')">×</button>
             </div>
           </div>
         </div>`;
@@ -3044,6 +3047,75 @@ function pgCustomerDetail(c){
 
   ${pgTreatmentRecords(c)}`;
 }
+
+// 補入帳（給之前簽了但錢沒進的合約用）
+window.epUpdateEnd=()=>{
+  const sd=$('ep_startDate')?.value;
+  const mo=parseInt($('ep_months')?.value)||6;
+  const el=$('ep_endDate');
+  if(sd&&el)el.textContent=addMonthsToDate(sd,mo);
+};
+
+window.saveEditPass=async(id)=>{
+  const price=parseFloat($('ep_price')?.value)||0;
+  const months=parseInt($('ep_months')?.value)||6;
+  const startDate=$('ep_startDate')?.value||today();
+  const endDate=addMonthsToDate(startDate,months);
+  const perUse=months>0?Math.round(price/months):price;
+  const updated={
+    customer:$('ep_customer')?.value?.trim()||'',
+    phone:$('ep_phone')?.value?.trim()||'',
+    planName:$('ep_planName')?.value?.trim()||'',
+    price,
+    originalPrice:parseFloat($('ep_originalPrice')?.value)||0,
+    singlePrice:parseFloat($('ep_singlePrice')?.value)||0,
+    months,startDate,endDate,perUse
+  };
+  const passContracts=(S.data.passContracts||[]).map(x=>x.id===id?{...x,...updated}:x);
+  await saveMain({passContracts});
+  toast('✅ 合約已更新');
+  closeMod();
+  render();
+};
+
+window.depositPassContract=async(id)=>{
+  const p=(S.data.passContracts||[]).find(x=>x.id===id);
+  if(!p){alert('找不到合約');return;}
+  if(p.deposited){alert('這筆已經入帳過了');return;}
+  const perUse=p.perUse||(p.months>0?Math.round(p.price/p.months):p.price);
+  if(!confirm(`確定為「${p.customer}」的 ${p.planName} 補入帳？\n\n金額 $${fmt(p.price)} 會：\n• 加進儲值餘額\n• 記進現金流收入\n\n每次除毛扣 $${fmt(perUse)}（${p.months}次）`))return;
+  try{
+    await finalizeDeposit({
+      customer:p.customer,
+      date:p.startDate,
+      amount:p.price,
+      actualReceived:p.price,
+      payMethod:p.payMethod||'現金',
+      note:`${p.planName}（補入帳，每次扣$${fmt(perUse)}，${p.months}次到期${p.endDate}）`,
+      signature:p.signature,
+      termsSnapshot:p.contractText,
+      signed:true,
+      scope:'restricted',
+      allowedServices:['熱蠟除毛'],
+      monthlyLimit:0
+    });
+    // 標記已入帳
+    const passContracts=(S.data.passContracts||[]).map(x=>x.id===id?{...x,deposited:true,perUse}:x);
+    await saveMain({passContracts});
+    toast(`✅ 已為 ${p.customer} 補入帳 $${fmt(p.price)}`);
+    render();
+  }catch(e){alert('補入帳失敗：'+e.message);}
+};
+
+window.delPassContract=async(id)=>{
+  const p=(S.data.passContracts||[]).find(x=>x.id===id);
+  if(!p)return;
+  if(!confirm(`確定刪除「${p.customer}」的 ${p.planName} 合約？\n\n⚠️ 如果已經入帳，儲值餘額不會自動退回，需另外調整。`))return;
+  const passContracts=(S.data.passContracts||[]).filter(x=>x.id!==id);
+  await saveMain({passContracts});
+  toast('已刪除合約');
+  render();
+};
 
 window.viewPassContract=(id)=>{
   const p=(S.data.passContracts||[]).find(x=>x.id===id);
@@ -7630,6 +7702,41 @@ function renderModal(){
   }
 
   // ─── 🎁 試用包管理 ───
+  // ─── ✏️ 編輯除毛吃到飽合約 ───
+  if(m.t==='editPass'){
+    const p=(S.data.passContracts||[]).find(x=>x.id===m.x)||{};
+    const endPreview=p.startDate?addMonthsToDate(p.startDate,p.months||6):'';
+    c=`<div class="mttl">✏️ 編輯合約：${p.customer||''}</div>
+    <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:12px;">
+      改完存檔只會更新這份合約紀錄。若金額有變且已入帳，儲值餘額需另外用「客戶儲值入帳」調整。
+    </div>
+    <div class="fg" style="margin-top:12px;">
+      <div class="fgrp"><label>客戶姓名</label><input type="text" id="ep_customer" value="${(p.customer||'').replace(/"/g,'&quot;')}"></div>
+      <div class="fgrp"><label>電話</label><input type="text" id="ep_phone" value="${(p.phone||'').replace(/"/g,'&quot;')}"></div>
+      <div class="fgrp"><label>方案名稱</label><input type="text" id="ep_planName" value="${(p.planName||'').replace(/"/g,'&quot;')}"></div>
+      <div class="fg fg2" style="grid-column:1/-1;">
+        <div class="fgrp"><label>優惠價格</label><input type="number" id="ep_price" value="${p.price||0}"></div>
+        <div class="fgrp"><label>原價</label><input type="number" id="ep_originalPrice" value="${p.originalPrice||0}"></div>
+      </div>
+      <div class="fg fg2" style="grid-column:1/-1;">
+        <div class="fgrp"><label>期限（月）</label><input type="number" id="ep_months" value="${p.months||6}" onchange="epUpdateEnd()"></div>
+        <div class="fgrp"><label>單次原價</label><input type="number" id="ep_singlePrice" value="${p.singlePrice||0}"></div>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;"><label>開始日期</label>
+        <input type="date" id="ep_startDate" value="${p.startDate||''}" onchange="epUpdateEnd()">
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;background:var(--grnL);padding:10px;border-radius:8px;">
+        <label style="color:var(--grn);">到期日（自動計算）</label>
+        <div id="ep_endDate" style="font-size:20px;font-weight:900;color:var(--grn);">${endPreview}</div>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="saveEditPass('${m.x}')">✓ 儲存修改</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── 📖 定型化契約講解重點卡 ───
   if(m.t==='contractGuide'){
     c=`<div class="mttl">📖 定型化契約・講解重點卡</div>
@@ -10846,11 +10953,14 @@ window.submitPassSign=async()=>{
   const contractText=buildPassContractText(t);
 
   // 存包期合約
+  const perUse=t.months>0?Math.round(t.price/t.months):t.price;  // 每次扣款價（總額÷次數）
   const contract={
     id:uid(),
     customer:t.customer,phone:t.phone,
     planName:t.planName,months:t.months,
     originalPrice:t.originalPrice,price:t.price,singlePrice:t.singlePrice,
+    perUse,                          // 每次除毛扣多少
+    usedCount:0,                     // 已使用次數
     startDate:t.startDate,endDate,
     payMethod:t.payMethod,
     contractText,signature,
@@ -10866,15 +10976,23 @@ window.submitPassSign=async()=>{
   }
   await saveMain(updates);
 
-  // 收入記進現金流
+  // 💰 入帳：$13,400 進儲值餘額 + 現金流（用 finalizeDeposit 確保兩邊都正確）
   try{
-    await addSub('cashFlow',{
-      date:t.startDate,type:'in',amount:t.price,
-      category:'包期方案',
-      note:`${t.planName}（${t.customer}）`,
-      customer:t.customer
+    await finalizeDeposit({
+      customer:t.customer,
+      date:t.startDate,
+      amount:t.price,              // 面額＝實收（除毛包期沒有額外贈送金額）
+      actualReceived:t.price,
+      payMethod:t.payMethod,
+      note:`${t.planName}（每次扣$${fmt(perUse)}，${t.months}次到期${endDate}）`,
+      signature,
+      termsSnapshot:contractText,
+      signed:true,
+      scope:'restricted',
+      allowedServices:['熱蠟除毛'],
+      monthlyLimit:0
     });
-  }catch(e){console.warn('現金流記錄失敗',e);}
+  }catch(e){console.warn('入帳失敗',e);}
 
   S.lastPassContract=contract;
   t.passSubmitted=true;
