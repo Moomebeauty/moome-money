@@ -680,13 +680,17 @@ async function addSub(col,data){
   }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
 }
 async function setSub(col,id,data){
+  if(!id){console.error('setSub 缺少 id，取消寫入避免產生重複',col,data);toast('更新失敗：缺少識別碼');return;}
   setSyncing('syncing');
   try{
-    await setDoc(doc(db,'studios',FID,col,id),{...data,_at:Date.now()});
+    // 移除 data 裡的 id 欄位（避免混淆），一律用參數 id 當文件路徑
+    const {id:_omit,...clean}=data;
+    await setDoc(doc(db,'studios',FID,col,id),{...clean,_at:Date.now()});
     // 立即本地更新（避免 onSnapshot 延遲）
     if(!S.data[col])S.data[col]=[];
     const idx=S.data[col].findIndex(x=>x.id===id);
-    if(idx>=0){S.data[col][idx]={...data,id,_at:Date.now()};}
+    if(idx>=0){S.data[col][idx]={...clean,id,_at:Date.now()};}
+    else{S.data[col].push({...clean,id,_at:Date.now()});}
     setSyncing('synced');
   }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
 }
@@ -6331,6 +6335,14 @@ function pgSettings(){
           <div class="tm" style="font-size:11px;margin-top:4px;">用所有進貨紀錄重新計算每個產品的平均成本（總成本÷總數量）。手動改錯成本、或進貨資料修正後，用這個同步回正確數字</div>
         </div>
         <div>
+          <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanDuplicatePurchase()">🧹 清理重複的進貨紀錄</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">如果同一筆進貨變成兩行（一筆未付款、一筆已付款），用這個找出並刪掉重複的，優先保留已付款那筆。會一併清掉重複的支出/現金流</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanDuplicatePurchaseExpense()">🧹 清理重複的進貨支出</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">如果同一筆進貨被記了兩次支出（按標記付款造成金額變兩倍），用這個找出並刪掉重複的，保留一筆。不會動到你原本的進貨紀錄</div>
+        </div>
+        <div>
           <button class="btn" style="background:var(--grn);color:#fff;" onclick="rebuildInventoryFromPurchases()">🔧 從進貨重建庫存</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">如果產品清單/庫存不見了，但進貨紀錄還在，用這個從進貨紀錄反推重建產品和庫存（只補回缺的，不動現有資料）</div>
         </div>
@@ -11917,10 +11929,105 @@ window.updPurchase=async(id)=>{
 };
 
 // ── 進貨同步支出 ──
+// 🧹 清理重複的進貨紀錄（同一筆進貨變成兩行：一未付款一已付款）
+window.cleanDuplicatePurchase=async()=>{
+  const purchases=S.data.purchases||[];
+  // 找重複：同產品+同日期+同金額+同數量，視為同一筆
+  const seen={};
+  const dups=[];
+  purchases.forEach(p=>{
+    const key=`${p.productName}|${p.date}|${p.totalCost}|${p.qty}`;
+    if(!seen[key]){
+      seen[key]=[p];
+    }else{
+      seen[key].push(p);
+    }
+  });
+  // 每組若有多筆，保留「已付款」那筆（或第一筆），刪其餘
+  Object.values(seen).forEach(list=>{
+    if(list.length>1){
+      // 優先保留已付款的
+      const keep=list.find(x=>x.paid||x.paidToExpense)||list[0];
+      list.forEach(x=>{if(x.id!==keep.id)dups.push(x);});
+    }
+  });
+
+  if(dups.length===0){
+    alert('✅ 沒有發現重複的進貨紀錄。');
+    return;
+  }
+  const preview=dups.slice(0,10).map(p=>`• ${p.date} ${p.productName} $${fmt(p.totalCost)}（${p.paid?'已付款':'未付款'}）`).join('\n');
+  if(!confirm(`發現 ${dups.length} 筆重複進貨（同產品/日期/金額）：\n\n${preview}${dups.length>10?'\n...':''}\n\n每組保留一筆（優先保留已付款的），刪除其餘重複。\n確定清理嗎？`))return;
+
+  setSyncing&&setSyncing('syncing');
+  let ok=0;
+  for(const p of dups){
+    try{
+      // 刪重複進貨時，也刪掉它可能產生的重複支出/現金流
+      const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase&&(e.purchaseRefId===p.id||e.fromPurchaseId===p.id));
+      const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase&&(f.purchaseRefId===p.id||f.fromPurchaseId===p.id));
+      for(const e of exps){try{await delSub('expenses',e.id);}catch(err){}}
+      for(const f of flows){try{await delSub('cashFlow',f.id);}catch(err){}}
+      await delSub('purchases',p.id);
+      ok++;
+    }catch(err){console.error(err);}
+  }
+  setSyncing&&setSyncing('synced');
+  alert(`✅ 已清理 ${ok} 筆重複進貨，以及它們產生的重複支出/現金流。\n\n建議接著點「💰 重算加權平均成本」讓成本回正。`);
+  render();
+};
+
+// 🧹 清理重複的進貨支出（同一筆進貨被記多次支出/現金流）
+window.cleanDuplicatePurchaseExpense=async()=>{
+  const exps=(S.data.expenses||[]).filter(e=>e.fromPurchase);
+  const flows=(S.data.cashFlow||[]).filter(f=>f.fromPurchase);
+  // 依 purchaseRefId 分組，找出同一筆進貨被記多次的
+  const groupBy=(arr)=>{
+    const g={};
+    arr.forEach(x=>{
+      const rid=x.purchaseRefId||x.fromPurchaseId||'no_ref';
+      if(!g[rid])g[rid]=[];
+      g[rid].push(x);
+    });
+    return g;
+  };
+  const expG=groupBy(exps),flowG=groupBy(flows);
+  const dupExps=[],dupFlows=[];
+  // 每組保留第一筆，其餘標為重複
+  Object.values(expG).forEach(list=>{if(list.length>1)dupExps.push(...list.slice(1));});
+  Object.values(flowG).forEach(list=>{if(list.length>1)dupFlows.push(...list.slice(1));});
+
+  if(dupExps.length===0&&dupFlows.length===0){
+    alert('✅ 沒有發現重複的進貨支出，帳目是乾淨的。');
+    return;
+  }
+  const dupAmount=dupExps.reduce((s,e)=>s+toN(e.amount),0);
+  const preview=dupExps.slice(0,8).map(e=>`• ${e.date} ${(e.note||'').substring(0,20)} $${fmt(e.amount)}`).join('\n');
+  if(!confirm(`發現重複記帳：\n\n支出重複 ${dupExps.length} 筆（共 $${fmt(dupAmount)}）\n現金流重複 ${dupFlows.length} 筆\n\n${preview}${dupExps.length>8?'\n...':''}\n\n每組保留一筆、刪掉多餘的。確定清理嗎？\n（不會動到進貨紀錄本身）`))return;
+
+  setSyncing&&setSyncing('syncing');
+  let ok=0;
+  for(const e of dupExps){try{await delSub('expenses',e.id);ok++;}catch(err){console.error(err);}}
+  for(const f of dupFlows){try{await delSub('cashFlow',f.id);}catch(err){console.error(err);}}
+  setSyncing&&setSyncing('synced');
+  alert(`✅ 清理完成，刪除了 ${dupExps.length} 筆重複支出、${dupFlows.length} 筆重複現金流。\n\n進貨成本統計現在應該正確了。`);
+  render();
+};
+
 window.payPurchase=async(id)=>{
   const p=(S.data.purchases||[]).find(x=>x.id===id);
   if(!p){toast('找不到進貨記錄');return;}
   if(p.paidToExpense||p.paid){toast('已付款過');return;}
+  // 🛡️ 防重複：檢查這筆進貨是否已經有對應的支出紀錄（避免重複記帳）
+  const existingExp=(S.data.expenses||[]).find(e=>e.fromPurchase&&(e.purchaseRefId===id||e.fromPurchaseId===id));
+  if(existingExp){
+    // 已經有支出紀錄了，只補標記進貨為已付款，不再新增
+    await setSub('purchases',id,{...p,paidToExpense:true,paid:true,paidDate:existingExp.date||today(),paidMethod:existingExp.payMethod||'轉帳',payMethod:existingExp.payMethod||'轉帳',expenseId:existingExp.id});
+    toast('✅ 已標記付款（此筆先前已記過支出，未重複記帳）');
+    closeMod();
+    render();
+    return;
+  }
   const paidDate=$('m_pay0')?.value||today();
   const paidMethod=$('m_pay1')?.value||'轉帳';
   const payNote=$('m_pay2')?.value||'';
@@ -11937,7 +12044,7 @@ window.payPurchase=async(id)=>{
     purchaseRefId:id,
     month:d.getMonth()+1,year:d.getFullYear()
   });
-  // 2. 寫入現金流水帳（這樣銀行帳目才能對得起來）
+  // 2. 寫入現金流水帳
   const flowRef=await addSub('cashFlow',{
     date:paidDate,
     amount:-toN(p.totalCost),
@@ -11952,6 +12059,7 @@ window.payPurchase=async(id)=>{
   await setSub('purchases',id,{...p,paidToExpense:true,paid:true,paidDate,paidMethod,payMethod:paidMethod,payNote,expenseId:expenseRef?.id||'',cashFlowId:flowRef?.id||''});
   toast(`✅ 已標記付款，自動記入 ${d.getMonth()+1} 月支出 $${fmt(p.totalCost)}`);
   closeMod();
+  render();
 };
 window.unpayPurchase=async(id)=>{
   if(!confirm('取消付款？\n會同時刪除「支出記帳」和「現金流水帳」中對應的紀錄'))return;
