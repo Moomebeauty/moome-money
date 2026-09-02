@@ -370,6 +370,111 @@ const DEFAULT_PASS_PLANS=[{
   scope:'身體部位除毛（依本公司公告為準，私密處、全手、全腳、腋下，不含臉部）'
 }];
 
+// ═══ 紋繡（霧眉霧唇）相關預設 ═══
+
+// 痼疾/現症清單（基本設定可增減）
+// 補色提醒訊息範本（基本設定可改）
+const DEFAULT_PMU_TOUCHUP_MSG=`親愛的 {客戶} 您好 🌸
+
+這是沐蜜美學的貼心提醒～
+您的 {服務} 建議在 {補色日期} 前回來補色一次（免費），這樣顏色會更飽和、更持久喔！
+
+想預約補色時間，直接回覆這則訊息就可以囉 ♡
+期待再次為您服務 🌷`;
+
+// 滿一年回訪提醒訊息範本（基本設定可改）
+const DEFAULT_PMU_YEARLY_MSG=`親愛的 {客戶} 您好 🌸
+
+不知不覺您的 {服務} 已經陪伴您一年了呢！
+半永久紋繡會隨時間自然代謝，如果您覺得顏色變淡了，歡迎回來讓我幫您補色，重新找回美麗的眉型 ♡
+
+想預約或有任何問題，都可以直接回覆我唷～
+好久不見，很想念您 🌷`;
+
+const DEFAULT_PMU_CONDITIONS=['癌症','糖尿病','甲狀腺疾病','心臟病','荷爾蒙失調','頭痛','失眠','貧血','高血壓','血友病','愛滋病','B型肝炎','皮膚病','蕁麻疹','異位性皮膚炎','白血病','癲癇','氣喘','乾癬'];
+
+// 過敏項目清單（基本設定可增減）
+const DEFAULT_PMU_ALLERGIES=['異位性皮膚炎','食物過敏','植物過敏','藥物過敏','金屬過敏','其他'];
+
+// 得知管道（基本設定可增減）
+const DEFAULT_PMU_SOURCES=['朋友介紹','IG','Facebook','Google搜尋','路過看到','LINE','小紅書','其他'];
+
+// 紋繡須知（基本設定可編輯）
+const DEFAULT_PMU_NOTICE=`【紋繡須知】
+
+1. 紋繡屬半永久性美容，會隨時間逐漸自然代謝、褪色，維持時間因個人膚質、生活習慣、保養方式而異。
+
+2. 為達最佳效果，通常需要「第一次施作」加上「一次補色」，補色請於首次施作後的建議期間內完成。
+
+3. 施作後會經歷結痂、脫落、反黑、返色等正常過程，約需 4～6 週穩定，請耐心等待，勿自行摳除痂皮。
+
+4. 施作後 7 天內請保持傷口乾燥清潔，避免碰水、流汗、泡溫泉、游泳、蒸氣。
+
+5. 施作部位請勿使用去角質、酸類、美白等刺激性保養品。
+
+6. 若有紅腫、發炎、異常疼痛等狀況，請立即與本店聯繫。`;
+
+// ── 優化後的紋繡完整同意書內容（已拿掉「刺青」，措辭優化）──
+// 各段落分開存，方便基本設定分別編輯
+const DEFAULT_PMU_TERMS={
+  // 個資告知
+  privacy:`【問卷與個人資料告知事項】
+
+上開基本資料與詢問事項各項資料，本店基於客戶管理及營業目的，於營業期間及營業地區內，得處理及利用您的個人資料，以提供相關美容服務，及日後契約期滿之客戶關係維繫與行銷活動訊息提供。
+
+您有向本店請求查詢、閱覽、複製、更正、刪除個人資料等權利。惟如不提供相關個人資料，足以影響美容服務之執行時，本店得不接受或終止契約。`,
+
+  // 服務說明書
+  serviceDesc:`【紋繡服務說明書】
+
+本說明書用以說明顧客的需求，及接受紋繡服務（以下稱本服務）的目的、方法、效益、施作後保養須知及可能產生的問題，作為顧客與紋繡師討論的資料。經紋繡師說明後，若仍有疑問，請於簽署同意書前再與紋繡師討論。
+
+一、本服務無法達到的效果：
+本服務旨在美容，非屬醫療行為，不治療、矯正或預防關於皮膚、身體結構及生理組織之疾病。若您有疾病、傷害或殘缺，請儘早與您的醫師聯繫就診。
+
+二、操作方法：
+將由您的紋繡師以口述方式向您說明。
+
+三、可能發生輕微疼痛：
+施作過程中，因每位顧客對疼痛感受不同，有些人會有些許疼痛或不適感。一般而言疼痛程度輕微、短暫。若過程中發生您無法忍受的疼痛不適，請務必立即主動告知紋繡師，以便暫停或適當處理，避免不必要的誤會、疼痛加劇，或因疼痛震動導致圖樣變形。
+
+四、注意事項：
+懷孕期間及患有癌症者不建議接受本服務。本店紋繡師並無醫學專業知識足以判斷本服務對您的身體是否構成風險，若您仍選擇施作，請確保事前已詢問過您的醫師並審慎評估風險。本店對於接受本服務的條件、應遵循的須知、所選服務項目與風險等，均會向您充分明確說明；如有不清楚之處，請務必當場立即向本店服務人員反映。`,
+
+  // 同意書主文
+  consent:`【紋繡服務同意書】
+
+一、紋繡師之聲明：
+1. 我已儘量以顧客所能了解的方式及語言，說明本服務的相關資訊。
+2. 我已給予顧客充足時間詢問本次服務的問題，並予以答覆。
+
+二、顧客之聲明與同意：
+1. 紋繡師已向我說明，且我已了解本服務的步驟程序、健康風險可能性（包括出血、發炎、腫脹、疼痛、疤痕、過敏反應、細菌感染、破傷風風險等）、費用、使用的工具及原料等資訊。針對我自身身體狀況，我已能向紋繡師提出問題與疑慮並獲得說明。
+2. 紋繡師已給我充分時間考慮是否施作。
+3. 本人已充分了解紋繡服務在本質上具有不可避免的輕微傷口，方能上色，並能預期此服務及傷口癒合過程可能帶來的不適感。
+4. 本人已充分了解紋繡後的相關保養須知、注意事項及建議，並同意遵循。施作後之保養照護以避免前述風險，為本人之責任。
+5. 本人已充分了解本服務所使用之產品均經合格單位認證、用具皆完成消毒、服務人員均通過合格技術檢定。故本人同意，如發生任何不適、疾病、作品瑕疵或損壞等事件，應提出其係歸因於本服務之證明，否則無法接受任何退費或賠償要求。
+
+三、其他同意事項：
+1. 本人確認服務人員事前已就設計理念與本人充分溝通，於本人對設計滿意後，始同意進行本服務。本人充分理解，服務人員依本人同意之設計所完成的成品，因每人五官及審美主觀差異，無法保證一定滿意，故操作完成後無法接受任何退費要求。
+2. 本人已充分了解所接受之半永久紋繡服務會隨時間逐漸褪色或脫落，且因每人生活習慣及保養方式不同，維持時間也不同，店家及服務人員無法提供任何保固期。
+3. 本人已充分了解，如欲清除已完成之紋繡成果，需藉由專業醫學雷射或外科手術，可能需多次診療且費用昂貴，施作部位也可能無法恢復原本外觀，任何清除手段皆可能造成永久性疤痕。
+4. 本人已誠實告知前開身體狀況，並充分了解該狀況（包括糖尿病、癲癇、心血管疾病、懷孕、癌症、服用抗凝血藥物等）對本服務可能帶來的風險，本人願自行承擔未誠實告知及因個人因素所造成的一切風險：
+   (a) 長期服用止痛藥、阿司匹林、鎮定劑或其他抗凝血藥物，可能造成凝血功能降低，致過程中有流血過量、不易凝血或傷口不易癒合之現象。
+   (b) 前開疾病可能造成眼睛、皮膚或其他部位產生預期外的風險。
+   (c) 因個人體質或衛生問題，可能產生任何不適現象。`,
+
+  // 多媒體授權
+  media:`【多媒體使用同意】
+
+1. 本人同意在施作前、中、後，由店家對施作部位（含身體髮膚之一部分及肖像）拍攝照片及錄影做成紀錄，以追蹤施作狀況，及於傳播媒體中進行各項宣傳行銷活動。
+2. 本人同意前款照片及影片可與其他影像、文字、圖像、影片、音效、音訊與視訊結合，並予以裁剪、改變或修改。
+3. 本人了解並同意，無權對上開照片、影片及後製作品取得報酬，且不會基於任何考量向店家提出其他法律上請求。`,
+
+  // 結尾聲明
+  closing:`本人係在最佳認知狀態下，仔細閱讀過此份同意書，並經服務人員以本人能充分理解之語言講解後，已完全了解本人權益，並簽名同意施作。`
+};
+
 const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
 const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
 const SERVICE_PRESETS=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩','自訂項目'];
@@ -581,6 +686,7 @@ let S={
     appointments:[],
     trialPacks:[],
     passContracts:[],
+    pmuRecords:[],
     // 出貨記錄（客戶購買、自用、損耗、贈品）
     stockOuts:[],
     // 設備（含折舊）
@@ -626,7 +732,8 @@ function startSync(){
     S.data.equipment=d.equipment||[];  // 設備（每月折舊）
     S.data.serviceCosts=d.serviceCosts||[];
     S.data.trialPacks=d.trialPacks||[];
-    S.data.passContracts=d.passContracts||[];  // 服務成本卡
+    S.data.passContracts=d.passContracts||[];
+    S.data.pmuRecords=d.pmuRecords||[];  // 服務成本卡
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -1066,7 +1173,7 @@ function appHTML(){
   ];
   const curPage=PAGES.find(p=>p.id===S.page)||PAGES[0];
   // 判斷是否為客戶簽名模式（隱藏側邊欄與頂部欄，全螢幕沉浸體驗）
-  const isCustomerMode=S.page==='treatment'&&S.treatment&&(S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'||S.treatment.mode==='depositCustomer'||S.treatment.mode==='guestIntake'||S.treatment.mode==='depositSign'||S.treatment.mode==='passSign');
+  const isCustomerMode=S.page==='treatment'&&S.treatment&&(S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'||S.treatment.mode==='depositCustomer'||S.treatment.mode==='guestIntake'||S.treatment.mode==='depositSign'||S.treatment.mode==='passSign'||(S.treatment.mode==='pmu'&&S.treatment.pmuStage==='consent'));
   return`
 <div class="app${isCustomerMode?' customer-mode':''}">
   ${isCustomerMode?'':`<nav class="sidebar">
@@ -1489,6 +1596,10 @@ function pgOverview(){
   <button onclick="startPassSignFlow()" style="width:100%;background:linear-gradient(135deg,var(--grn),#0891b2);color:#fff;border:none;padding:16px;border-radius:14px;font-size:17px;font-weight:700;margin-bottom:14px;box-shadow:0 4px 16px rgba(16,150,120,0.25);cursor:pointer;">
     🎫 除毛吃到飽（簽合約）
     <div style="font-size:12px;font-weight:400;opacity:0.9;margin-top:4px;">選包期方案，自動算到期日，客人簽合約後存進系統</div>
+  </button>
+  <button onclick="startPmuFlow()" style="width:100%;background:linear-gradient(135deg,#9333ea,#c026d3);color:#fff;border:none;padding:16px;border-radius:14px;font-size:17px;font-weight:700;margin-bottom:14px;box-shadow:0 4px 16px rgba(147,51,234,0.25);cursor:pointer;">
+    🎨 紋繡服務（霧眉霧唇）
+    <div style="font-size:12px;font-weight:400;opacity:0.9;margin-top:4px;">眉型設計→簽同意書→操作紀錄→完成提醒，一站完成</div>
   </button>
   <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>📊 <b>日常儀表板</b>：每天/每週打開，看本月即時狀態 — 營收、支出、警示、待辦</div>
@@ -4106,6 +4217,7 @@ function pgTreatment(){
   }
   const t=S.treatment;
   if(t.mode==='customer')return pgTreatmentCustomerView(t);
+  if(t.mode==='pmu')return pgPmuView(t);
   if(t.mode==='passSign')return pgPassSignView(t);
   if(t.mode==='depositSign')return pgDepositSignView(t);
   if(t.mode==='guestIntake')return pgGuestIntakeView(t);
@@ -4612,6 +4724,494 @@ function pgTreatmentCustomerView(t){
   </div>
   `;
 }
+
+// ───── 🎨 紋繡服務主畫面 ─────
+function pgPmuView(t){
+  // 完成畫面
+  if(t.pmuSubmitted)return pmuDoneView(t);
+  // 簽同意書階段（客人畫面，隱私隔離）
+  if(t.pmuStage==='consent')return pmuConsentView(t);
+
+  // 其他階段（你的操作畫面）：頂部有階段導覽
+  const stages=[
+    {id:'design',label:'① 眉型設計',icon:'✏️'},
+    {id:'consent',label:'② 簽同意書',icon:'📜'},
+    {id:'operation',label:'③ 操作紀錄',icon:'🎨'},
+    {id:'finish',label:'④ 完成提醒',icon:'✅'}
+  ];
+  const nav=`
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+      ${stages.map(s=>{
+        const active=t.pmuStage===s.id;
+        const signed=s.id==='consent'&&t.consentSignature;
+        return`<button onclick="pmuGoStage('${s.id}')" style="flex:1;min-width:80px;padding:10px 6px;border-radius:10px;border:2px solid ${active?'#9333ea':'var(--bdr)'};background:${active?'#f3e8ff':'#fff'};cursor:pointer;font-size:12px;font-weight:${active?'700':'400'};color:${active?'#9333ea':'var(--mut)'};">
+          ${s.icon}<br>${s.label}${signed?' ✓':''}
+        </button>`;
+      }).join('')}
+    </div>`;
+
+  let body='';
+  if(t.pmuStage==='design')body=pmuDesignStage(t);
+  else if(t.pmuStage==='operation')body=pmuOperationStage(t);
+  else if(t.pmuStage==='finish')body=pmuFinishStage(t);
+
+  return`
+  <button onclick="cancelPmu()" title="取消" style="position:fixed;top:14px;right:14px;z-index:100;background:rgba(255,255,255,0.6);border:1px solid var(--bdr);color:var(--mut);padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;opacity:0.5;">離開</button>
+  <div style="max-width:680px;margin:0 auto;padding:20px 16px 60px;">
+    <div class="pg-ttl" style="color:#9333ea;">🎨 紋繡服務${t.customer?`：${t.customer}`:''}</div>
+    ${nav}
+    ${body}
+  </div>`;
+}
+
+// ── 階段① 眉型設計 ──
+function pmuDesignStage(t){
+  const sources=S.data.settings?.pmuSources||DEFAULT_PMU_SOURCES;
+  const conditions=S.data.settings?.pmuConditions||DEFAULT_PMU_CONDITIONS;
+  const allergies=S.data.settings?.pmuAllergies||DEFAULT_PMU_ALLERGIES;
+  const custList=(S.data.customers||[]).map(c=>c.name);
+  return`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">👤 基本資料</span></div>
+      <div class="card-bd">
+        <div class="fg fg2">
+          <div class="fgrp"><label>姓名 *</label><input type="text" id="pmu_customer" list="pmu_custlist" value="${(t.customer||'').replace(/"/g,'&quot;')}" oninput="S.treatment.customer=this.value"><datalist id="pmu_custlist">${custList.map(n=>`<option value="${n}">`).join('')}</datalist></div>
+          <div class="fgrp"><label>行動電話 *</label><input type="tel" id="pmu_phone" value="${(t.phone||'').replace(/"/g,'&quot;')}" oninput="S.treatment.phone=this.value"></div>
+          <div class="fgrp"><label>生日</label><input type="date" id="pmu_birthday" value="${t.birthday||''}"></div>
+          <div class="fgrp"><label>LINE ID</label><input type="text" id="pmu_lineId" value="${(t.lineId||'').replace(/"/g,'&quot;')}" oninput="S.treatment.lineId=this.value"></div>
+          <div class="fgrp" style="grid-column:1/-1;"><label>通訊地址</label><input type="text" id="pmu_address" value="${(t.address||'').replace(/"/g,'&quot;')}" oninput="S.treatment.address=this.value"></div>
+          <div class="fgrp" style="grid-column:1/-1;"><label>E-mail</label><input type="email" id="pmu_email" value="${(t.email||'').replace(/"/g,'&quot;')}" oninput="S.treatment.email=this.value"></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+          <input type="checkbox" ${t.isMinor?'checked':''} onchange="S.treatment.isMinor=this.checked;pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();"> 未成年（需法定代理人同意）
+        </label>
+        ${t.isMinor?`<div class="fgrp" style="margin-top:8px;"><label>法定代理人姓名</label><input type="text" id="pmu_guardian" value="${(t.guardianName||'').replace(/"/g,'&quot;')}" oninput="S.treatment.guardianName=this.value"></div>`:''}
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">✏️ 眉型設計與溝通</span></div>
+      <div class="card-bd">
+        <div class="fgrp"><label>服務項目</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${['霧眉','霧唇','霧眉+霧唇'].map(s=>`<label style="padding:8px 16px;background:${t.serviceType===s?'#9333ea':'var(--bg2)'};color:${t.serviceType===s?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:14px;" onclick="S.treatment.serviceType='${s}';pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();">${s}</label>`).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:10px;"><label>客人想要的風格</label>
+          <input type="text" id="pmu_designStyle" value="${(t.designStyle||'').replace(/"/g,'&quot;')}" placeholder="如：自然野生眉、韓系平眉、根根分明" oninput="S.treatment.designStyle=this.value">
+        </div>
+        <div class="fgrp" style="margin-top:10px;"><label>客人期待與需求</label>
+          <textarea id="pmu_expectation" rows="2" placeholder="客人對紋繡的期待、在意的點" oninput="S.treatment.expectation=this.value">${t.expectation||''}</textarea>
+        </div>
+        <div class="fgrp" style="margin-top:10px;"><label>設計溝通紀錄</label>
+          <textarea id="pmu_designNote" rows="3" placeholder="怎麼設計的、量了什麼、客人確認了什麼" oninput="S.treatment.designNote=this.value">${t.designNote||''}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知）</span></div>
+      <div class="card-bd">
+        <div class="fgrp"><label>有無痼疾/現症治療中（含皮膚病）？</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${conditions.map(cond=>{
+              const on=(t.conditions||[]).includes(cond);
+              return`<label style="padding:6px 12px;background:${on?'var(--red)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('conditions','${cond.replace(/'/g,"\\'")}')">${on?'✓ ':''}${cond}</label>`;
+            }).join('')}
+          </div>
+          <input type="text" id="pmu_conditionNote" value="${(t.conditionNote||'').replace(/"/g,'&quot;')}" placeholder="其他說明（選填）" style="margin-top:8px;" oninput="S.treatment.conditionNote=this.value">
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>是否有過敏性體質？</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${allergies.map(a=>{
+              const on=(t.allergies||[]).includes(a);
+              return`<label style="padding:6px 12px;background:${on?'var(--gold)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('allergies','${a.replace(/'/g,"\\'")}')">${on?'✓ ':''}${a}</label>`;
+            }).join('')}
+          </div>
+          <input type="text" id="pmu_allergyNote" value="${(t.allergyNote||'').replace(/"/g,'&quot;')}" placeholder="其他過敏說明（選填）" style="margin-top:8px;" oninput="S.treatment.allergyNote=this.value">
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>如何知道本店？</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${sources.map(s=>`<label style="padding:6px 12px;background:${t.source===s?'var(--pur)':'var(--bg2)'};color:${t.source===s?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="S.treatment.source='${s.replace(/'/g,"\\'")}';pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();">${t.source===s?'✓ ':''}${s}</label>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;">
+      <div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人決定要做了？</div>
+      <button class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuSaveInputs();pmuGoStage('consent')">
+        客人確定 → 交給客人簽同意書 →
+      </button>
+    </div>`;
+}
+
+window.pmuToggle=(field,val)=>{
+  if(!S.treatment)return;
+  if(!Array.isArray(S.treatment[field]))S.treatment[field]=[];
+  const arr=S.treatment[field];
+  const i=arr.indexOf(val);
+  if(i>=0)arr.splice(i,1);else arr.push(val);
+  if(window.event&&window.event.target){
+    const el=window.event.target.closest('label')||window.event.target;
+    const on=arr.includes(val);
+    const color=field==='conditions'?'var(--red)':field==='allergies'?'var(--gold)':'var(--pur)';
+    el.style.background=on?color:'var(--bg2)';
+    el.style.color=on?'#fff':'var(--txt)';
+    el.textContent=(on?'✓ ':'')+val;
+  }
+};
+
+// ── 階段② 簽同意書（客人畫面）──
+function pmuConsentView(t){
+  const S2=S.data.settings||{};
+  const terms=S2.pmuTerms||DEFAULT_PMU_TERMS;
+  const notice=S2.pmuNotice||DEFAULT_PMU_NOTICE;
+  const studioName='沐蜜美學';
+  const condStr=(t.conditions||[]).length>0?(t.conditions.join('、')+(t.conditionNote?'；'+t.conditionNote:'')):'無';
+  const allergyStr=(t.allergies||[]).length>0?(t.allergies.join('、')+(t.allergyNote?'；'+t.allergyNote:'')):'無';
+
+  return`
+  <button onclick="pmuGoStage('design')" title="返回" style="position:fixed;top:14px;left:14px;z-index:100;background:rgba(255,255,255,0.6);border:1px solid var(--bdr);color:var(--mut);padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;opacity:0.5;">← 老師返回</button>
+  <div style="max-width:660px;margin:0 auto;padding:20px 16px 60px;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-family:'Noto Serif TC',serif;font-size:26px;font-weight:900;color:#9333ea;letter-spacing:0.1em;">${studioName}</div>
+      <div style="color:var(--mut);font-size:15px;margin-top:8px;">紋繡服務同意書 🌸</div>
+      <div style="color:var(--mut);font-size:13px;margin-top:4px;">請詳細閱讀後簽名，這份文件保障您與本店雙方權益</div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">您的基本資料</span></div>
+      <div class="card-bd" style="font-size:14px;line-height:2;">
+        姓名：${t.customer||''}　電話：${t.phone||''}<br>
+        服務項目：${t.serviceType||''}<br>
+        身體狀況：${condStr}<br>
+        過敏史：${allergyStr}
+        ${t.isMinor?`<br><b style="color:var(--red);">未成年，法定代理人：${t.guardianName||'＿＿＿'}</b>`:''}
+      </div>
+    </div>
+
+    ${[
+      {t:'📋 紋繡須知',c:notice},
+      {t:'🔐 個人資料告知',c:terms.privacy},
+      {t:'📖 紋繡服務說明書',c:terms.serviceDesc},
+      {t:'📜 紋繡服務同意書',c:terms.consent},
+      {t:'📸 多媒體使用同意',c:terms.media}
+    ].map(sec=>`
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">${sec.t}</span></div>
+        <div class="card-bd"><div style="font-size:13px;line-height:1.9;white-space:pre-wrap;max-height:240px;overflow-y:auto;">${sec.c||''}</div></div>
+      </div>
+    `).join('')}
+
+    <div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-bottom:14px;font-size:13px;line-height:1.9;">
+      ${terms.closing||''}
+    </div>
+
+    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:14px;background:#f3e8ff;border-radius:10px;margin-bottom:14px;">
+      <input type="checkbox" id="pmu_consent_agree" style="margin-top:3px;transform:scale(1.3);" ${t.consentAgreed?'checked':''} onchange="S.treatment.consentAgreed=this.checked;">
+      <span style="font-size:14px;font-weight:700;color:#9333ea;">本人 ${t.customer||''} 已詳細閱讀並充分理解上述全部內容，同意接受紋繡服務，所填資料屬實。</span>
+    </label>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">✍️ 顧客簽名</span></div>
+      <div class="card-bd">
+        <div style="background:#fff;border:3px dashed #9333ea;border-radius:12px;padding:10px;">
+          <canvas id="t_guest_sign_canvas" width="600" height="180" style="width:100%;height:180px;cursor:crosshair;touch-action:none;display:block;background:#fff;border-radius:8px;"></canvas>
+        </div>
+        <div style="display:flex;justify-content:center;margin-top:10px;">
+          <button class="btn btn-y" onclick="clearSignature()">🗑️ 清除重簽</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;">
+      <button class="btn btn-p" style="background:#9333ea;font-size:18px;font-weight:700;padding:16px 44px;border-radius:30px;" onclick="pmuSubmitConsent()">
+        ✓ 確認簽署 ✨
+      </button>
+    </div>
+  </div>`;
+}
+
+window.pmuSubmitConsent=()=>{
+  const t=S.treatment;if(!t)return;
+  if(!t.consentAgreed&&!$('pmu_consent_agree')?.checked){alert('請勾選同意');return;}
+  if(!_sigCanvas||!_sigHasContent){alert('請簽名');return;}
+  t.consentSignature=_sigCanvas.toDataURL('image/png');
+  t.consentSignedAt=nowLocal();
+  t.consentAgreed=true;
+  toast('✅ 同意書簽署完成');
+  pmuGoStage('operation');
+};
+
+// ── 階段③ 操作紀錄 ──
+function pmuOperationStage(t){
+  if(!t.consentSignature){
+    return`<div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);">
+      ⚠️ 還沒簽同意書。請先回到「② 簽同意書」讓客人簽署，再進行操作紀錄。
+    </div>
+    <button class="btn btn-p" style="background:#9333ea;margin-top:12px;" onclick="pmuGoStage('consent')">→ 去簽同意書</button>`;
+  }
+  const S2=S.data.settings||{};
+  const numbCreams=S2.pmuNumbCreams||['表面麻','注射前麻','二次麻'];
+  const tools=S2.pmuTools||['圓針','排針','霧針','手工排','機器'];
+  const pigments=S2.pmuPigments||['棕色','咖啡色','灰棕色','紅棕色','橘調'];
+  const numbTimes=S2.pmuNumbTimes||['20分','30分','40分','45分','60分'];
+  return`
+    <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;margin-bottom:14px;">
+      ✓ 同意書已簽署（${t.consentSignedAt}）。現在邊操作邊記錄，這些之後在客戶檔案都查得到。
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">⏱️ 時間紀錄</span></div>
+      <div class="card-bd">
+        <div class="fg fg2">
+          <div class="fgrp"><label>開始時間</label><input type="time" id="pmu_startTime" value="${t.startTime||''}" onchange="S.treatment.startTime=this.value"></div>
+          <div class="fgrp"><label>結束時間</label><input type="time" id="pmu_endTime" value="${t.endTime||''}" onchange="S.treatment.endTime=this.value"></div>
+        </div>
+        <div class="fgrp" style="margin-top:10px;"><label>敷麻時間</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${numbTimes.map(n=>`<label style="padding:6px 14px;background:${t.numbTime===n?'#9333ea':'var(--bg2)'};color:${t.numbTime===n?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuPick('numbTime','${n}')">${n}</label>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">🧴 麻膏 / 工具 / 色乳</span></div>
+      <div class="card-bd">
+        <div class="fgrp"><label>使用的麻膏</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${numbCreams.map(n=>`<label style="padding:6px 12px;background:${t.numbCream===n?'var(--blu)':'var(--bg2)'};color:${t.numbCream===n?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuPick('numbCream','${n.replace(/'/g,"\\'")}')">${n}</label>`).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>使用的工具（可複選）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${tools.map(tool=>{const on=(t.tools||[]).includes(tool);return`<label style="padding:6px 12px;background:${on?'var(--grn)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('tools','${tool.replace(/'/g,"\\'")}')">${on?'✓ ':''}${tool}</label>`;}).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>使用的色乳（可複選）</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${pigments.map(pig=>{const on=(t.pigments||[]).includes(pig);return`<label style="padding:6px 12px;background:${on?'var(--rose)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('pigments','${pig.replace(/'/g,"\\'")}')">${on?'✓ ':''}${pig}</label>`;}).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>操作備註（更個人化的細節）</label>
+          <textarea id="pmu_operationNote" rows="3" placeholder="如：調色比例、客人反應、特殊狀況、下次要注意的" oninput="S.treatment.operationNote=this.value">${t.operationNote||''}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;">
+      <button class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuSaveInputs();pmuGoStage('finish')">
+        操作完成 → 下一步（衛教/結帳提醒）→
+      </button>
+    </div>`;
+}
+
+window.pmuPick=(field,val)=>{
+  if(!S.treatment)return;
+  S.treatment[field]=val;
+  pmuSaveInputs();
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// ── 階段④ 完成提醒 ──
+function pmuFinishStage(t){
+  const S2=S.data.settings||{};
+  // 補色天數（預設3個月）
+  const touchupDays=toN(S2.pmuTouchupDays)||90;
+  const touchupDate=addMonthsToDate(t.date,Math.round(touchupDays/30));
+  return`
+    <div class="notice" style="background:#f3e8ff;border-left-color:#9333ea;color:#9333ea;font-size:14px;margin-bottom:16px;">
+      🎉 操作完成！在結帳前，確認以下事項都做到了：
+    </div>
+
+    <div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
+      <div class="card-bd">
+        <div style="font-weight:700;color:var(--goldDk);font-size:16px;margin-bottom:10px;">📅 預約免費補色</div>
+        <div style="background:var(--goldL);padding:14px;border-radius:10px;text-align:center;">
+          <div class="tm" style="font-size:13px;">建議補色日期（${touchupDays}天內免費一次）</div>
+          <div style="font-size:24px;font-weight:900;color:var(--goldDk);margin-top:4px;">${touchupDate}</div>
+          <div class="tm" style="font-size:12px;margin-top:4px;">系統自動算好，直接跟客人約這個日期前 ✓</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-bd">
+        <div style="font-weight:700;font-size:15px;margin-bottom:10px;">✅ 離開前確認清單</div>
+        ${[
+          {key:'cardSigned',label:'已給客人簽「售後須知小卡」'},
+          {key:'carePackGiven',label:'已把護理包交給客人'},
+          {key:'aftercareGiven',label:'已完成術後衛教講解'},
+          {key:'photoAfterDone',label:'已拍攝完成後的成果照'}
+        ].map(item=>`
+          <label style="display:flex;align-items:center;gap:10px;padding:12px;background:${t[item.key]?'var(--grnL)':'var(--bg2)'};border-radius:10px;margin-bottom:8px;cursor:pointer;">
+            <input type="checkbox" ${t[item.key]?'checked':''} style="transform:scale(1.4);" onchange="S.treatment.${item.key}=this.checked;pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();">
+            <span style="font-size:14px;font-weight:${t[item.key]?'700':'400'};color:${t[item.key]?'var(--grn)':'var(--txt)'};">${t[item.key]?'✓ ':''}${item.label}</span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
+
+    <div style="text-align:center;">
+      <button class="btn btn-p" style="background:linear-gradient(135deg,#9333ea,#c026d3);font-size:17px;font-weight:700;padding:16px 40px;border-radius:30px;" onclick="pmuSubmit()">
+        ✓ 完成並存檔 ✨
+      </button>
+      <div class="tm" style="font-size:12px;margin-top:8px;">存檔後可下載同意書給客人，並記入客戶檔案</div>
+    </div>`;
+}
+
+// ── 完成畫面 ──
+function pmuDoneView(t){
+  return`
+  <button onclick="switchTreatmentMode('staff')" style="position:fixed;top:14px;right:14px;z-index:100;background:rgba(255,255,255,0.6);border:1px solid var(--bdr);color:var(--mut);padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;opacity:0.4;">返回</button>
+  <div style="min-height:90vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#faf5ff,#fff);padding:20px;">
+    <div style="background:#fff;padding:40px 30px;border-radius:20px;text-align:center;max-width:440px;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+      <div style="font-size:56px;margin-bottom:14px;">🎨</div>
+      <div style="font-size:22px;font-weight:700;color:#9333ea;margin-bottom:10px;">${t.customer} 紋繡完成 🌸</div>
+      <div style="color:var(--mut);font-size:15px;line-height:1.8;margin-bottom:20px;">
+        ${t.serviceType}　同意書已簽署<br>
+        所有紀錄已存進客戶檔案 ♡
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-p" style="background:#9333ea;padding:12px;" onclick="downloadPmuConsent()">🖼️ 下載同意書給客人</button>
+        <button class="btn btn-y" onclick="copyPmuTouchupMsg()" style="padding:12px;">💬 複製補色提醒訊息</button>
+        <button class="btn btn-s" onclick="switchTreatmentMode('staff')" style="padding:12px;">完成，返回</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 紋繡完成存檔 ──
+window.pmuSubmit=async()=>{
+  const t=S.treatment;if(!t)return;
+  pmuSaveInputs();
+  if(!t.customer){alert('缺少客戶姓名');return;}
+  if(!t.consentSignature){alert('還沒簽同意書');return;}
+
+  const S2=S.data.settings||{};
+  const touchupDays=toN(S2.pmuTouchupDays)||90;
+  const touchupDate=addMonthsToDate(t.date,Math.round(touchupDays/30));
+  const oneYearDate=addMonthsToDate(t.date,12);
+
+  // 紋繡紀錄
+  const record={
+    id:uid(),
+    customer:t.customer,phone:t.phone,lineId:t.lineId,
+    birthday:t.birthday,address:t.address,email:t.email,
+    isMinor:t.isMinor,guardianName:t.guardianName,
+    date:t.date,staff:t.staff,serviceType:t.serviceType,
+    designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
+    conditions:t.conditions,conditionNote:t.conditionNote,
+    allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
+    startTime:t.startTime,endTime:t.endTime,
+    numbCream:t.numbCream,numbTime:t.numbTime,
+    tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
+    consentSignature:t.consentSignature,consentSignedAt:t.consentSignedAt,
+    cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,
+    aftercareGiven:t.aftercareGiven,photoAfterDone:t.photoAfterDone,
+    touchupDate,oneYearDate,
+    touchupDone:false,oneYearReminded:false,
+    createdAt:nowLocal()
+  };
+  const pmuRecords=[...(S.data.pmuRecords||[]),record];
+
+  let updates={pmuRecords};
+  if(t.customer&&!(S.data.customers||[]).find(c=>c.name===t.customer)){
+    updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
+  }
+  await saveMain(updates);
+
+  S.lastPmuRecord=record;
+  t.pmuSubmitted=true;
+  render();
+};
+
+// ── 下載同意書存證圖 ──
+window.downloadPmuConsent=()=>{
+  const r=S.lastPmuRecord;
+  if(!r){alert('找不到紀錄');return;}
+  const S2=S.data.settings||{};
+  const terms=S2.pmuTerms||DEFAULT_PMU_TERMS;
+  const notice=S2.pmuNotice||DEFAULT_PMU_NOTICE;
+  const condStr=(r.conditions||[]).length>0?(r.conditions.join('、')+(r.conditionNote?'；'+r.conditionNote:'')):'無';
+  const allergyStr=(r.allergies||[]).length>0?(r.allergies.join('、')+(r.allergyNote?'；'+r.allergyNote:'')):'無';
+  // 組合完整文字
+  const fullText=`【沐蜜美學・紋繡服務同意書】
+
+顧客姓名：${r.customer}　電話：${r.phone||''}
+服務項目：${r.serviceType}　日期：${r.date}
+身體狀況：${condStr}
+過敏史：${allergyStr}
+${r.isMinor?`未成年，法定代理人：${r.guardianName||''}\n`:''}
+${notice}
+
+${terms.privacy}
+
+${terms.serviceDesc}
+
+${terms.consent}
+
+${terms.media}
+
+${terms.closing}
+
+━━━━━━━━━━━━━━━━━━━
+顧客簽名：（見下方）
+簽署時間：${r.consentSignedAt}`;
+
+  try{
+    const lines=[];
+    fullText.split('\n').forEach(para=>{
+      if(para.length<=30)lines.push(para);
+      else{for(let i=0;i<para.length;i+=30)lines.push(para.substring(i,i+30));}
+    });
+    const lineH=20,pad=36,headH=64,sigH=170,width=680;
+    const height=headH+lines.length*lineH+sigH+pad*2;
+    const canvas=document.createElement('canvas');
+    const scale=2;canvas.width=width*scale;canvas.height=height*scale;
+    const ctx=canvas.getContext('2d');ctx.scale(scale,scale);
+    ctx.fillStyle='#faf5ff';ctx.fillRect(0,0,width,height);
+    ctx.fillStyle='#9333ea';ctx.fillRect(0,0,width,headH);
+    ctx.fillStyle='#fff';ctx.font='bold 20px "Noto Serif TC",serif';ctx.textAlign='center';
+    ctx.fillText('沐蜜美學・紋繡服務同意書',width/2,40);
+    ctx.fillStyle='#333';ctx.font='13px sans-serif';ctx.textAlign='left';
+    let y=headH+pad;
+    lines.forEach(l=>{ctx.fillText(l,pad,y);y+=lineH;});
+    ctx.fillStyle='#666';ctx.font='13px sans-serif';
+    ctx.fillText('顧客簽名：',pad,y+16);
+    if(r.consentSignature){
+      const img=new Image();
+      img.onload=()=>{
+        ctx.drawImage(img,pad+80,y,200,70);
+        ctx.fillStyle='#999';ctx.font='11px sans-serif';
+        ctx.fillText(`簽署時間：${r.consentSignedAt}`,pad,y+96);
+        canvas.toBlob(blob=>{
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a');
+          a.href=url;a.download=`${r.customer}_紋繡同意書.png`;a.click();
+          setTimeout(()=>URL.revokeObjectURL(url),1000);
+        });
+      };
+      img.src=r.consentSignature;
+    }
+  }catch(e){alert('產生同意書圖失敗：'+e.message);}
+};
+
+// ── 複製補色提醒訊息 ──
+window.copyPmuTouchupMsg=()=>{
+  const r=S.lastPmuRecord;
+  if(!r)return;
+  const S2=S.data.settings||{};
+  const tmpl=S2.pmuTouchupMsg||DEFAULT_PMU_TOUCHUP_MSG;
+  const msg=tmpl
+    .replace(/\{客戶\}/g,r.customer||'')
+    .replace(/\{服務\}/g,r.serviceType||'')
+    .replace(/\{補色日期\}/g,r.touchupDate||'');
+  try{navigator.clipboard.writeText(msg);toast('✅ 補色訊息已複製');}
+  catch(e){alert('複製失敗');}
+};
 
 // ───── 🎫 除毛吃到飽包期簽約畫面 ─────
 function pgPassSignView(t){
@@ -10869,6 +11469,57 @@ window.copyPassContractText=()=>{
 };
 
 // ─── 🎫 除毛吃到飽包期簽約流程 ───
+// ═══ 🎨 紋繡服務流程 ═══
+window.startPmuFlow=()=>{
+  S.treatment={
+    mode:'pmu',
+    pmuStage:'design',
+    customer:'',phone:'',lineId:'',
+    birthday:'',address:'',email:'',
+    isMinor:false,guardianName:'',
+    date:today(),
+    staff:TEACHERS[0]||'于蜜',
+    serviceType:'霧眉',
+    designNote:'',designStyle:'',expectation:'',
+    conditions:[],conditionNote:'',allergies:[],allergyNote:'',
+    source:'',
+    consentAgreed:false,consentSignature:null,consentSignedAt:'',
+    startTime:'',endTime:'',numbCream:'',numbTime:'',tools:[],pigments:[],operationNote:'',
+    photoBeforeDone:false,photoAfterDone:false,
+    aftercareGiven:false,cardSigned:false,carePackGiven:false,
+    pmuSubmitted:false
+  };
+  S.page='treatment';
+  render();
+};
+
+window.pmuGoStage=(stage)=>{
+  if(!S.treatment)return;
+  pmuSaveInputs();
+  S.treatment.pmuStage=stage;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  if(stage==='consent'){
+    setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
+  }
+};
+
+function pmuSaveInputs(){
+  const t=S.treatment;if(!t)return;
+  const g=(id)=>$(id)?.value;
+  const set=(id,key)=>{const v=g(id);if(v!==undefined&&v!=='')t[key]=v;};
+  set('pmu_customer','customer');set('pmu_phone','phone');set('pmu_lineId','lineId');
+  set('pmu_birthday','birthday');set('pmu_address','address');set('pmu_email','email');
+  set('pmu_guardian','guardianName');
+  set('pmu_designNote','designNote');set('pmu_designStyle','designStyle');set('pmu_expectation','expectation');
+  set('pmu_conditionNote','conditionNote');set('pmu_allergyNote','allergyNote');
+  set('pmu_operationNote','operationNote');
+  set('pmu_numbTime','numbTime');set('pmu_startTime','startTime');set('pmu_endTime','endTime');
+}
+
+window.cancelPmu=()=>{
+  if(confirm('確定離開紋繡流程？未儲存的內容會消失。'))switchTreatmentMode('staff');
+};
+
 window.startPassSignFlow=()=>{
   const plans=S.data.settings?.passPlans||DEFAULT_PASS_PLANS;
   const p=plans[0]||{};
