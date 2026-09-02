@@ -3160,8 +3160,211 @@ function pgCustomerDetail(c){
     </div>`;
   })()}
 
+  ${(() => {
+    // 🎨 紋繡紀錄
+    const recs=(S.data.pmuRecords||[]).filter(r=>r.customer===c.name).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    if(recs.length===0)return'';
+    const todayStr=today();
+    return`<div class="sec" style="margin-top:20px;">
+      <div class="sec-hd"><span class="sec-ttl" style="color:#9333ea;">🎨 紋繡紀錄（${recs.length} 筆）</span></div>
+      ${recs.map(r=>{
+        const touchupSoon=r.touchupDate&&!r.touchupDone&&r.touchupDate>=todayStr;
+        const touchupOver=r.touchupDate&&!r.touchupDone&&r.touchupDate<todayStr;
+        return`<div class="card" style="margin-bottom:10px;border-left:4px solid #9333ea;">
+          <div class="card-bd">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+              <b style="font-size:15px;">${r.serviceType||'紋繡'}　<span class="tm" style="font-size:13px;">${r.date}</span></b>
+              ${r.consentSignature?'<span class="bdg grn">✓ 已簽同意書</span>':'<span class="bdg" style="background:var(--redL);color:var(--red);">未簽同意書</span>'}
+            </div>
+            <div class="tm" style="font-size:13px;margin-top:8px;line-height:1.8;">
+              ${r.designStyle?`風格：${r.designStyle}<br>`:''}
+              ${(r.tools||[]).length>0?`工具：${r.tools.join('、')}<br>`:''}
+              ${(r.pigments||[]).length>0?`色乳：${r.pigments.join('、')}<br>`:''}
+              ${r.numbCream?`麻膏：${r.numbCream}　`:''}${r.numbTime?`敷麻：${r.numbTime}<br>`:''}
+              ${r.operationNote?`備註：${r.operationNote}<br>`:''}
+              ${r.touchupDate?`📅 補色日：<b style="color:${touchupOver?'var(--red)':'#9333ea'};">${r.touchupDate}</b>${r.touchupDone?'（已補色✓）':touchupOver?'（已過期）':'（未補色）'}<br>`:''}
+              ${r.oneYearDate?`🗓️ 滿一年：${r.oneYearDate}`:''}
+            </div>
+            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+              <button class="btn btn-s btn-sm" onclick="viewPmuRecord('${r.id}')">📋 看完整</button>
+              ${r.consentSignature?`<button class="btn btn-s btn-sm" onclick="viewPmuSignature('${r.id}')">✍️ 看簽名</button><button class="btn btn-s btn-sm" onclick="downloadPmuRecordConsent('${r.id}')">🖼️ 下載同意書</button>`:''}
+              <button class="btn btn-sm" style="background:var(--gold);color:#fff;" onclick="openM('editPmu','${r.id}')">✏️ 編輯</button>
+              <button class="bdel" onclick="delPmuRecord('${r.id}')">×</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  })()}
+
   ${pgTreatmentRecords(c)}`;
 }
+
+window.diagnosePmu=()=>{
+  const recs=S.data.pmuRecords||[];
+  const custs=(S.data.customers||[]).map(c=>c.name);
+  let msg=`【紋繡紀錄診斷】\n\n系統裡共有 ${recs.length} 筆紋繡紀錄。\n\n`;
+  if(recs.length===0){
+    msg+='⚠️ 一筆都沒有！\n\n可能原因：\n1. 走流程時沒按到最後的「✓ 完成並存檔」\n2. 存檔時網路中斷\n\n請重新走一次紋繡流程，確認最後有按「完成並存檔」，看到「紋繡完成」的畫面才算成功。';
+  }else{
+    msg+='存的紀錄：\n';
+    recs.forEach((r,i)=>{
+      const nameInCust=custs.includes(r.customer);
+      msg+=`${i+1}. 客戶「${r.customer}」 ${r.serviceType||''} ${r.date||''}${r.consentSignature?' ✓有簽名':' ✗無簽名'}\n   ${nameInCust?'✓ 客戶檔案裡有這個名字':'⚠️ 客戶檔案裡沒有這個名字（名字對不上）'}\n`;
+    });
+    const mismatch=recs.filter(r=>!custs.includes(r.customer));
+    if(mismatch.length>0){
+      msg+=`\n⚠️ 有 ${mismatch.length} 筆的客戶名字，跟客戶檔案對不上（可能有空白或錯字），所以客戶頁看不到。\n\n要幫你自動修正嗎？（把紋繡紀錄的名字，補進客戶檔案）`;
+      if(confirm(msg)){
+        fixPmuCustomerNames();
+        return;
+      }
+      return;
+    }
+  }
+  alert(msg);
+};
+
+window.fixPmuCustomerNames=async()=>{
+  const recs=S.data.pmuRecords||[];
+  const custs=S.data.customers||[];
+  const custNames=custs.map(c=>c.name);
+  const toAdd=[];
+  recs.forEach(r=>{
+    const name=(r.customer||'').trim();
+    if(name&&!custNames.includes(name)&&!toAdd.find(x=>x.name===name)){
+      toAdd.push({id:uid(),name,phone:r.phone||'',createdAt:today()});
+    }
+  });
+  if(toAdd.length===0){alert('沒有需要修正的');return;}
+  // 同時把紋繡紀錄的 customer 去除頭尾空白
+  const pmuRecords=recs.map(r=>({...r,customer:(r.customer||'').trim()}));
+  await saveMain({customers:[...custs,...toAdd],pmuRecords});
+  alert(`✅ 已修正！補了 ${toAdd.length} 個客戶進客戶檔案。\n\n現在去客戶管理應該看得到紋繡紀錄了。`);
+  render();
+};
+
+// 紋繡編輯：切換工具/色乳
+window.epmuToggle=(field,val)=>{
+  if(!S.modal||!S.modal.epmu)return;
+  if(!Array.isArray(S.modal.epmu[field]))S.modal.epmu[field]=[];
+  const arr=S.modal.epmu[field];
+  const i=arr.indexOf(val);
+  if(i>=0)arr.splice(i,1);else arr.push(val);
+  const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();
+};
+
+window.epmuRecalc=()=>{
+  // 改日期時可即時重算（目前補色日獨立欄位，這裡先保留）
+};
+
+window.saveEditPmu=async(id)=>{
+  const g=(k)=>$('epmu_'+k)?.value;
+  const e=S.modal?.epmu||{};
+  const updated={
+    customer:g('customer')?.trim()||'',
+    phone:g('phone')?.trim()||'',
+    serviceType:g('serviceType')?.trim()||'',
+    date:g('date')||'',
+    designStyle:g('designStyle')?.trim()||'',
+    designNote:g('designNote')||'',
+    numbCream:g('numbCream')?.trim()||'',
+    numbTime:g('numbTime')?.trim()||'',
+    tools:e.tools||[],
+    pigments:e.pigments||[],
+    operationNote:g('operationNote')||'',
+    touchupDate:g('touchupDate')||'',
+    touchupDone:$('epmu_touchupDone')?.checked||false
+  };
+  const pmuRecords=(S.data.pmuRecords||[]).map(x=>x.id===id?{...x,...updated}:x);
+  await saveMain({pmuRecords});
+  toast('✅ 紋繡紀錄已更新');
+  closeMod();
+  render();
+};
+
+// 看完整紋繡紀錄
+window.viewPmuRecord=(id)=>{
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r)return;
+  const condStr=(r.conditions||[]).length>0?(r.conditions.join('、')+(r.conditionNote?'；'+r.conditionNote:'')):'無';
+  const allergyStr=(r.allergies||[]).length>0?(r.allergies.join('、')+(r.allergyNote?'；'+r.allergyNote:'')):'無';
+  const html=`<div class="mttl">📋 ${r.customer} 的紋繡紀錄</div>
+    <div style="max-height:65vh;overflow-y:auto;font-size:14px;line-height:2;">
+      <div style="background:var(--bg2);padding:14px;border-radius:10px;">
+        <b>基本資料</b><br>
+        姓名：${r.customer}　電話：${r.phone||''}<br>
+        ${r.birthday?`生日：${r.birthday}　`:''}${r.lineId?`LINE：${r.lineId}`:''}<br>
+        ${r.address?`地址：${r.address}<br>`:''}${r.email?`Email：${r.email}<br>`:''}
+        ${r.isMinor?`<span style="color:var(--red);">未成年，法代：${r.guardianName||''}</span><br>`:''}
+        ${r.source?`來源：${r.source}${r.referrer?'（'+r.referrer+'）':''}`:''}
+      </div>
+      <div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-top:10px;">
+        <b>服務與設計</b><br>
+        項目：${r.serviceType}　日期：${r.date}　老師：${r.staff||''}<br>
+        ${r.designStyle?`風格：${r.designStyle}<br>`:''}
+        ${r.expectation?`期待：${r.expectation}<br>`:''}
+        ${r.designNote?`設計溝通：${r.designNote}`:''}
+      </div>
+      <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
+        <b>身體狀況</b><br>
+        痼疾：${condStr}<br>過敏：${allergyStr}
+      </div>
+      <div style="background:var(--roseL);padding:14px;border-radius:10px;margin-top:10px;">
+        <b>操作紀錄</b><br>
+        ${r.startTime||r.endTime?`時間：${r.startTime||'?'} ~ ${r.endTime||'?'}<br>`:''}
+        ${r.numbCream?`麻膏：${r.numbCream}　`:''}${r.numbTime?`敷麻：${r.numbTime}<br>`:''}
+        ${(r.tools||[]).length>0?`工具：${r.tools.join('、')}<br>`:''}
+        ${(r.pigments||[]).length>0?`色乳：${r.pigments.join('、')}<br>`:''}
+        ${r.operationNote?`備註：${r.operationNote}`:''}
+      </div>
+      <div style="background:var(--goldL);padding:14px;border-radius:10px;margin-top:10px;">
+        <b>後續</b><br>
+        📅 補色日：${r.touchupDate||'-'}${r.touchupDone?'（已補色）':''}<br>
+        🗓️ 滿一年：${r.oneYearDate||'-'}<br>
+        ${r.cardSigned?'✓ 已簽售後小卡　':'✗ 未簽售後小卡　'}<br>
+        ${r.carePackGiven?'✓ 已給護理包　':'✗ 未給護理包　'}<br>
+        ${r.aftercareGiven?'✓ 已衛教':'✗ 未衛教'}
+      </div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button><button class="btn btn-p" style="background:var(--gold);" onclick="openM('editPmu','${r.id}')">✏️ 編輯</button></div>`;
+  S.modal={t:'pmuView',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+};
+
+window.viewPmuSignature=(id)=>{
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r||!r.consentSignature){alert('沒有簽名');return;}
+  const html=`<div class="mttl">✍️ ${r.customer} 的同意書簽名</div>
+    <div style="text-align:center;padding:10px;">
+      <div class="tm" style="font-size:13px;margin-bottom:10px;">簽署時間：${r.consentSignedAt||''}</div>
+      <div style="background:#fff;border:2px solid #9333ea;border-radius:12px;padding:10px;display:inline-block;">
+        <img src="${r.consentSignature}" style="max-width:100%;height:auto;">
+      </div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+  S.modal={t:'pmuSig',html,lg:true};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal lg';}
+};
+
+window.downloadPmuRecordConsent=(id)=>{
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r){alert('找不到');return;}
+  S.lastPmuRecord=r;
+  downloadPmuConsent();
+};
+
+window.delPmuRecord=async(id)=>{
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm(`確定刪除 ${r.customer} 的紋繡紀錄（${r.date}）？\n⚠️ 含同意書簽名，刪除後無法復原。`))return;
+  const pmuRecords=(S.data.pmuRecords||[]).filter(x=>x.id!==id);
+  await saveMain({pmuRecords});
+  toast('已刪除');
+  render();
+};
 
 // 補入帳（給之前簽了但錢沒進的合約用）
 window.epUpdateEnd=()=>{
@@ -5137,6 +5340,9 @@ window.pmuSubmit=async()=>{
   if(t.customer&&!(S.data.customers||[]).find(c=>c.name===t.customer)){
     updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
   }
+  // 先更新本地，確保存完立刻看得到（不等 onSnapshot）
+  S.data.pmuRecords=pmuRecords;
+  if(updates.customers)S.data.customers=updates.customers;
   await saveMain(updates);
 
   S.lastPmuRecord=record;
@@ -6951,6 +7157,10 @@ function pgSettings(){
           <div class="tm" style="font-size:11px;margin-top:4px;">用所有進貨紀錄重新計算每個產品的平均成本（總成本÷總數量）。手動改錯成本、或進貨資料修正後，用這個同步回正確數字</div>
         </div>
         <div>
+          <button class="btn" style="background:#9333ea;color:#fff;" onclick="diagnosePmu()">🔍 紋繡紀錄診斷</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">如果客戶頁看不到紋繡紀錄，點這個看系統裡到底存了幾筆、存的客戶名字是什麼</div>
+        </div>
+        <div>
           <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanDuplicatePurchase()">🧹 清理重複的進貨紀錄</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">如果同一筆進貨變成兩行（一筆未付款、一筆已付款），用這個找出並刪掉重複的，優先保留已付款那筆。會一併清掉重複的支出/現金流</div>
         </div>
@@ -8330,6 +8540,53 @@ function renderModal(){
   }
 
   // ─── 🎁 試用包管理 ───
+  // ─── ✏️ 編輯紋繡紀錄 ───
+  if(m.t==='editPmu'){
+    const r=(S.data.pmuRecords||[]).find(x=>x.id===m.x)||{};
+    const S2=S.data.settings||{};
+    const tools=S2.pmuTools||['圓針','排針','霧針','手工排','機器'];
+    const pigments=S2.pmuPigments||['棕色','咖啡色','灰棕色','紅棕色','橘調'];
+    if(!S.modal.epmu)S.modal.epmu=JSON.parse(JSON.stringify(r));
+    const e=S.modal.epmu;
+    c=`<div class="mttl">✏️ 編輯紋繡紀錄</div>
+    <div style="max-height:65vh;overflow-y:auto;">
+      <div class="fg fg2">
+        <div class="fgrp"><label>姓名</label><input type="text" id="epmu_customer" value="${(e.customer||'').replace(/"/g,'&quot;')}"></div>
+        <div class="fgrp"><label>電話</label><input type="text" id="epmu_phone" value="${(e.phone||'').replace(/"/g,'&quot;')}"></div>
+        <div class="fgrp"><label>服務項目</label><input type="text" id="epmu_serviceType" value="${(e.serviceType||'').replace(/"/g,'&quot;')}"></div>
+        <div class="fgrp"><label>日期</label><input type="date" id="epmu_date" value="${e.date||''}" onchange="epmuRecalc()"></div>
+      </div>
+      <div class="fgrp"><label>風格</label><input type="text" id="epmu_designStyle" value="${(e.designStyle||'').replace(/"/g,'&quot;')}"></div>
+      <div class="fgrp"><label>設計溝通紀錄</label><textarea id="epmu_designNote" rows="2">${e.designNote||''}</textarea></div>
+      <div class="fg fg2">
+        <div class="fgrp"><label>麻膏</label><input type="text" id="epmu_numbCream" value="${(e.numbCream||'').replace(/"/g,'&quot;')}"></div>
+        <div class="fgrp"><label>敷麻時間</label><input type="text" id="epmu_numbTime" value="${(e.numbTime||'').replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div class="fgrp"><label>工具（可複選）</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${tools.map(tool=>{const on=(e.tools||[]).includes(tool);return`<button type="button" style="padding:6px 12px;background:${on?'var(--grn)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="epmuToggle('tools','${tool.replace(/'/g,"&#39;")}')">${on?'✓ ':''}${tool}</button>`;}).join('')}
+        </div>
+      </div>
+      <div class="fgrp"><label>色乳（可複選）</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${pigments.map(pig=>{const on=(e.pigments||[]).includes(pig);return`<button type="button" style="padding:6px 12px;background:${on?'var(--rose)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="epmuToggle('pigments','${pig.replace(/'/g,"&#39;")}')">${on?'✓ ':''}${pig}</button>`;}).join('')}
+        </div>
+      </div>
+      <div class="fgrp"><label>操作備註</label><textarea id="epmu_operationNote" rows="3">${e.operationNote||''}</textarea></div>
+      <div class="fgrp" style="background:var(--goldL);padding:10px;border-radius:8px;">
+        <label>補色日期</label><input type="date" id="epmu_touchupDate" value="${e.touchupDate||''}">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;">
+          <input type="checkbox" id="epmu_touchupDone" ${e.touchupDone?'checked':''}> 已完成補色
+        </label>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" onclick="saveEditPmu('${m.x}')">✓ 儲存修改</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── ✏️ 編輯除毛吃到飽合約 ───
   if(m.t==='editPass'){
     const p=(S.data.passContracts||[]).find(x=>x.id===m.x)||{};
