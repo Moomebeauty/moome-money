@@ -4794,7 +4794,7 @@ function pmuDesignStage(t){
       <div class="card-bd">
         <div class="fgrp"><label>服務項目</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            ${['霧眉','霧唇','霧眉+霧唇'].map(s=>`<label style="padding:8px 16px;background:${t.serviceType===s?'#9333ea':'var(--bg2)'};color:${t.serviceType===s?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:14px;" onclick="S.treatment.serviceType='${s}';pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();">${s}</label>`).join('')}
+            ${['霧眉','霧唇','霧眉+霧唇'].map(s=>`<button type="button" style="padding:8px 16px;background:${t.serviceType===s?'#9333ea':'var(--bg2)'};color:${t.serviceType===s?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:14px;" onclick="pmuSet('serviceType','${s}')">${s}</button>`).join('')}
           </div>
         </div>
         <div class="fgrp" style="margin-top:10px;"><label>客人想要的風格</label>
@@ -4832,15 +4832,16 @@ function pmuDesignStage(t){
         </div>
         <div class="fgrp" style="margin-top:12px;"><label>如何知道本店？</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${sources.map(s=>`<label style="padding:6px 12px;background:${t.source===s?'var(--pur)':'var(--bg2)'};color:${t.source===s?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="S.treatment.source='${s.replace(/'/g,"\\'")}';pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();">${t.source===s?'✓ ':''}${s}</label>`).join('')}
+            ${sources.map(s=>`<button type="button" style="padding:6px 12px;background:${t.source===s?'var(--pur)':'var(--bg2)'};color:${t.source===s?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('source','${s.replace(/'/g,"&#39;")}')">${t.source===s?'✓ ':''}${s}</button>`).join('')}
           </div>
+          ${(t.source||'').includes('介紹')||(t.source||'').includes('朋友')?`<div class="fgrp" style="margin-top:8px;"><label style="font-size:12px;">介紹人姓名</label><input type="text" id="pmu_referrer" value="${(t.referrer||'').replace(/"/g,'&quot;')}" placeholder="是誰介紹的呢？" oninput="S.treatment.referrer=this.value"></div>`:''}
         </div>
       </div>
     </div>
 
     <div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;">
       <div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人決定要做了？</div>
-      <button class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuSaveInputs();pmuGoStage('consent')">
+      <button type="button" class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuNext('consent')">
         客人確定 → 交給客人簽同意書 →
       </button>
     </div>`;
@@ -5002,7 +5003,7 @@ function pmuOperationStage(t){
     </div>
 
     <div style="text-align:center;">
-      <button class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuSaveInputs();pmuGoStage('finish')">
+      <button type="button" class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuNext('finish')">
         操作完成 → 下一步（衛教/結帳提醒）→
       </button>
     </div>`;
@@ -5013,6 +5014,21 @@ window.pmuPick=(field,val)=>{
   S.treatment[field]=val;
   pmuSaveInputs();
   const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// 統一設值並重繪（給服務項目、來源等單選用）
+window.pmuSet=(field,val)=>{
+  if(!S.treatment)return;
+  pmuSaveInputs();
+  S.treatment[field]=val;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// 前往下一階段（具名函式，避免 onclick 內嵌失敗）
+window.pmuNext=(stage)=>{
+  if(!S.treatment)return;
+  pmuSaveInputs();
+  pmuGoStage(stage);
 };
 
 // ── 階段④ 完成提醒 ──
@@ -11513,6 +11529,7 @@ function pmuSaveInputs(){
   set('pmu_designNote','designNote');set('pmu_designStyle','designStyle');set('pmu_expectation','expectation');
   set('pmu_conditionNote','conditionNote');set('pmu_allergyNote','allergyNote');
   set('pmu_operationNote','operationNote');
+  set('pmu_referrer','referrer');
   set('pmu_numbTime','numbTime');set('pmu_startTime','startTime');set('pmu_endTime','endTime');
 }
 
