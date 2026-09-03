@@ -391,6 +391,10 @@ const DEFAULT_PMU_YEARLY_MSG=`親愛的 {客戶} 您好 🌸
 想預約或有任何問題，都可以直接回覆我唷～
 好久不見，很想念您 🌷`;
 
+const DEFAULT_PMU_TOOLS_D=['圓針','排針','霧針','手工排','機器','1針','3針','5針'];
+const DEFAULT_PMU_PIGMENTS_D=['棕色','咖啡色','灰棕色','紅棕色','橘調','奶茶色','深棕'];
+const DEFAULT_PMU_NUMBCREAMS_D=['表面麻','注射前麻','二次麻','舒緩凝膠'];
+const DEFAULT_PMU_NUMBTIMES_D=['20分','30分','40分','45分','60分'];
 const DEFAULT_PMU_CONDITIONS=['癌症','糖尿病','甲狀腺疾病','心臟病','荷爾蒙失調','頭痛','失眠','貧血','高血壓','血友病','愛滋病','B型肝炎','皮膚病','蕁麻疹','異位性皮膚炎','白血病','癲癇','氣喘','乾癬'];
 
 // 過敏項目清單（基本設定可增減）
@@ -1611,6 +1615,34 @@ function pgOverview(){
   ${moSel()}
 
   ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')}　數量不足，請盡快補貨</div>`:''}
+
+  ${(() => {
+    // 🎨 紋繡提醒：補色到期、滿一年回訪
+    const recs=S.data.pmuRecords||[];
+    if(recs.length===0)return'';
+    const todayStr=today();
+    const in14=addMonthsToDate(todayStr,0);
+    const d14=new Date();d14.setDate(d14.getDate()+14);
+    const in14Str=`${d14.getFullYear()}-${String(d14.getMonth()+1).padStart(2,'0')}-${String(d14.getDate()).padStart(2,'0')}`;
+    // 補色：14天內到期或已過期、還沒補色
+    const touchupDue=recs.filter(r=>r.touchupDate&&!r.touchupDone&&r.touchupDate<=in14Str);
+    // 滿一年：到了滿一年日期、還沒提醒過
+    const yearlyDue=recs.filter(r=>r.oneYearDate&&!r.oneYearReminded&&r.oneYearDate<=todayStr);
+    let html='';
+    if(touchupDue.length>0){
+      html+=`<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#9333ea;">
+        🎨 <b>補色提醒（${touchupDue.length} 位）</b>：${touchupDue.map(r=>`${r.customer}（${r.touchupDate}${r.touchupDate<todayStr?' 已過期':''}）`).join('、')}
+        <div style="margin-top:6px;">${touchupDue.map(r=>`<button class="btn btn-sm" style="background:#9333ea;color:#fff;margin:2px;" onclick="pmuSendTouchup('${r.id}')">💬 傳訊給 ${r.customer}</button>`).join('')}</div>
+      </div>`;
+    }
+    if(yearlyDue.length>0){
+      html+=`<div class="notice" style="background:var(--roseL);border-left-color:var(--rose);color:var(--roseDk);">
+        🗓️ <b>滿一年回訪（${yearlyDue.length} 位）</b>：${yearlyDue.map(r=>r.customer).join('、')} 的紋繡滿一年了，該關心一下囉～
+        <div style="margin-top:6px;">${yearlyDue.map(r=>`<button class="btn btn-sm" style="background:var(--rose);color:#fff;margin:2px;" onclick="pmuSendYearly('${r.id}')">💬 傳訊給 ${r.customer}</button>`).join('')}</div>
+      </div>`;
+    }
+    return html;
+  })()}
 
   ${!thisQReviewed?`<div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);">
     📅 第 ${curQ} 季尚未做季度檢視　
@@ -3200,6 +3232,124 @@ function pgCustomerDetail(c){
   ${pgTreatmentRecords(c)}`;
 }
 
+// 補色提醒：複製訊息
+window.pmuSendTouchup=(id)=>{
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r)return;
+  const tmpl=S.data.settings?.pmuTouchupMsg||DEFAULT_PMU_TOUCHUP_MSG;
+  const msg=tmpl.replace(/\{客戶\}/g,r.customer||'').replace(/\{服務\}/g,r.serviceType||'').replace(/\{補色日期\}/g,r.touchupDate||'');
+  const html=`<div class="mttl">💬 傳給 ${r.customer} 的補色提醒</div>
+    <textarea id="pmu_msg_copy" rows="10" readonly style="width:100%;font-size:14px;line-height:1.7;background:var(--bg2);">${msg}</textarea>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn btn-y" onclick="pmuMarkTouchupDone('${id}')">✓ 標記已補色</button>
+      <button class="btn btn-p" onclick="pmuCopyMsg()">📋 複製訊息</button>
+    </div>`;
+  S.modal={t:'pmuMsg',html,lg:false};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal';}
+};
+
+window.pmuSendYearly=(id)=>{
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r)return;
+  const tmpl=S.data.settings?.pmuYearlyMsg||DEFAULT_PMU_YEARLY_MSG;
+  const msg=tmpl.replace(/\{客戶\}/g,r.customer||'').replace(/\{服務\}/g,r.serviceType||'');
+  const html=`<div class="mttl">💬 傳給 ${r.customer} 的回訪訊息</div>
+    <textarea id="pmu_msg_copy" rows="10" readonly style="width:100%;font-size:14px;line-height:1.7;background:var(--bg2);">${msg}</textarea>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn btn-y" onclick="pmuMarkYearlyDone('${id}')">✓ 已聯絡，不再提醒</button>
+      <button class="btn btn-p" onclick="pmuCopyMsg()">📋 複製訊息</button>
+    </div>`;
+  S.modal={t:'pmuMsg',html,lg:false};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal';}
+};
+
+window.pmuCopyMsg=()=>{
+  const ta=$('pmu_msg_copy');if(!ta)return;
+  try{navigator.clipboard.writeText(ta.value);toast('✅ 已複製，貼到 LINE 傳給客人');}
+  catch(e){ta.select();try{document.execCommand('copy');toast('✅ 已複製');}catch(e2){alert('複製失敗');}}
+};
+
+window.pmuMarkTouchupDone=async(id)=>{
+  const pmuRecords=(S.data.pmuRecords||[]).map(x=>x.id===id?{...x,touchupDone:true}:x);
+  S.data.pmuRecords=pmuRecords;
+  await saveMain({pmuRecords});
+  toast('✅ 已標記補色完成');
+  closeMod();render();
+};
+
+window.pmuMarkYearlyDone=async(id)=>{
+  const pmuRecords=(S.data.pmuRecords||[]).map(x=>x.id===id?{...x,oneYearReminded:true}:x);
+  S.data.pmuRecords=pmuRecords;
+  await saveMain({pmuRecords});
+  toast('✅ 已標記已聯絡');
+  closeMod();render();
+};
+
+// ═══ 🎨 紋繡設定操作 ═══
+window.pmuListEdit=(i,val)=>{if(S.modal?.listDraft)S.modal.listDraft[i]=val;};
+window.pmuListDel=(i)=>{if(!S.modal?.listDraft)return;S.modal.listDraft.splice(i,1);const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
+window.pmuListAdd=()=>{if(!S.modal)return;if(!S.modal.listDraft)S.modal.listDraft=[];S.modal.listDraft.push('');const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
+window.pmuListReset=(key)=>{
+  const defMap={pmuTools:DEFAULT_PMU_TOOLS_D,pmuPigments:DEFAULT_PMU_PIGMENTS_D,pmuNumbCreams:DEFAULT_PMU_NUMBCREAMS_D,pmuNumbTimes:DEFAULT_PMU_NUMBTIMES_D,pmuConditions:DEFAULT_PMU_CONDITIONS,pmuAllergies:DEFAULT_PMU_ALLERGIES,pmuSources:DEFAULT_PMU_SOURCES};
+  if(!confirm('還原成預設清單？'))return;
+  S.modal.listDraft=[...(defMap[key]||[])];
+  const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();
+};
+window.savePmuList=async(key)=>{
+  const list=(S.modal?.listDraft||[]).map(x=>(x||'').trim()).filter(x=>x);
+  const settings={...(S.data.settings||{}),[key]:list};
+  S.data.settings=settings;
+  await saveMain({settings});
+  S.modal.listDraft=null;
+  toast('✅ 已儲存');
+  openM('pmuSettings');
+};
+
+window.savePmuText=async(key)=>{
+  const val=$('pmu_text_edit')?.value||'';
+  const settings={...(S.data.settings||{}),[key]:val};
+  S.data.settings=settings;
+  await saveMain({settings});
+  toast('✅ 已儲存');
+  openM('pmuSettings');
+};
+window.pmuTextReset=(key)=>{
+  const defMap={pmuNotice:DEFAULT_PMU_NOTICE,pmuTouchupMsg:DEFAULT_PMU_TOUCHUP_MSG,pmuYearlyMsg:DEFAULT_PMU_YEARLY_MSG};
+  if(!confirm('還原成預設內容？'))return;
+  const ta=$('pmu_text_edit');if(ta)ta.value=defMap[key]||'';
+  toast('已還原，記得按儲存');
+};
+
+window.pmuTermsTab=(k)=>{if(!S.modal)return;S.modal.termsWhich=k;const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
+window.savePmuTerms=async()=>{
+  const which=S.modal?.termsWhich||'privacy';
+  const val=$('pmu_terms_edit')?.value||'';
+  const terms={...(S.data.settings?.pmuTerms||DEFAULT_PMU_TERMS),[which]:val};
+  const settings={...(S.data.settings||{}),pmuTerms:terms};
+  S.data.settings=settings;
+  await saveMain({settings});
+  toast('✅ 已儲存這段');
+};
+window.pmuTermsReset=()=>{
+  const which=S.modal?.termsWhich||'privacy';
+  if(!confirm('這段還原成預設？'))return;
+  const ta=$('pmu_terms_edit');if(ta)ta.value=DEFAULT_PMU_TERMS[which]||'';
+  toast('已還原，記得按儲存');
+};
+
+window.savePmuTouchupDays=async(val)=>{
+  const days=parseInt(val)||90;
+  const settings={...(S.data.settings||{}),pmuTouchupDays:days};
+  S.data.settings=settings;
+  await saveMain({settings});
+  toast('✅ 補色期限已設為 '+days+' 天');
+};
+
+// ═══ 🎨 紋繡設定操作 END ═══
 window.diagnosePmu=()=>{
   const recs=S.data.pmuRecords||[];
   const custs=(S.data.customers||[]).map(c=>c.name);
@@ -7110,6 +7260,18 @@ function pgSettings(){
     </div>
   </div>
 
+  <div class="card" style="background:#faf5ff;border:1px solid #9333ea;margin-bottom:14px;">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:#9333ea;">🎨 紋繡設定</span>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;line-height:1.7;">
+        設定紋繡服務時「無腦勾選」的選項（工具、色乳、麻膏等），以及同意書內容、須知、補色/回訪訊息。設好之後做紋繡時直接點選就好。
+      </div>
+      <button class="btn" style="background:#9333ea;color:#fff;" onclick="openM('pmuSettings')">🎨 紋繡選項與同意書設定</button>
+    </div>
+  </div>
+
   <div class="card" style="background:var(--bluL);border:1px solid var(--blu);">
     <div class="card-hd" style="background:transparent;border:none;">
       <span class="card-ttl" style="color:var(--blu);">🔧 資料修復工具</span>
@@ -8540,6 +8702,124 @@ function renderModal(){
   }
 
   // ─── 🎁 試用包管理 ───
+  // ─── 🎨 紋繡設定總覽 ───
+  if(m.t==='pmuSettings'){
+    const S2=S.data.settings||{};
+    const count=(arr,def)=>((S2[arr]||def)||[]).length;
+    c=`<div class="mttl">🎨 紋繡選項與同意書設定</div>
+    <div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#9333ea;font-size:12px;">
+      這裡設定好，做紋繡時就能直接勾選。改完的內容會即時套用到紋繡流程。
+    </div>
+    <div style="max-height:65vh;overflow-y:auto;margin-top:12px;">
+
+      <div style="font-weight:700;color:#9333ea;margin:12px 0 8px;">📋 勾選項目（做紋繡時用）</div>
+      ${[
+        {key:'pmuTools',label:'🔧 使用工具',def:'DEFAULT_PMU_TOOLS_HINT'},
+        {key:'pmuPigments',label:'🎨 色乳',def:''},
+        {key:'pmuNumbCreams',label:'🧴 麻膏',def:''},
+        {key:'pmuNumbTimes',label:'⏱️ 敷麻時間',def:''},
+        {key:'pmuConditions',label:'🩺 痼疾/現症清單',def:''},
+        {key:'pmuAllergies',label:'🌾 過敏項目',def:''},
+        {key:'pmuSources',label:'📢 得知管道',def:''}
+      ].map(item=>{
+        const defMap={pmuTools:DEFAULT_PMU_TOOLS_D,pmuPigments:DEFAULT_PMU_PIGMENTS_D,pmuNumbCreams:DEFAULT_PMU_NUMBCREAMS_D,pmuNumbTimes:DEFAULT_PMU_NUMBTIMES_D,pmuConditions:DEFAULT_PMU_CONDITIONS,pmuAllergies:DEFAULT_PMU_ALLERGIES,pmuSources:DEFAULT_PMU_SOURCES};
+        const list=S2[item.key]||defMap[item.key]||[];
+        return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:6px;">
+          <div><b style="font-size:14px;">${item.label}</b><div class="tm" style="font-size:11px;">${list.length} 個：${list.slice(0,4).join('、')}${list.length>4?'...':''}</div></div>
+          <button class="btn btn-s btn-sm" onclick="openM('pmuEditList','${item.key}')">✏️ 編輯</button>
+        </div>`;
+      }).join('')}
+
+      <div style="font-weight:700;color:#9333ea;margin:16px 0 8px;">📜 文字內容</div>
+      ${[
+        {key:'pmuNotice',label:'📋 紋繡須知'},
+        {key:'pmuTouchupMsg',label:'💬 補色提醒訊息'},
+        {key:'pmuYearlyMsg',label:'🗓️ 滿一年回訪訊息'}
+      ].map(item=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:6px;">
+          <b style="font-size:14px;">${item.label}</b>
+          <button class="btn btn-s btn-sm" onclick="openM('pmuEditText','${item.key}')">✏️ 編輯</button>
+        </div>`).join('')}
+
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:6px;">
+        <div><b style="font-size:14px;">📄 同意書全文（5 段）</b><div class="tm" style="font-size:11px;">須知、個資、服務說明、同意書、多媒體</div></div>
+        <button class="btn btn-s btn-sm" onclick="openM('pmuEditTerms')">✏️ 編輯</button>
+      </div>
+
+      <div style="font-weight:700;color:#9333ea;margin:16px 0 8px;">⚙️ 其他設定</div>
+      <div style="padding:10px;background:var(--bg2);border-radius:8px;">
+        <label style="font-size:14px;">免費補色期限（天）</label>
+        <input type="number" id="pmu_touchupDays" value="${toN(S2.pmuTouchupDays)||90}" style="margin-top:4px;" onchange="savePmuTouchupDays(this.value)">
+        <div class="tm" style="font-size:11px;margin-top:4px;">預設 90 天（3個月）。做完紋繡系統會自動算補色日期</div>
+      </div>
+    </div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯勾選清單（工具/色乳等）───
+  if(m.t==='pmuEditList'){
+    const key=m.x;
+    const S2=S.data.settings||{};
+    const defMap={pmuTools:DEFAULT_PMU_TOOLS_D,pmuPigments:DEFAULT_PMU_PIGMENTS_D,pmuNumbCreams:DEFAULT_PMU_NUMBCREAMS_D,pmuNumbTimes:DEFAULT_PMU_NUMBTIMES_D,pmuConditions:DEFAULT_PMU_CONDITIONS,pmuAllergies:DEFAULT_PMU_ALLERGIES,pmuSources:DEFAULT_PMU_SOURCES};
+    const labelMap={pmuTools:'使用工具',pmuPigments:'色乳',pmuNumbCreams:'麻膏',pmuNumbTimes:'敷麻時間',pmuConditions:'痼疾/現症清單',pmuAllergies:'過敏項目',pmuSources:'得知管道'};
+    if(!S.modal.listDraft)S.modal.listDraft=[...(S2[key]||defMap[key]||[])];
+    const list=S.modal.listDraft;
+    c=`<div class="mttl">✏️ 編輯：${labelMap[key]||key}</div>
+    <div class="notice" style="background:var(--bg2);color:var(--mut);font-size:12px;">增加或刪除項目，做紋繡時就是勾這些。</div>
+    <div id="pmu_list_items" style="max-height:45vh;overflow-y:auto;margin-top:12px;">
+      ${list.map((item,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+        <input type="text" value="${(item||'').replace(/"/g,'&quot;')}" onchange="pmuListEdit(${i},this.value)" style="flex:1;">
+        <button class="bdel" onclick="pmuListDel(${i})">×</button>
+      </div>`).join('')}
+    </div>
+    <button class="btn btn-s btn-sm" style="margin-top:8px;" onclick="pmuListAdd()">＋ 新增項目</button>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="S.modal.listDraft=null;openM('pmuSettings')">取消</button>
+      <button class="btn btn-y" onclick="pmuListReset('${key}')">↺ 還原預設</button>
+      <button class="btn btn-p" onclick="savePmuList('${key}')">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯文字（須知/訊息）───
+  if(m.t==='pmuEditText'){
+    const key=m.x;
+    const S2=S.data.settings||{};
+    const defMap={pmuNotice:DEFAULT_PMU_NOTICE,pmuTouchupMsg:DEFAULT_PMU_TOUCHUP_MSG,pmuYearlyMsg:DEFAULT_PMU_YEARLY_MSG};
+    const labelMap={pmuNotice:'紋繡須知',pmuTouchupMsg:'補色提醒訊息',pmuYearlyMsg:'滿一年回訪訊息'};
+    const val=S2[key]||defMap[key]||'';
+    const hasVars=key==='pmuTouchupMsg'||key==='pmuYearlyMsg';
+    c=`<div class="mttl">✏️ 編輯：${labelMap[key]||key}</div>
+    ${hasVars?`<div class="notice" style="background:var(--goldL);color:var(--goldDk);font-size:12px;">可用變數（會自動代入）：<code>{客戶}</code> <code>{服務}</code>${key==='pmuTouchupMsg'?' <code>{補色日期}</code>':''}</div>`:''}
+    <textarea id="pmu_text_edit" rows="14" style="width:100%;font-size:13px;line-height:1.7;margin-top:10px;">${val}</textarea>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('pmuSettings')">取消</button>
+      <button class="btn btn-y" onclick="pmuTextReset('${key}')">↺ 還原預設</button>
+      <button class="btn btn-p" onclick="savePmuText('${key}')">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 編輯同意書全文（5段）───
+  if(m.t==='pmuEditTerms'){
+    const S2=S.data.settings||{};
+    const terms=S2.pmuTerms||DEFAULT_PMU_TERMS;
+    const which=S.modal.termsWhich||'privacy';
+    const secs={privacy:'個資告知',serviceDesc:'服務說明書',consent:'同意書主文',media:'多媒體授權',closing:'結尾聲明'};
+    c=`<div class="mttl">✏️ 編輯同意書全文</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      ${Object.entries(secs).map(([k,label])=>`<button type="button" class="btn btn-sm ${which===k?'btn-p':'btn-s'}" onclick="pmuTermsTab('${k}')">${label}</button>`).join('')}
+    </div>
+    <textarea id="pmu_terms_edit" rows="16" style="width:100%;font-size:13px;line-height:1.7;">${terms[which]||''}</textarea>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="openM('pmuSettings')">取消</button>
+      <button class="btn btn-y" onclick="pmuTermsReset()">↺ 這段還原預設</button>
+      <button class="btn btn-p" onclick="savePmuTerms()">✓ 儲存這段</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── ✏️ 編輯紋繡紀錄 ───
   if(m.t==='editPmu'){
     const r=(S.data.pmuRecords||[]).find(x=>x.id===m.x)||{};
