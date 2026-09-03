@@ -3301,14 +3301,20 @@ function renderNotePointEditor(p,i){
   const col=noteColor(p.color);
   return`<div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:10px;margin-bottom:8px;" data-pidx="${i}">
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
-      <input type="text" value="${(p.label||'').replace(/"/g,'&quot;')}" placeholder="第 ${i+1} 重點" onchange="notePointEdit(${i},'label',this.value)" style="flex:1;min-width:100px;font-weight:700;color:${col.text};">
+      <input type="text" value="${(p.label||'').replace(/"/g,'&quot;')}" placeholder="✏️ 輸入這個重點的標題..." onchange="notePointEdit(${i},'label',this.value)" style="flex:1;min-width:100px;font-weight:700;color:${col.text};">
       <button class="bdel" onclick="noteDelPoint(${i})" title="刪除這個重點">×</button>
     </div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
       ${NOTE_COLORS.map(nc=>`<button type="button" onclick="notePointColor(${i},'${nc.key}')" title="${nc.label}" style="width:26px;height:26px;border-radius:50%;border:2px solid ${p.color===nc.key?'#333':'transparent'};background:${nc.border};cursor:pointer;"></button>`).join('')}
       <span class="tm" style="font-size:11px;align-self:center;margin-left:4px;">${col.label}</span>
     </div>
-    <textarea placeholder="寫下這個重點的內容..." onchange="notePointEdit(${i},'text',this.value)" rows="2" style="width:100%;font-size:14px;line-height:1.7;background:#fff;">${p.text||''}</textarea>
+    <textarea id="note_pt_${i}" placeholder="寫下這個重點的內容...&#10;想標示的字用 **金色** 或 !!紅色!! 包起來" onchange="notePointEdit(${i},'text',this.value)" rows="2" style="width:100%;font-size:14px;line-height:1.7;background:#fff;">${p.text||''}</textarea>
+    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;align-items:center;">
+      <span class="tm" style="font-size:10px;">選好字後點：</span>
+      <button type="button" onclick="noteWrap(${i},'**')" style="font-size:11px;padding:2px 8px;background:#fffbeb;color:#b45309;border:1px solid #d97706;border-radius:6px;cursor:pointer;font-weight:700;">**金色重點**</button>
+      <button type="button" onclick="noteWrap(${i},'!!')" style="font-size:11px;padding:2px 8px;background:#fef2f2;color:#dc2626;border:1px solid #dc2626;border-radius:6px;cursor:pointer;font-weight:700;">!!紅色超重點!!</button>
+      <button type="button" onclick="noteWrap(${i},'__')" style="font-size:11px;padding:2px 8px;background:#faf5ff;color:#7e22ce;border:1px solid #9333ea;border-radius:6px;cursor:pointer;">__底線__</button>
+    </div>
   </div>`;
 }
 
@@ -3316,7 +3322,7 @@ window.noteAddPoint=()=>{
   if(!S.modal?.noteDraft)return;
   const n=S.modal.noteDraft.points.length+1;
   const colors=['red','gold','green','blue','purple'];
-  S.modal.noteDraft.points.push({label:`第 ${n} 重點`,text:'',color:colors[(n-1)%colors.length]});
+  S.modal.noteDraft.points.push({label:'',text:'',color:colors[(n-1)%colors.length]});
   const el=$('note_points');if(el)el.innerHTML=S.modal.noteDraft.points.map((p,i)=>renderNotePointEditor(p,i)).join('');
 };
 window.noteDelPoint=(i)=>{
@@ -3327,6 +3333,24 @@ window.noteDelPoint=(i)=>{
 window.notePointEdit=(i,field,val)=>{
   if(!S.modal?.noteDraft?.points?.[i])return;
   S.modal.noteDraft.points[i][field]=val;
+};
+
+// 把選取的文字用符號包起來（**金色 !!紅色 __底線）
+window.noteWrap=(i,mark)=>{
+  const ta=$(`note_pt_${i}`);
+  if(!ta)return;
+  const start=ta.selectionStart,end=ta.selectionEnd;
+  const val=ta.value;
+  if(start===end){
+    // 沒選字 → 提示
+    toast('請先用手指選取要標示的文字，再點這個');
+    return;
+  }
+  const selected=val.substring(start,end);
+  const newVal=val.substring(0,start)+mark+selected+mark+val.substring(end);
+  ta.value=newVal;
+  S.modal.noteDraft.points[i].text=newVal;
+  toast('✅ 已標示，儲存後就會變色');
 };
 window.notePointColor=(i,color)=>{
   if(!S.modal?.noteDraft?.points?.[i])return;
@@ -6627,6 +6651,20 @@ const NOTE_COLORS=[
 ];
 function noteColor(key){return NOTE_COLORS.find(c=>c.key===key)||NOTE_COLORS[5];}
 
+// 內文重點標示：**字**→金色粗體、!!字!!→紅色粗體、__字__→底線
+function renderNoteText(text){
+  if(!text)return'';
+  // 先跳脫 HTML 特殊字元，避免破版
+  let s=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // !!字!! → 紅色粗體（超重點）
+  s=s.replace(/!!([^!]+)!!/g,'<span style="color:#dc2626;font-weight:800;">$1</span>');
+  // **字** → 金色粗體（重點）
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<span style="color:#b45309;font-weight:800;">$1</span>');
+  // __字__ → 底線
+  s=s.replace(/__([^_]+)__/g,'<span style="text-decoration:underline;text-decoration-color:#9333ea;text-decoration-thickness:2px;">$1</span>');
+  return s;
+}
+
 function pgNotes(){
   const folders=S.data.noteFolders||[];
   // 首次沒資料夾 → 自動建預設（背景執行，不阻塞）
@@ -6704,7 +6742,7 @@ function renderNoteCard(n,folders){
               <span style="font-weight:800;color:${col.text};font-size:14px;">${p.label||`第 ${i+1} 重點`}</span>
               ${p.color&&p.color!=='gray'?`<span style="font-size:10px;background:${col.border};color:#fff;padding:1px 6px;border-radius:8px;">${noteColor(p.color).label}</span>`:''}
             </div>
-            ${p.text?`<div style="font-size:14px;line-height:1.8;color:var(--txt);margin-top:4px;white-space:pre-wrap;">${p.text}</div>`:''}
+            ${p.text?`<div style="font-size:14px;line-height:1.8;color:var(--txt);margin-top:4px;white-space:pre-wrap;">${renderNoteText(p.text)}</div>`:''}
           </div>`;
         }).join('')}
       </div>`:''}
@@ -9033,7 +9071,7 @@ function renderModal(){
     const folders=S.data.noteFolders||[];
     if(!S.modal.noteDraft){
       if(isNew){
-        S.modal.noteDraft={id:uid(),folderId:(S.noteFolder&&S.noteFolder!=='all')?S.noteFolder:(folders[0]?.id||''),title:'',subtitle:'',points:[{label:'第 1 重點',text:'',color:'red'}]};
+        S.modal.noteDraft={id:uid(),folderId:(S.noteFolder&&S.noteFolder!=='all')?S.noteFolder:(folders[0]?.id||''),title:'',subtitle:'',points:[{label:'',text:'',color:'red'}]};
       }else{
         const n=(S.data.studyNotes||[]).find(x=>x.id===m.x)||{};
         S.modal.noteDraft=JSON.parse(JSON.stringify(n));
