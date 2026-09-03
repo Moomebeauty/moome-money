@@ -691,6 +691,8 @@ let S={
     trialPacks:[],
     passContracts:[],
     pmuRecords:[],
+    studyNotes:[],
+    noteFolders:[],
     // 出貨記錄（客戶購買、自用、損耗、贈品）
     stockOuts:[],
     // 設備（含折舊）
@@ -737,7 +739,9 @@ function startSync(){
     S.data.serviceCosts=d.serviceCosts||[];
     S.data.trialPacks=d.trialPacks||[];
     S.data.passContracts=d.passContracts||[];
-    S.data.pmuRecords=d.pmuRecords||[];  // 服務成本卡
+    S.data.pmuRecords=d.pmuRecords||[];
+    S.data.studyNotes=d.studyNotes||[];
+    S.data.noteFolders=d.noteFolders||[];
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -1169,6 +1173,7 @@ function appHTML(){
     {id:'equipment',ico:'🛋️',lbl:'設備折舊'},
     {id:'serviceCost',ico:'💎',lbl:'服務成本卡'},
     {id:'courses',ico:'📋',lbl:'課程管理'},
+    {id:'notes',ico:'📒',lbl:'備課筆記'},
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
     {id:'cashflow',ico:'🏦',lbl:'現金流水帳'},
     {id:'reports',ico:'📈',lbl:'月報年報'},
@@ -1221,6 +1226,7 @@ function renderPage(){
     case'equipment': return pgEquipment();
     case'serviceCost': return pgServiceCost();
     case'courses':   return pgCourses();
+    case'notes':     return pgNotes();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
     case'reports':   return pgReports();
@@ -3289,7 +3295,111 @@ window.pmuMarkYearlyDone=async(id)=>{
   closeMod();render();
 };
 
-// ═══ 🎨 紋繡設定操作 ═══
+// ═══ 📒 備課筆記操作 ═══
+// 單個重點的編輯器
+function renderNotePointEditor(p,i){
+  const col=noteColor(p.color);
+  return`<div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:10px;margin-bottom:8px;" data-pidx="${i}">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+      <input type="text" value="${(p.label||'').replace(/"/g,'&quot;')}" placeholder="第 ${i+1} 重點" onchange="notePointEdit(${i},'label',this.value)" style="flex:1;min-width:100px;font-weight:700;color:${col.text};">
+      <button class="bdel" onclick="noteDelPoint(${i})" title="刪除這個重點">×</button>
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+      ${NOTE_COLORS.map(nc=>`<button type="button" onclick="notePointColor(${i},'${nc.key}')" title="${nc.label}" style="width:26px;height:26px;border-radius:50%;border:2px solid ${p.color===nc.key?'#333':'transparent'};background:${nc.border};cursor:pointer;"></button>`).join('')}
+      <span class="tm" style="font-size:11px;align-self:center;margin-left:4px;">${col.label}</span>
+    </div>
+    <textarea placeholder="寫下這個重點的內容..." onchange="notePointEdit(${i},'text',this.value)" rows="2" style="width:100%;font-size:14px;line-height:1.7;background:#fff;">${p.text||''}</textarea>
+  </div>`;
+}
+
+window.noteAddPoint=()=>{
+  if(!S.modal?.noteDraft)return;
+  const n=S.modal.noteDraft.points.length+1;
+  const colors=['red','gold','green','blue','purple'];
+  S.modal.noteDraft.points.push({label:`第 ${n} 重點`,text:'',color:colors[(n-1)%colors.length]});
+  const el=$('note_points');if(el)el.innerHTML=S.modal.noteDraft.points.map((p,i)=>renderNotePointEditor(p,i)).join('');
+};
+window.noteDelPoint=(i)=>{
+  if(!S.modal?.noteDraft)return;
+  S.modal.noteDraft.points.splice(i,1);
+  const el=$('note_points');if(el)el.innerHTML=S.modal.noteDraft.points.map((p,idx)=>renderNotePointEditor(p,idx)).join('');
+};
+window.notePointEdit=(i,field,val)=>{
+  if(!S.modal?.noteDraft?.points?.[i])return;
+  S.modal.noteDraft.points[i][field]=val;
+};
+window.notePointColor=(i,color)=>{
+  if(!S.modal?.noteDraft?.points?.[i])return;
+  S.modal.noteDraft.points[i].color=color;
+  const el=$('note_points');if(el)el.innerHTML=S.modal.noteDraft.points.map((p,idx)=>renderNotePointEditor(p,idx)).join('');
+};
+
+window.saveNote=async(id)=>{
+  const d=S.modal?.noteDraft;
+  if(!d){closeMod();return;}
+  // 存前先抓輸入框最新值
+  if($('note_title'))d.title=$('note_title').value;
+  if($('note_subtitle'))d.subtitle=$('note_subtitle').value;
+  if($('note_folder'))d.folderId=$('note_folder').value;
+  if(!d.title?.trim()){alert('請填主標題');return;}
+  d.points=(d.points||[]).filter(p=>(p.label||'').trim()||(p.text||'').trim());
+  d.updatedAt=nowLocal();
+  let notes=[...(S.data.studyNotes||[])];
+  if(id==='__new__'){d.createdAt=nowLocal();notes.push(d);}
+  else{notes=notes.map(n=>n.id===id?d:n);}
+  S.data.studyNotes=notes;
+  await saveMain({studyNotes:notes});
+  S.modal.noteDraft=null;
+  toast('✅ 筆記已儲存');
+  closeMod();
+  setP('notes');
+};
+
+window.delNote=async(id)=>{
+  const n=(S.data.studyNotes||[]).find(x=>x.id===id);
+  if(!confirm(`確定刪除筆記「${n?.title||''}」？`))return;
+  const notes=(S.data.studyNotes||[]).filter(x=>x.id!==id);
+  S.data.studyNotes=notes;
+  await saveMain({studyNotes:notes});
+  toast('已刪除');render();
+};
+
+// 資料夾操作
+window.addFolder=async()=>{
+  const folders=[...(S.data.noteFolders||[]),{id:uid(),name:'新資料夾',icon:'📁',color:''}];
+  S.data.noteFolders=folders;
+  await saveMain({noteFolders:folders});
+  openM('manageFolders');
+};
+window.folderEdit=async(id,field,val)=>{
+  const folders=(S.data.noteFolders||[]).map(f=>f.id===id?{...f,[field]:val}:f);
+  S.data.noteFolders=folders;
+  await saveMain({noteFolders:folders});
+  // 不重繪整個 modal，避免打字中斷
+};
+window.delFolder=async(id)=>{
+  const f=(S.data.noteFolders||[]).find(x=>x.id===id);
+  const cnt=(S.data.studyNotes||[]).filter(n=>n.folderId===id).length;
+  if(!confirm(`刪除資料夾「${f?.name||''}」？\n${cnt>0?`裡面有 ${cnt} 篇筆記，刪除後這些筆記會變成「未分類」（不會消失）。`:''}`))return;
+  const folders=(S.data.noteFolders||[]).filter(x=>x.id!==id);
+  S.data.noteFolders=folders;
+  await saveMain({noteFolders:folders});
+  openM('manageFolders');
+};
+
+// 首次進筆記頁，若沒資料夾，自動建預設的
+window.ensureDefaultFolders=async()=>{
+  if((S.data.noteFolders||[]).length>0)return;
+  const def=[
+    {id:uid(),name:'美容',icon:'💆',color:'#fffbeb'},
+    {id:uid(),name:'紋繡',icon:'🎨',color:'#faf5ff'},
+    {id:uid(),name:'熱蠟除毛',icon:'🪶',color:'#f0fdf4'}
+  ];
+  S.data.noteFolders=def;
+  await saveMain({noteFolders:def});
+};
+
+// ═══ 📒 備課筆記操作 END ═══
 window.pmuListEdit=(i,val)=>{if(S.modal?.listDraft)S.modal.listDraft[i]=val;};
 window.pmuListDel=(i)=>{if(!S.modal?.listDraft)return;S.modal.listDraft.splice(i,1);const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
 window.pmuListAdd=()=>{if(!S.modal)return;if(!S.modal.listDraft)S.modal.listDraft=[];S.modal.listDraft.push('');const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
@@ -6505,6 +6615,103 @@ function pgDepositCustomerView(t){
 }
 
 // ─── COURSES ───────────────────────────────────────────────
+// ═══════════ 📒 備課筆記 ═══════════
+// 顏色標籤選項
+const NOTE_COLORS=[
+  {key:'red',label:'超級大重點',bg:'#fef2f2',border:'#dc2626',text:'#dc2626'},
+  {key:'gold',label:'重要',bg:'#fffbeb',border:'#d97706',text:'#b45309'},
+  {key:'green',label:'一般重點',bg:'#f0fdf4',border:'#16a34a',text:'#15803d'},
+  {key:'blue',label:'補充',bg:'#eff6ff',border:'#2563eb',text:'#1d4ed8'},
+  {key:'purple',label:'技巧',bg:'#faf5ff',border:'#9333ea',text:'#7e22ce'},
+  {key:'gray',label:'備註',bg:'#f9fafb',border:'#6b7280',text:'#4b5563'}
+];
+function noteColor(key){return NOTE_COLORS.find(c=>c.key===key)||NOTE_COLORS[5];}
+
+function pgNotes(){
+  const folders=S.data.noteFolders||[];
+  // 首次沒資料夾 → 自動建預設（背景執行，不阻塞）
+  if(folders.length===0&&!S._noteFoldersInit){S._noteFoldersInit=true;ensureDefaultFolders();}
+  const notes=S.data.studyNotes||[];
+  const curFolder=S.noteFolder||'all';
+  const search=S.noteSearch||'';
+
+  // 篩選筆記
+  let list=notes;
+  if(curFolder!=='all')list=list.filter(n=>n.folderId===curFolder);
+  if(search){
+    const kw=search.toLowerCase();
+    list=list.filter(n=>{
+      const inTitle=(n.title||'').toLowerCase().includes(kw)||(n.subtitle||'').toLowerCase().includes(kw);
+      const inPoints=(n.points||[]).some(p=>(p.text||'').toLowerCase().includes(kw)||(p.label||'').toLowerCase().includes(kw));
+      return inTitle||inPoints;
+    });
+  }
+  list=list.slice().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
+
+  return`
+  <div class="pg-ttl">📒 備課筆記</div>
+  <div class="pg-sub">整理你的教學筆記，備課、跟客人說明時一秒找到</div>
+
+  <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
+    <input type="text" placeholder="🔍 搜尋筆記內容..." value="${search.replace(/"/g,'&quot;')}" oninput="S.noteSearch=this.value;const c=$('pg-content');if(c)c.innerHTML=renderPage();" style="flex:1;min-width:180px;">
+    <button class="btn btn-p" style="background:#9333ea;" onclick="openM('editNote','__new__')">＋ 新增筆記</button>
+    <button class="btn btn-s" onclick="openM('manageFolders')">📁 管理資料夾</button>
+  </div>
+
+  <!-- 資料夾分頁 -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+    <button class="btn btn-sm ${curFolder==='all'?'btn-p':'btn-s'}" onclick="S.noteFolder='all';const c=$('pg-content');if(c)c.innerHTML=renderPage();">📚 全部（${notes.length}）</button>
+    ${folders.map(f=>{
+      const cnt=notes.filter(n=>n.folderId===f.id).length;
+      return`<button class="btn btn-sm ${curFolder===f.id?'btn-p':'btn-s'}" onclick="S.noteFolder='${f.id}';const c=$('pg-content');if(c)c.innerHTML=renderPage();" style="${curFolder===f.id?'':`background:${f.color||'var(--bg2)'};`}">${f.icon||'📁'} ${f.name}（${cnt}）</button>`;
+    }).join('')}
+  </div>
+
+  ${list.length===0?`
+    <div class="empty" style="padding:40px;">
+      <div class="empty-ico">📒</div>
+      <p>${search?'找不到符合的筆記':curFolder==='all'?'還沒有筆記':'這個資料夾還沒有筆記'}</p>
+      <div class="tm" style="font-size:13px;margin-top:6px;">點右上角「＋ 新增筆記」開始整理你的備課內容</div>
+    </div>`:`
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      ${list.map(n=>renderNoteCard(n,folders)).join('')}
+    </div>`}
+  `;
+}
+
+// 單張筆記卡片（檢視用）
+function renderNoteCard(n,folders){
+  const folder=folders.find(f=>f.id===n.folderId);
+  return`
+  <div class="card" style="border-left:4px solid #9333ea;">
+    <div class="card-bd">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          ${folder?`<span class="bdg" style="background:${folder.color||'var(--bg2)'};font-size:11px;">${folder.icon||'📁'} ${folder.name}</span>`:''}
+          <div style="font-size:19px;font-weight:800;color:var(--txt);margin-top:6px;">${n.title||'（未命名）'}</div>
+          ${n.subtitle?`<div style="font-size:14px;color:var(--mut);margin-top:2px;">${n.subtitle}</div>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn btn-s btn-sm" onclick="openM('editNote','${n.id}')">✏️ 編輯</button>
+          <button class="bdel" onclick="delNote('${n.id}')">×</button>
+        </div>
+      </div>
+      ${(n.points||[]).length>0?`<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+        ${n.points.map((p,i)=>{
+          const col=noteColor(p.color);
+          return`<div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+              <span style="font-weight:800;color:${col.text};font-size:14px;">${p.label||`第 ${i+1} 重點`}</span>
+              ${p.color&&p.color!=='gray'?`<span style="font-size:10px;background:${col.border};color:#fff;padding:1px 6px;border-radius:8px;">${noteColor(p.color).label}</span>`:''}
+            </div>
+            ${p.text?`<div style="font-size:14px;line-height:1.8;color:var(--txt);margin-top:4px;white-space:pre-wrap;">${p.text}</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>`:''}
+    </div>
+  </div>`;
+}
+
 function pgCourses(){
   const courses=S.data.courses||[];
   const students=S.data.courseStudents||[];
@@ -8817,6 +9024,76 @@ function renderModal(){
       <button class="btn btn-y" onclick="pmuTermsReset()">↺ 這段還原預設</button>
       <button class="btn btn-p" onclick="savePmuTerms()">✓ 儲存這段</button>
     </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── ✏️ 編輯備課筆記 ───
+  if(m.t==='editNote'){
+    const isNew=m.x==='__new__';
+    const folders=S.data.noteFolders||[];
+    if(!S.modal.noteDraft){
+      if(isNew){
+        S.modal.noteDraft={id:uid(),folderId:(S.noteFolder&&S.noteFolder!=='all')?S.noteFolder:(folders[0]?.id||''),title:'',subtitle:'',points:[{label:'第 1 重點',text:'',color:'red'}]};
+      }else{
+        const n=(S.data.studyNotes||[]).find(x=>x.id===m.x)||{};
+        S.modal.noteDraft=JSON.parse(JSON.stringify(n));
+        if(!S.modal.noteDraft.points)S.modal.noteDraft.points=[];
+      }
+    }
+    const d=S.modal.noteDraft;
+    c=`<div class="mttl">${isNew?'➕ 新增':'✏️ 編輯'}筆記</div>
+    <div style="max-height:68vh;overflow-y:auto;padding-right:4px;">
+      <div class="fgrp"><label>📁 資料夾</label>
+        <select id="note_folder" onchange="S.modal.noteDraft.folderId=this.value">
+          ${folders.length===0?'<option value="">（尚無資料夾，先去管理資料夾建立）</option>':folders.map(f=>`<option value="${f.id}"${d.folderId===f.id?' selected':''}>${f.icon||'📁'} ${f.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fgrp" style="margin-top:10px;"><label>主標題 *</label>
+        <input type="text" id="note_title" value="${(d.title||'').replace(/"/g,'&quot;')}" placeholder="如：霧眉的黃金比例" style="font-size:16px;font-weight:700;" oninput="S.modal.noteDraft.title=this.value">
+      </div>
+      <div class="fgrp" style="margin-top:10px;"><label>副標題</label>
+        <input type="text" id="note_subtitle" value="${(d.subtitle||'').replace(/"/g,'&quot;')}" placeholder="如：適合初學者的三步驟" oninput="S.modal.noteDraft.subtitle=this.value">
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px;">
+        <label style="font-weight:700;">📝 重點內容</label>
+        <button class="btn btn-sm" style="background:#9333ea;color:#fff;" onclick="noteAddPoint()">＋ 加一個重點</button>
+      </div>
+      <div id="note_points">
+        ${(d.points||[]).map((p,i)=>renderNotePointEditor(p,i)).join('')}
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="S.modal.noteDraft=null;closeMod()">取消</button>
+      <button class="btn btn-p" style="background:#9333ea;" onclick="saveNote('${isNew?'__new__':m.x}')">✓ 儲存筆記</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 📁 管理資料夾 ───
+  if(m.t==='manageFolders'){
+    const folders=S.data.noteFolders||[];
+    const notes=S.data.studyNotes||[];
+    c=`<div class="mttl">📁 管理資料夾</div>
+    <div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#9333ea;font-size:12px;">
+      依你的服務項目分類，例如「美容」「紋繡」，方便找筆記。
+    </div>
+    <div style="margin:12px 0;">
+      ${folders.map(f=>{
+        const cnt=notes.filter(n=>n.folderId===f.id).length;
+        return`<div style="display:flex;gap:6px;align-items:center;padding:10px;background:${f.color||'var(--bg2)'};border-radius:8px;margin-bottom:6px;">
+          <input type="text" value="${(f.icon||'📁').replace(/"/g,'&quot;')}" onchange="folderEdit('${f.id}','icon',this.value)" style="width:44px;text-align:center;font-size:16px;">
+          <input type="text" value="${(f.name||'').replace(/"/g,'&quot;')}" onchange="folderEdit('${f.id}','name',this.value)" style="flex:1;font-weight:700;">
+          <select onchange="folderEdit('${f.id}','color',this.value)" style="width:90px;font-size:12px;">
+            ${[['','無色'],['#fef2f2','紅'],['#fffbeb','金'],['#f0fdf4','綠'],['#eff6ff','藍'],['#faf5ff','紫']].map(([v,l])=>`<option value="${v}"${(f.color||'')===v?' selected':''}>${l}</option>`).join('')}
+          </select>
+          <span class="tm" style="font-size:11px;">${cnt}篇</span>
+          <button class="bdel" onclick="delFolder('${f.id}')">×</button>
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="btn btn-s" onclick="addFolder()">＋ 新增資料夾</button>
+    <div class="mbtns"><button class="btn btn-p" onclick="openM('editNote','__new__');S.modal.noteDraft=null;" style="display:none;"></button><button class="btn btn-s" onclick="closeMod();setP('notes')">完成</button></div>`;
     S.modal.lg=true;
   }
 
