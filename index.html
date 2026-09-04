@@ -3297,146 +3297,6 @@ window.pmuMarkYearlyDone=async(id)=>{
   closeMod();render();
 };
 
-// ═══════════ 🌳 聯想筆記（樹狀，可無限往內挖）═══════════
-// 資料結構：每個節點 {id, keyword, detail, color, expanded, children:[...]}
-function renderMindNotes(){
-  const roots=S.data.mindNotes||[];
-  const search=S.mindSearch||'';
-  return`
-  <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
-    <input type="text" placeholder="🔍 搜尋關鍵字..." value="${search.replace(/"/g,'&quot;')}" oninput="S.mindSearch=this.value;const c=$('pg-content');if(c)c.innerHTML=renderPage();" style="flex:1;min-width:180px;">
-    <button class="btn btn-p" style="background:#0891b2;" onclick="mindAddRoot()">＋ 新主題</button>
-    <button class="btn btn-s btn-sm" onclick="mindExpandAll(true)">全部展開</button>
-    <button class="btn btn-s btn-sm" onclick="mindExpandAll(false)">全部收合</button>
-  </div>
-  <div class="notice" style="background:#ecfeff;border-left-color:#0891b2;color:#0e7490;font-size:12px;">
-    💡 一個關鍵字底下可以再加關鍵字，一直往內挖。點 <b>▶</b> 展開／收合，點關鍵字看細節。
-  </div>
-
-  ${roots.length===0?`
-    <div class="empty" style="padding:40px;">
-      <div class="empty-ico">🌳</div>
-      <p>還沒有聯想筆記</p>
-      <div class="tm" style="font-size:13px;margin-top:6px;">點「＋ 新主題」開始，例如「霧眉」，再往內加「眉型設計」「下針技巧」...</div>
-    </div>`:`
-    <div style="margin-top:14px;">
-      ${roots.map(node=>renderMindNode(node,0,search)).join('')}
-    </div>`}
-  `;
-}
-
-// 遞迴渲染一個節點
-function renderMindNode(node,depth,search){
-  const col=noteColor(node.color);
-  const hasChildren=(node.children||[]).length>0;
-  const expanded=node.expanded;
-  // 搜尋時：若關鍵字或細節含搜尋字，高亮
-  const match=search&&((node.keyword||'').toLowerCase().includes(search.toLowerCase())||(node.detail||'').toLowerCase().includes(search.toLowerCase()));
-  const indent=depth*20;
-  return`
-  <div style="margin-left:${indent}px;margin-bottom:6px;">
-    <div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:8px 10px;${match?'box-shadow:0 0 0 2px #fbbf24;':''}">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button type="button" onclick="mindToggle('${node.id}')" style="border:none;background:none;cursor:pointer;font-size:14px;color:${col.text};width:20px;flex-shrink:0;${hasChildren?'':'visibility:hidden;'}">${expanded?'▼':'▶'}</button>
-        <span onclick="mindToggle('${node.id}')" style="flex:1;font-weight:800;color:${col.text};font-size:15px;cursor:pointer;">🔑 ${node.keyword||'（未命名）'}</span>
-        <button type="button" onclick="openM('editMindNode','${node.id}')" style="border:none;background:none;cursor:pointer;font-size:13px;opacity:0.5;" title="編輯">✏️</button>
-        <button type="button" onclick="mindAddChild('${node.id}')" style="border:none;background:${col.border};color:#fff;cursor:pointer;font-size:12px;border-radius:6px;padding:2px 8px;" title="往內加一層">＋內</button>
-      </div>
-      ${expanded&&node.detail?`<div style="margin-left:28px;margin-top:6px;font-size:14px;line-height:1.8;color:var(--txt);white-space:pre-wrap;background:#fff;padding:8px 10px;border-radius:6px;">${renderNoteText(node.detail)}</div>`:''}
-    </div>
-    ${expanded&&hasChildren?`<div style="margin-top:6px;">${node.children.map(ch=>renderMindNode(ch,depth+1,search)).join('')}</div>`:''}
-  </div>`;
-}
-
-// ── 樹狀操作 ──
-// 遞迴找節點
-function mindFind(nodes,id){
-  for(const n of nodes){
-    if(n.id===id)return n;
-    if(n.children){const f=mindFind(n.children,id);if(f)return f;}
-  }
-  return null;
-}
-// 遞迴找父陣列
-function mindFindParentArr(nodes,id){
-  for(const n of nodes){
-    if(n.id===id)return nodes;
-    if(n.children){const f=mindFindParentArr(n.children,id);if(f)return f;}
-  }
-  return null;
-}
-
-window.mindAddRoot=()=>{
-  const roots=[...(S.data.mindNotes||[]),{id:uid(),keyword:'',detail:'',color:'blue',expanded:true,children:[]}];
-  S.data.mindNotes=roots;
-  saveMain({mindNotes:roots});
-  // 直接開編輯
-  setTimeout(()=>openM('editMindNode',roots[roots.length-1].id),50);
-};
-
-window.mindAddChild=(parentId)=>{
-  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
-  const parent=mindFind(roots,parentId);
-  if(!parent)return;
-  if(!parent.children)parent.children=[];
-  const child={id:uid(),keyword:'',detail:'',color:'green',expanded:true,children:[]};
-  parent.children.push(child);
-  parent.expanded=true;
-  S.data.mindNotes=roots;
-  saveMain({mindNotes:roots});
-  setTimeout(()=>openM('editMindNode',child.id),50);
-};
-
-window.mindToggle=(id)=>{
-  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
-  const node=mindFind(roots,id);
-  if(!node)return;
-  node.expanded=!node.expanded;
-  S.data.mindNotes=roots;
-  saveMain({mindNotes:roots});
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
-};
-
-window.mindExpandAll=(expand)=>{
-  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
-  const walk=(nodes)=>nodes.forEach(n=>{n.expanded=expand;if(n.children)walk(n.children);});
-  walk(roots);
-  S.data.mindNotes=roots;
-  saveMain({mindNotes:roots});
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
-};
-
-window.mindDelNode=async(id)=>{
-  const node=mindFind(S.data.mindNotes||[],id);
-  const childCount=node?.children?.length||0;
-  if(!confirm(`刪除「${node?.keyword||''}」？${childCount>0?`\n⚠️ 底下的 ${childCount} 個關鍵字也會一起刪除。`:''}`))return;
-  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
-  const arr=mindFindParentArr(roots,id);
-  if(arr){const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);}
-  S.data.mindNotes=roots;
-  await saveMain({mindNotes:roots});
-  closeMod();
-  toast('已刪除');
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
-};
-
-window.saveMindNode=async(id)=>{
-  const kw=$('mind_keyword')?.value?.trim();
-  const detail=$('mind_detail')?.value||'';
-  const color=S.modal?.mindColor||'blue';
-  if(!kw){alert('請填關鍵字');return;}
-  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
-  const node=mindFind(roots,id);
-  if(!node){closeMod();return;}
-  node.keyword=kw;node.detail=detail;node.color=color;
-  S.data.mindNotes=roots;
-  await saveMain({mindNotes:roots});
-  toast('✅ 已儲存');
-  closeMod();
-  const c=$('pg-content');if(c)c.innerHTML=renderPage();
-};
-
-// ═══════════ 🌳 聯想筆記 END ═══════════
 
 // 單個重點的編輯器
 function renderNotePointEditor(p,i){
@@ -6806,6 +6666,147 @@ function renderNoteText(text){
   s=s.replace(/__([^_]+)__/g,'<span style="text-decoration:underline;text-decoration-color:#9333ea;text-decoration-thickness:2px;">$1</span>');
   return s;
 }
+
+// ═══════════ 🌳 聯想筆記（樹狀，可無限往內挖）═══════════
+// 資料結構：每個節點 {id, keyword, detail, color, expanded, children:[...]}
+function renderMindNotes(){
+  const roots=S.data.mindNotes||[];
+  const search=S.mindSearch||'';
+  return`
+  <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
+    <input type="text" placeholder="🔍 搜尋關鍵字..." value="${search.replace(/"/g,'&quot;')}" oninput="S.mindSearch=this.value;const c=$('pg-content');if(c)c.innerHTML=renderPage();" style="flex:1;min-width:180px;">
+    <button class="btn btn-p" style="background:#0891b2;" onclick="mindAddRoot()">＋ 新主題</button>
+    <button class="btn btn-s btn-sm" onclick="mindExpandAll(true)">全部展開</button>
+    <button class="btn btn-s btn-sm" onclick="mindExpandAll(false)">全部收合</button>
+  </div>
+  <div class="notice" style="background:#ecfeff;border-left-color:#0891b2;color:#0e7490;font-size:12px;">
+    💡 一個關鍵字底下可以再加關鍵字，一直往內挖。點 <b>▶</b> 展開／收合，點關鍵字看細節。
+  </div>
+
+  ${roots.length===0?`
+    <div class="empty" style="padding:40px;">
+      <div class="empty-ico">🌳</div>
+      <p>還沒有聯想筆記</p>
+      <div class="tm" style="font-size:13px;margin-top:6px;">點「＋ 新主題」開始，例如「霧眉」，再往內加「眉型設計」「下針技巧」...</div>
+    </div>`:`
+    <div style="margin-top:14px;">
+      ${roots.map(node=>renderMindNode(node,0,search)).join('')}
+    </div>`}
+  `;
+}
+
+// 遞迴渲染一個節點
+function renderMindNode(node,depth,search){
+  const col=noteColor(node.color);
+  const hasChildren=(node.children||[]).length>0;
+  const expanded=node.expanded;
+  // 搜尋時：若關鍵字或細節含搜尋字，高亮
+  const match=search&&((node.keyword||'').toLowerCase().includes(search.toLowerCase())||(node.detail||'').toLowerCase().includes(search.toLowerCase()));
+  const indent=depth*20;
+  return`
+  <div style="margin-left:${indent}px;margin-bottom:6px;">
+    <div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:8px 10px;${match?'box-shadow:0 0 0 2px #fbbf24;':''}">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button type="button" onclick="mindToggle('${node.id}')" style="border:none;background:none;cursor:pointer;font-size:14px;color:${col.text};width:20px;flex-shrink:0;${hasChildren?'':'visibility:hidden;'}">${expanded?'▼':'▶'}</button>
+        <span onclick="mindToggle('${node.id}')" style="flex:1;font-weight:800;color:${col.text};font-size:15px;cursor:pointer;">🔑 ${node.keyword||'（未命名）'}</span>
+        <button type="button" onclick="openM('editMindNode','${node.id}')" style="border:none;background:none;cursor:pointer;font-size:13px;opacity:0.5;" title="編輯">✏️</button>
+        <button type="button" onclick="mindAddChild('${node.id}')" style="border:none;background:${col.border};color:#fff;cursor:pointer;font-size:12px;border-radius:6px;padding:2px 8px;" title="往內加一層">＋內</button>
+      </div>
+      ${expanded&&node.detail?`<div style="margin-left:28px;margin-top:6px;font-size:14px;line-height:1.8;color:var(--txt);white-space:pre-wrap;background:#fff;padding:8px 10px;border-radius:6px;">${renderNoteText(node.detail)}</div>`:''}
+    </div>
+    ${expanded&&hasChildren?`<div style="margin-top:6px;">${node.children.map(ch=>renderMindNode(ch,depth+1,search)).join('')}</div>`:''}
+  </div>`;
+}
+
+// ── 樹狀操作 ──
+// 遞迴找節點
+function mindFind(nodes,id){
+  for(const n of nodes){
+    if(n.id===id)return n;
+    if(n.children){const f=mindFind(n.children,id);if(f)return f;}
+  }
+  return null;
+}
+// 遞迴找父陣列
+function mindFindParentArr(nodes,id){
+  for(const n of nodes){
+    if(n.id===id)return nodes;
+    if(n.children){const f=mindFindParentArr(n.children,id);if(f)return f;}
+  }
+  return null;
+}
+
+window.mindAddRoot=()=>{
+  const roots=[...(S.data.mindNotes||[]),{id:uid(),keyword:'',detail:'',color:'blue',expanded:true,children:[]}];
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  // 直接開編輯
+  setTimeout(()=>openM('editMindNode',roots[roots.length-1].id),50);
+};
+
+window.mindAddChild=(parentId)=>{
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const parent=mindFind(roots,parentId);
+  if(!parent)return;
+  if(!parent.children)parent.children=[];
+  const child={id:uid(),keyword:'',detail:'',color:'green',expanded:true,children:[]};
+  parent.children.push(child);
+  parent.expanded=true;
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  setTimeout(()=>openM('editMindNode',child.id),50);
+};
+
+window.mindToggle=(id)=>{
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const node=mindFind(roots,id);
+  if(!node)return;
+  node.expanded=!node.expanded;
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+window.mindExpandAll=(expand)=>{
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const walk=(nodes)=>nodes.forEach(n=>{n.expanded=expand;if(n.children)walk(n.children);});
+  walk(roots);
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+window.mindDelNode=async(id)=>{
+  const node=mindFind(S.data.mindNotes||[],id);
+  const childCount=node?.children?.length||0;
+  if(!confirm(`刪除「${node?.keyword||''}」？${childCount>0?`\n⚠️ 底下的 ${childCount} 個關鍵字也會一起刪除。`:''}`))return;
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const arr=mindFindParentArr(roots,id);
+  if(arr){const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);}
+  S.data.mindNotes=roots;
+  await saveMain({mindNotes:roots});
+  closeMod();
+  toast('已刪除');
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+window.saveMindNode=async(id)=>{
+  const kw=$('mind_keyword')?.value?.trim();
+  const detail=$('mind_detail')?.value||'';
+  const color=S.modal?.mindColor||'blue';
+  if(!kw){alert('請填關鍵字');return;}
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const node=mindFind(roots,id);
+  if(!node){closeMod();return;}
+  node.keyword=kw;node.detail=detail;node.color=color;
+  S.data.mindNotes=roots;
+  await saveMain({mindNotes:roots});
+  toast('✅ 已儲存');
+  closeMod();
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// ═══════════ 🌳 聯想筆記 END ═══════════
 
 function pgNotes(){
   const folders=S.data.noteFolders||[];
