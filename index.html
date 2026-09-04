@@ -693,6 +693,7 @@ let S={
     pmuRecords:[],
     studyNotes:[],
     noteFolders:[],
+    mindNotes:[],
     // 出貨記錄（客戶購買、自用、損耗、贈品）
     stockOuts:[],
     // 設備（含折舊）
@@ -742,6 +743,7 @@ function startSync(){
     S.data.pmuRecords=d.pmuRecords||[];
     S.data.studyNotes=d.studyNotes||[];
     S.data.noteFolders=d.noteFolders||[];
+    S.data.mindNotes=d.mindNotes||[];
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -3295,7 +3297,147 @@ window.pmuMarkYearlyDone=async(id)=>{
   closeMod();render();
 };
 
-// ═══ 📒 備課筆記操作 ═══
+// ═══════════ 🌳 聯想筆記（樹狀，可無限往內挖）═══════════
+// 資料結構：每個節點 {id, keyword, detail, color, expanded, children:[...]}
+function renderMindNotes(){
+  const roots=S.data.mindNotes||[];
+  const search=S.mindSearch||'';
+  return`
+  <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
+    <input type="text" placeholder="🔍 搜尋關鍵字..." value="${search.replace(/"/g,'&quot;')}" oninput="S.mindSearch=this.value;const c=$('pg-content');if(c)c.innerHTML=renderPage();" style="flex:1;min-width:180px;">
+    <button class="btn btn-p" style="background:#0891b2;" onclick="mindAddRoot()">＋ 新主題</button>
+    <button class="btn btn-s btn-sm" onclick="mindExpandAll(true)">全部展開</button>
+    <button class="btn btn-s btn-sm" onclick="mindExpandAll(false)">全部收合</button>
+  </div>
+  <div class="notice" style="background:#ecfeff;border-left-color:#0891b2;color:#0e7490;font-size:12px;">
+    💡 一個關鍵字底下可以再加關鍵字，一直往內挖。點 <b>▶</b> 展開／收合，點關鍵字看細節。
+  </div>
+
+  ${roots.length===0?`
+    <div class="empty" style="padding:40px;">
+      <div class="empty-ico">🌳</div>
+      <p>還沒有聯想筆記</p>
+      <div class="tm" style="font-size:13px;margin-top:6px;">點「＋ 新主題」開始，例如「霧眉」，再往內加「眉型設計」「下針技巧」...</div>
+    </div>`:`
+    <div style="margin-top:14px;">
+      ${roots.map(node=>renderMindNode(node,0,search)).join('')}
+    </div>`}
+  `;
+}
+
+// 遞迴渲染一個節點
+function renderMindNode(node,depth,search){
+  const col=noteColor(node.color);
+  const hasChildren=(node.children||[]).length>0;
+  const expanded=node.expanded;
+  // 搜尋時：若關鍵字或細節含搜尋字，高亮
+  const match=search&&((node.keyword||'').toLowerCase().includes(search.toLowerCase())||(node.detail||'').toLowerCase().includes(search.toLowerCase()));
+  const indent=depth*20;
+  return`
+  <div style="margin-left:${indent}px;margin-bottom:6px;">
+    <div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:8px 10px;${match?'box-shadow:0 0 0 2px #fbbf24;':''}">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button type="button" onclick="mindToggle('${node.id}')" style="border:none;background:none;cursor:pointer;font-size:14px;color:${col.text};width:20px;flex-shrink:0;${hasChildren?'':'visibility:hidden;'}">${expanded?'▼':'▶'}</button>
+        <span onclick="mindToggle('${node.id}')" style="flex:1;font-weight:800;color:${col.text};font-size:15px;cursor:pointer;">🔑 ${node.keyword||'（未命名）'}</span>
+        <button type="button" onclick="openM('editMindNode','${node.id}')" style="border:none;background:none;cursor:pointer;font-size:13px;opacity:0.5;" title="編輯">✏️</button>
+        <button type="button" onclick="mindAddChild('${node.id}')" style="border:none;background:${col.border};color:#fff;cursor:pointer;font-size:12px;border-radius:6px;padding:2px 8px;" title="往內加一層">＋內</button>
+      </div>
+      ${expanded&&node.detail?`<div style="margin-left:28px;margin-top:6px;font-size:14px;line-height:1.8;color:var(--txt);white-space:pre-wrap;background:#fff;padding:8px 10px;border-radius:6px;">${renderNoteText(node.detail)}</div>`:''}
+    </div>
+    ${expanded&&hasChildren?`<div style="margin-top:6px;">${node.children.map(ch=>renderMindNode(ch,depth+1,search)).join('')}</div>`:''}
+  </div>`;
+}
+
+// ── 樹狀操作 ──
+// 遞迴找節點
+function mindFind(nodes,id){
+  for(const n of nodes){
+    if(n.id===id)return n;
+    if(n.children){const f=mindFind(n.children,id);if(f)return f;}
+  }
+  return null;
+}
+// 遞迴找父陣列
+function mindFindParentArr(nodes,id){
+  for(const n of nodes){
+    if(n.id===id)return nodes;
+    if(n.children){const f=mindFindParentArr(n.children,id);if(f)return f;}
+  }
+  return null;
+}
+
+window.mindAddRoot=()=>{
+  const roots=[...(S.data.mindNotes||[]),{id:uid(),keyword:'',detail:'',color:'blue',expanded:true,children:[]}];
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  // 直接開編輯
+  setTimeout(()=>openM('editMindNode',roots[roots.length-1].id),50);
+};
+
+window.mindAddChild=(parentId)=>{
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const parent=mindFind(roots,parentId);
+  if(!parent)return;
+  if(!parent.children)parent.children=[];
+  const child={id:uid(),keyword:'',detail:'',color:'green',expanded:true,children:[]};
+  parent.children.push(child);
+  parent.expanded=true;
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  setTimeout(()=>openM('editMindNode',child.id),50);
+};
+
+window.mindToggle=(id)=>{
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const node=mindFind(roots,id);
+  if(!node)return;
+  node.expanded=!node.expanded;
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+window.mindExpandAll=(expand)=>{
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const walk=(nodes)=>nodes.forEach(n=>{n.expanded=expand;if(n.children)walk(n.children);});
+  walk(roots);
+  S.data.mindNotes=roots;
+  saveMain({mindNotes:roots});
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+window.mindDelNode=async(id)=>{
+  const node=mindFind(S.data.mindNotes||[],id);
+  const childCount=node?.children?.length||0;
+  if(!confirm(`刪除「${node?.keyword||''}」？${childCount>0?`\n⚠️ 底下的 ${childCount} 個關鍵字也會一起刪除。`:''}`))return;
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const arr=mindFindParentArr(roots,id);
+  if(arr){const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);}
+  S.data.mindNotes=roots;
+  await saveMain({mindNotes:roots});
+  closeMod();
+  toast('已刪除');
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+window.saveMindNode=async(id)=>{
+  const kw=$('mind_keyword')?.value?.trim();
+  const detail=$('mind_detail')?.value||'';
+  const color=S.modal?.mindColor||'blue';
+  if(!kw){alert('請填關鍵字');return;}
+  const roots=JSON.parse(JSON.stringify(S.data.mindNotes||[]));
+  const node=mindFind(roots,id);
+  if(!node){closeMod();return;}
+  node.keyword=kw;node.detail=detail;node.color=color;
+  S.data.mindNotes=roots;
+  await saveMain({mindNotes:roots});
+  toast('✅ 已儲存');
+  closeMod();
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
+// ═══════════ 🌳 聯想筆記 END ═══════════
+
 // 單個重點的編輯器
 function renderNotePointEditor(p,i){
   const col=noteColor(p.color);
@@ -6669,11 +6811,26 @@ function pgNotes(){
   const folders=S.data.noteFolders||[];
   // 首次沒資料夾 → 自動建預設（背景執行，不阻塞）
   if(folders.length===0&&!S._noteFoldersInit){S._noteFoldersInit=true;ensureDefaultFolders();}
+
+  return`
+  <div class="pg-ttl">📒 備課筆記</div>
+  <div class="pg-sub">整理你的教學筆記，備課、跟客人說明時一秒找到</div>
+
+  <div style="display:flex;gap:8px;margin:14px 0;">
+    <button class="btn ${(S.noteMode||'list')==='list'?'btn-p':'btn-s'}" style="flex:1;${(S.noteMode||'list')==='list'?'background:#9333ea;':''}" onclick="S.noteMode='list';const c=$('pg-content');if(c)c.innerHTML=renderPage();">📝 條列筆記</button>
+    <button class="btn ${S.noteMode==='mind'?'btn-p':'btn-s'}" style="flex:1;${S.noteMode==='mind'?'background:#0891b2;':''}" onclick="S.noteMode='mind';const c=$('pg-content');if(c)c.innerHTML=renderPage();">🌳 聯想筆記</button>
+  </div>
+
+  ${S.noteMode==='mind'?renderMindNotes():renderListNotes()}
+  `;
+}
+
+// 條列筆記（原本的）
+function renderListNotes(){
+  const folders=S.data.noteFolders||[];
   const notes=S.data.studyNotes||[];
   const curFolder=S.noteFolder||'all';
   const search=S.noteSearch||'';
-
-  // 篩選筆記
   let list=notes;
   if(curFolder!=='all')list=list.filter(n=>n.folderId===curFolder);
   if(search){
@@ -6685,11 +6842,7 @@ function pgNotes(){
     });
   }
   list=list.slice().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
-
   return`
-  <div class="pg-ttl">📒 備課筆記</div>
-  <div class="pg-sub">整理你的教學筆記，備課、跟客人說明時一秒找到</div>
-
   <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">
     <input type="text" placeholder="🔍 搜尋筆記內容..." value="${search.replace(/"/g,'&quot;')}" oninput="S.noteSearch=this.value;const c=$('pg-content');if(c)c.innerHTML=renderPage();" style="flex:1;min-width:180px;">
     <button class="btn btn-p" style="background:#9333ea;" onclick="openM('editNote','__new__')">＋ 新增筆記</button>
@@ -9063,6 +9216,31 @@ function renderModal(){
       <button class="btn btn-p" onclick="savePmuTerms()">✓ 儲存這段</button>
     </div>`;
     S.modal.lg=true;
+  }
+
+  // ─── 🌳 編輯聯想筆記節點 ───
+  if(m.t==='editMindNode'){
+    const node=mindFind(S.data.mindNotes||[],m.x)||{};
+    if(S.modal.mindColor===undefined)S.modal.mindColor=node.color||'blue';
+    const curColor=S.modal.mindColor;
+    c=`<div class="mttl">✏️ 編輯關鍵字</div>
+    <div class="fgrp"><label>🔑 關鍵字 *</label>
+      <input type="text" id="mind_keyword" value="${(node.keyword||'').replace(/"/g,'&quot;')}" placeholder="如：黃金比例、下針深度" style="font-size:17px;font-weight:700;">
+    </div>
+    <div class="fgrp" style="margin-top:12px;"><label>📝 細節／備注／聯想</label>
+      <textarea id="mind_detail" rows="5" placeholder="這個關鍵字的細節、答案、你的聯想...&#10;想標示的字用 **金色** 或 !!紅色!! 包起來">${node.detail||''}</textarea>
+      <div class="tm" style="font-size:11px;margin-top:4px;">平常收合看不到，點開才顯示。想標重點的字用 **字** 或 !!字!!</div>
+    </div>
+    <div class="fgrp" style="margin-top:12px;"><label>顏色標籤</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+        ${NOTE_COLORS.map(nc=>`<button type="button" onclick="S.modal.mindColor='${nc.key}';const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();" style="padding:6px 12px;background:${curColor===nc.key?nc.border:nc.bg};color:${curColor===nc.key?'#fff':nc.text};border:2px solid ${nc.border};border-radius:16px;cursor:pointer;font-size:13px;font-weight:${curColor===nc.key?'700':'400'};">${curColor===nc.key?'✓ ':''}${nc.label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="S.modal.mindColor=undefined;closeMod()">取消</button>
+      <button class="bdel" style="padding:8px 14px;border-radius:8px;" onclick="mindDelNode('${m.x}')">🗑️ 刪除</button>
+      <button class="btn btn-p" style="background:#0891b2;" onclick="saveMindNode('${m.x}')">✓ 儲存</button>
+    </div>`;
   }
 
   // ─── ✏️ 編輯備課筆記 ───
