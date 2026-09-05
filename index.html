@@ -1161,6 +1161,7 @@ window.cbSubmit=async()=>{
 function appHTML(){
   const PAGES=[
     {id:'overview',ico:'📊',lbl:'總覽'},
+    {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
     {id:'profit',ico:'💎',lbl:'獲利分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
     {id:'pricelist',ico:'🏷️',lbl:'產品價目表'},
@@ -1177,7 +1178,6 @@ function appHTML(){
     {id:'courses',ico:'📋',lbl:'課程管理'},
     {id:'notes',ico:'📒',lbl:'備課筆記'},
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
-    {id:'cashflow',ico:'🏦',lbl:'現金流水帳'},
     {id:'reports',ico:'📈',lbl:'月報年報'},
     {id:'refund',ico:'⚖️',lbl:'退費計算機'},
     {id:'settings',ico:'⚙️',lbl:'基本設定'},
@@ -7138,8 +7138,86 @@ function pgCashflow(){
   else if(filter==='transfer')filteredRows=rows.filter(r=>r.payMethod==='轉帳');
   else if(filter==='deposit')filteredRows=rows.filter(r=>r.cat==='儲值入帳');
   return`
-  <div class="pg-ttl">🏦 現金流水帳</div>
-  <div class="pg-sub">完整顯示所有實際金流（自動整合銷售、支出、儲值、進貨）</div>
+  <div class="pg-ttl">🏦 現金流帳目</div>
+  <div class="pg-sub">工作室的生死線——維持店面生存、繳房租、發薪水的唯一依靠</div>
+
+  ${(()=>{
+    // ── 健康度儀表板 ──
+    // 抓上個月結餘，判斷是否連續兩月負數
+    const prevM=curM===1?12:curM-1;
+    const prevY=curM===1?curY-1:curY;
+    const prevMonthEntries=all.filter(e=>e.month===prevM&&e.year===prevY);
+    const prevMonthIn=prevMonthEntries.filter(e=>toN(e.amount)>0).reduce((s,e)=>s+toN(e.amount),0);
+    const prevMonthOut=prevMonthEntries.filter(e=>toN(e.amount)<0).reduce((s,e)=>s+Math.abs(toN(e.amount)),0);
+    const prevMonthNet=prevMonthIn-prevMonthOut;
+    const thisMonthNet=mIn-mOut;
+    const twoMonthNeg=thisMonthNet<0&&prevMonthNet<0;
+    // 儲值負債
+    const liability=getTotalDepositLiability();
+    // 儲值負債健康度：跟本月收入比，越低越好
+    const liabilityRatio=mIn>0?liability/mIn:0;
+
+    let statusColor,statusBg,statusIcon,statusText,statusAdvice;
+    if(twoMonthNeg){
+      statusColor='#dc2626';statusBg='#fef2f2';statusIcon='🚨';
+      statusText='危險！連續兩個月結餘為負';
+      statusAdvice='店裡正在吃老本！立刻停止大筆進貨，發動現金轉化活動（推儲值、促銷庫存）。';
+    }else if(thisMonthNet<0){
+      statusColor='#d97706';statusBg='#fffbeb';statusIcon='⚠️';
+      statusText='注意：本月結餘為負';
+      statusAdvice='這個月支出大於收入。檢查是不是進貨太多，或這個月客人太少。下個月要拉回正數。';
+    }else{
+      statusColor='#16a34a';statusBg='#f0fdf4';statusIcon='✅';
+      statusText='健康：本月結餘為正';
+      statusAdvice='現金流健康，繼續保持。結餘的錢記得分流：抽成進個人帳戶、公司留週轉金。';
+    }
+
+    return`
+    <div style="background:${statusBg};border:2px solid ${statusColor};border-radius:14px;padding:18px;margin-bottom:16px;">
+      <div style="font-size:19px;font-weight:800;color:${statusColor};margin-bottom:4px;">${statusIcon} ${statusText}</div>
+      <div style="font-size:14px;color:var(--txt);line-height:1.7;">${statusAdvice}</div>
+    </div>
+
+    <!-- 三大核心指標 -->
+    <div class="sg sg3" style="margin-bottom:14px;">
+      <div class="sc grn">
+        <div class="sl">💰 本月收入</div>
+        <div class="sv grn sm">$${fmt(mIn)}</div>
+        <div class="ss">現金+轉帳+儲值入帳</div>
+      </div>
+      <div class="sc red">
+        <div class="sl">💸 本月支出</div>
+        <div class="sv red sm">$${fmt(mOut)}</div>
+        <div class="ss">現金+轉帳實支</div>
+      </div>
+      <div class="sc" style="border:2px solid ${thisMonthNet>=0?'#16a34a':'#dc2626'};">
+        <div class="sl">📊 本月結餘</div>
+        <div class="sv sm" style="color:${thisMonthNet>=0?'#16a34a':'#dc2626'};font-size:24px;">$${fmt(thisMonthNet)}</div>
+        <div class="ss" style="color:${thisMonthNet>=0?'#16a34a':'#dc2626'};font-weight:700;">${thisMonthNet>=0?'✓ 正數（健康）':'✗ 負數（吃老本）'}</div>
+      </div>
+    </div>
+
+    <!-- 上月對照 + 儲值負債 -->
+    <div class="sg sg2" style="margin-bottom:16px;">
+      <div class="sc">
+        <div class="sl">上月結餘（對照）</div>
+        <div class="sv sm" style="color:${prevMonthNet>=0?'#16a34a':'#dc2626'};">$${fmt(prevMonthNet)}</div>
+        <div class="ss">${prevMonthNet>=0?'上月是正的':'⚠️ 上月也是負的'}</div>
+      </div>
+      <div class="sc" style="border-left:4px solid ${liabilityRatio>3?'#dc2626':liabilityRatio>1.5?'#d97706':'#16a34a'};">
+        <div class="sl">💳 儲值負債餘額</div>
+        <div class="sv sm" style="color:${liabilityRatio>3?'#dc2626':liabilityRatio>1.5?'#d97706':'#16a34a'};">$${fmt(liability)}</div>
+        <div class="ss">${liabilityRatio>3?'⚠️ 偏高，工時債重':liabilityRatio>1.5?'留意消耗速度':'健康，持續消耗中'}</div>
+      </div>
+    </div>
+
+    <!-- 儲值負債說明 -->
+    <div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);font-size:12px;margin-bottom:14px;">
+      💡 <b>儲值負債</b>是客人預付、你還欠他們的服務（工時債）。<b>越低越好、要快速消耗</b>。太高代表接下來幾個月你會做得很累，卻收不到新現金——因為客人是用「舊的儲值」在消費，不是付新錢。
+    </div>
+    `;
+  })()}
+
   ${(()=>{
     const sd=S.data.settings?.cashFlowStartDate||'';
     return`<div style="background:${sd?'var(--bluL)':'var(--goldL)'};border-left:3px solid ${sd?'var(--blu)':'var(--gold)'};padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -7155,7 +7233,7 @@ function pgCashflow(){
     <div class="sc grn"><div class="sl">本月收入</div><div class="sv grn sm">$${fmt(mIn)}</div></div>
     <div class="sc red"><div class="sl">本月支出</div><div class="sv red sm">$${fmt(mOut)}</div></div>
     <div class="sc ${moBal>=0?'grn':'red'}">
-      <div class="sl">本月結餘</div>
+      <div class="sl">累計結餘</div>
       <div class="sv sm ${moBal>=0?'grn':'red'}">$${fmt(moBal)}</div>
     </div>
   </div>
