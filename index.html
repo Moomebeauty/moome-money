@@ -1622,8 +1622,6 @@ function pgOverview(){
   </div>
   ${moSel()}
 
-  ${lowStock.length>0?`<div class="notice">⚠️ 低庫存警示：${lowStock.map(p=>p.name).join('、')}　數量不足，請盡快補貨</div>`:''}
-
   ${(() => {
     // 🎨 紋繡提醒：補色到期、滿一年回訪
     const recs=S.data.pmuRecords||[];
@@ -1675,35 +1673,86 @@ function pgOverview(){
       <div class="sv ${profit>=0?'grn':'red'}">$${fmt(profit)}</div>
       <div class="ss">毛利率 ${rev>0?Math.round(profit/rev*100):0}%</div>
     </div>
-    <div class="sc gold">
-      <div class="sl">🗂️ 庫存品項</div>
-      <div class="sv gold">${S.data.products.length}</div>
-      <div class="ss">低庫存 ${lowStock.length} 項</div>
-    </div>
+    ${(()=>{
+      // 本月現金流結餘
+      const allCF=getDerivedCashFlows();
+      const cfEntries=allCF.filter(e=>e.month===S.month&&e.year===yr());
+      const cfIn=cfEntries.filter(e=>toN(e.amount)>0).reduce((s,e)=>s+toN(e.amount),0);
+      const cfOut=cfEntries.filter(e=>toN(e.amount)<0).reduce((s,e)=>s+Math.abs(toN(e.amount)),0);
+      const cfNet=cfIn-cfOut;
+      return`<div class="sc ${cfNet>=0?'grn':'red'}" style="cursor:pointer;" onclick="setP('cashflow')">
+        <div class="sl">🏦 本月現金流</div>
+        <div class="sv ${cfNet>=0?'grn':'red'}">$${fmt(cfNet)}</div>
+        <div class="ss">${cfNet>=0?'✓ 正數':'✗ 負數，點看詳情'}</div>
+      </div>`;
+    })()}
   </div>
 
-  <!-- 財務體質指標（累計狀態，不隨月份變動） -->
-  <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-    <span style="font-size:13px;font-weight:700;color:var(--mut);">📌 目前狀態</span>
-    <span class="tm" style="font-size:11px;">（累計數字，不隨上方月份切換而改變）</span>
-  </div>
-  <div class="sg sg3" style="margin-bottom:18px;">
-    <div class="sc" style="border-top-color:var(--blu);">
-      <div class="sl">💳 儲值負債餘額</div>
-      <div class="sv sm" style="color:var(--blu);">$${fmt(getTotalDepositLiability())}</div>
-      <div class="ss">公司欠客戶的服務（不算營收）</div>
-    </div>
-    <div class="sc rose">
-      <div class="sl">👥 客戶總數</div>
-      <div class="sv rose sm">${(S.data.customers||[]).length}</div>
-      <div class="ss">建檔中的客戶</div>
-    </div>
-    <div class="sc grn">
-      <div class="sl">⭐ 有儲值客戶</div>
-      <div class="sv grn sm">${(S.data.customers||[]).filter(c=>getCustomerBalance(c.name)>0).length}</div>
-      <div class="ss">未消費完的客戶數</div>
-    </div>
-  </div>
+  ${(()=>{
+    // ════ 🎨 紋繡轉型戰情 ════
+    const curM=S.month,curY=yr();
+    const monthSales=getSales();
+    const totalRev=monthSales.reduce((s,x)=>s+toN(x.amount),0);
+    // 紋繡營收：從 pmuRecords 抓本月的（付現/成交），也從 sales 抓含霧眉霧唇的
+    const pmuThisMonth=(S.data.pmuRecords||[]).filter(r=>{
+      if(!r.date)return false;
+      const d=new Date(r.date);
+      return d.getMonth()+1===curM&&d.getFullYear()===curY;
+    });
+    // 紋繡營收：優先用 sales 裡標記紋繡的，否則用 pmuRecords 的成交（若有記金額）
+    const pmuRevFromSales=monthSales.filter(x=>{
+      const item=(x.item||'')+(x.subNote||'');
+      return item.includes('霧眉')||item.includes('霧唇')||item.includes('紋繡')||item.includes('霧眉')||item.includes('補色');
+    }).reduce((s,x)=>s+toN(x.amount),0);
+    const pmuRev=pmuRevFromSales;
+    const pmuRatio=totalRev>0?Math.round(pmuRev/totalRev*100):0;
+    // 件數
+    const browCount=pmuThisMonth.filter(r=>(r.serviceType||'').includes('眉')).length;
+    const lipCount=pmuThisMonth.filter(r=>(r.serviceType||'').includes('唇')).length;
+    const targetMet=browCount>=4&&lipCount>=2;
+    // 舊客回訪率
+    const custFirstDate={};
+    (S.data.sales||[]).forEach(x=>{
+      if(!x.customer||!x.date)return;
+      if(!custFirstDate[x.customer]||x.date<custFirstDate[x.customer])custFirstDate[x.customer]=x.date;
+    });
+    const monthCusts=[...new Set(monthSales.map(x=>x.customer).filter(x=>x))];
+    const monthPrefix=`${curY}-${String(curM).padStart(2,'0')}`;
+    const returnCusts=monthCusts.filter(name=>{
+      const first=custFirstDate[name]||'';
+      return first&&!first.startsWith(monthPrefix); // 首次消費不在本月 = 舊客
+    });
+    const returnRate=monthCusts.length>0?Math.round(returnCusts.length/monthCusts.length*100):0;
+
+    return`
+    <div style="background:linear-gradient(135deg,#faf5ff,#fff);border:2px solid #9333ea;border-radius:14px;padding:16px;margin-bottom:18px;">
+      <div style="font-weight:800;color:#9333ea;font-size:16px;margin-bottom:12px;">🎨 紋繡轉型戰情（檢視轉型計劃）</div>
+
+      <div class="sg sg3" style="margin-bottom:12px;">
+        <div class="sc" style="border:2px solid ${pmuRatio>=40?'#16a34a':'#9333ea'};">
+          <div class="sl">紋繡營收佔比</div>
+          <div class="sv sm" style="color:${pmuRatio>=40?'#16a34a':'#9333ea'};font-size:26px;">${pmuRatio}%</div>
+          <div class="ss" style="color:${pmuRatio>=40?'#16a34a':'var(--mut)'};">${pmuRatio>=40?'✓ 達標！淨利暴增中':'目標 40%+'}</div>
+        </div>
+        <div class="sc" style="border:2px solid ${targetMet?'#16a34a':'#d97706'};">
+          <div class="sl">本月成交件數</div>
+          <div class="sv sm" style="color:${targetMet?'#16a34a':'#d97706'};">${browCount}眉 ${lipCount}唇</div>
+          <div class="ss" style="color:${targetMet?'#16a34a':'#d97706'};">${targetMet?'✓ 達標(4眉2唇)':'目標 4眉+2唇'}</div>
+        </div>
+        <div class="sc" style="border:2px solid ${returnRate>=50?'#16a34a':'#d97706'};">
+          <div class="sl">舊客回訪率</div>
+          <div class="sv sm" style="color:${returnRate>=50?'#16a34a':'#d97706'};font-size:26px;">${returnRate}%</div>
+          <div class="ss" style="color:${returnRate>=50?'#16a34a':'#d97706'};">${returnRate>=50?'✓ 健康(50-60%)':'目標 50-60%'}</div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;line-height:1.8;color:var(--mut);background:#fff;padding:10px 12px;border-radius:8px;">
+        💡 <b>紋繡佔比</b>拉到 40%+，淨利可暴增 5-10 倍（紋繡自己做、高毛利）。<br>
+        🎯 每月維持 <b>4眉+2唇</b>，一年輕鬆回收 50 萬進修學費，之後全是純賺。<br>
+        🔄 <b>舊客回訪率</b> 50-60% 才健康——留住舊客比一直找新客省力得多。
+      </div>
+    </div>`;
+  })()}
 
   <!-- 真實財報（含老師抽成、公司吸收折讓）-->
   ${(()=>{
