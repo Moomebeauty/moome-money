@@ -1756,7 +1756,72 @@ function pgOverview(){
 
   <!-- 獲利診斷（暫時移除，稍後重加）-->
   ${pgOverviewProfitDiagnosis(rev)}
+  ${pgOverviewTop10(rev)}
   `;
+}
+
+// 當月消費 TOP 10 客戶（80/20 VVIP）
+function pgOverviewTop10(rev){
+  const monthSales=getSales();
+  // 依客戶加總本月消費
+  var byCust={};
+  monthSales.forEach(function(s){
+    const name=s.customer;
+    if(!name)return;
+    if(!byCust[name])byCust[name]={name:name,total:0,cnt:0};
+    byCust[name].total+=toN(s.amount);
+    byCust[name].cnt++;
+  });
+  var list=Object.values(byCust).sort(function(a,b){return b.total-a.total;});
+  if(list.length===0){
+    return '<div class="card" style="margin-top:18px;"><div class="card-hd"><span class="card-ttl">👑 本月消費 TOP 10（VVIP）</span></div><div class="card-bd"><div class="empty" style="padding:20px;"><p class="tm">本月還沒有客戶消費紀錄</p></div></div></div>';
+  }
+  const top10=list.slice(0,10);
+  const top10Total=top10.reduce(function(s,c){return s+c.total;},0);
+  const top10Pct=rev>0?Math.round(top10Total/rev*100):0;
+  // 前 20% 客戶貢獻多少（80/20 驗證）
+  const top20Count=Math.max(1,Math.ceil(list.length*0.2));
+  const top20Total=list.slice(0,top20Count).reduce(function(s,c){return s+c.total;},0);
+  const top20Pct=rev>0?Math.round(top20Total/rev*100):0;
+
+  var todayStr=today();
+  var monthPrefix=(''+yr())+'-'+(''+S.month).padStart(2,'0');
+  // 判斷新舊客
+  var custFirst={};
+  (S.data.sales||[]).forEach(function(s){
+    if(!s.customer||!s.date)return;
+    if(!custFirst[s.customer]||s.date<custFirst[s.customer])custFirst[s.customer]=s.date;
+  });
+
+  var rows='';
+  top10.forEach(function(c,i){
+    var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':(''+(i+1));
+    var first=custFirst[c.name]||'';
+    var isNew=first&&first.startsWith(monthPrefix);
+    var tag=isNew?'<span style="font-size:10px;background:#d97706;color:#fff;padding:1px 6px;border-radius:8px;">新客</span>':'<span style="font-size:10px;background:#16a34a;color:#fff;padding:1px 6px;border-radius:8px;">回客</span>';
+    var isVip=i<top20Count;
+    rows+='<tr style="'+(isVip?'background:#fffbeb;':'')+'">'
+      +'<td style="padding:8px;text-align:center;font-size:16px;width:40px;">'+medal+'</td>'
+      +'<td style="padding:8px;"><b>'+c.name+'</b> '+tag+(isVip?' <span style="font-size:10px;color:#d97706;">👑VVIP</span>':'')+'</td>'
+      +'<td style="padding:8px;text-align:center;color:#666;">'+c.cnt+' 次</td>'
+      +'<td style="padding:8px;text-align:right;font-weight:700;color:#9333ea;">$'+fmt(c.total)+'</td>'
+      +'</tr>';
+  });
+
+  var html='<div class="card" style="margin-top:18px;background:linear-gradient(135deg,#fffbeb,#fff);border:2px solid #d97706;">';
+  html+='<div class="card-hd" style="background:transparent;border:none;"><span class="card-ttl" style="color:#d97706;">👑 本月消費 TOP 10（VVIP）</span></div>';
+  html+='<div class="card-bd">';
+  html+='<div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;line-height:1.8;">';
+  html+='💡 <b>80/20 法則</b>：通常 80% 利潤來自 20% 的 VVIP 顧客。<br>';
+  html+='你的前 <b>'+top20Count+'</b> 位客人（前 20%），本月貢獻了 <b style="color:#d97706;font-size:16px;">'+top20Pct+'%</b> 的營收。<br>';
+  html+=(top20Pct>=60?'✓ 符合 80/20！這些是你的金主，要好好經營維繫。':'這個月比較平均。持續培養高消費客成為 VVIP。');
+  html+='</div>';
+  html+='<div class="tw"><table style="width:100%;border-collapse:collapse;font-size:14px;">';
+  html+='<thead><tr style="border-bottom:2px solid #d97706;"><th style="padding:6px;">排名</th><th style="padding:6px;text-align:left;">客戶</th><th style="padding:6px;">次數</th><th style="padding:6px;text-align:right;">消費總額</th></tr></thead>';
+  html+='<tbody>'+rows+'</tbody></table></div>';
+  html+='<div class="tm" style="font-size:12px;margin-top:8px;">前 10 名合計 $'+fmt(top10Total)+'，佔本月營收 '+top10Pct+'%</div>';
+  html+='</div></div>';
+  return html;
 }
 
 // 當月獲利診斷（獨立函式，避免模板字串巢狀反引號問題）
@@ -1830,12 +1895,14 @@ function pgProfit(){
   var html='<div class="pg-ttl">💎 季度年度分析</div>';
   html+='<div class="pg-sub">季度看有沒有賺、年度看累積多少身家</div>';
   html+='<div style="display:flex;gap:8px;margin:14px 0;">';
-  html+='<button class="btn '+(view==='quarter'?'btn-p':'btn-s')+'" style="flex:1;" onclick="S.profitView=\'quarter\';rerenderPage();">📊 季度損益表</button>';
-  html+='<button class="btn '+(view==='year'?'btn-p':'btn-s')+'" style="flex:1;" onclick="S.profitView=\'year\';rerenderPage();">🏛️ 年度資產負債表</button>';
+  html+='<button class="btn '+(view==='quarter'?'btn-p':'btn-s')+'" style="flex:1;" onclick="setProfitView(&quot;quarter&quot;)">📊 季度損益表</button>';
+  html+='<button class="btn '+(view==='year'?'btn-p':'btn-s')+'" style="flex:1;" onclick="setProfitView(&quot;year&quot;)">🏛️ 年度資產負債表</button>';
   html+='</div>';
   html+=(view==='year'?renderBalanceSheet():renderQuarterPL());
   return html;
 }
+
+window.setProfitView=function(v){S.profitView=v;var c=document.getElementById('pg-content');if(c)c.innerHTML=renderPage();};
 
 // 讓 onclick 能重繪整頁
 window.rerenderPage=function(){var c=document.getElementById('pg-content');if(c)c.innerHTML=renderPage();};
