@@ -1754,188 +1754,72 @@ function pgOverview(){
     </div>`;
   })()}
 
-  <!-- 真實財報（含老師抽成、公司吸收折讓）-->
-  ${(()=>{
-    const fin=getMonthFinancials();
-    // 從支出中排除薪資類別（避免和「老師抽成」重複扣）
-    const salaryExp=getExp().filter(e=>e.category==='薪資').reduce((s,e)=>s+toN(e.amount),0);
-    const otherExp=exp-salaryExp;
-    const realProfit=fin.totalCompanyNet-otherExp;
-    return`<div class="card" style="background:linear-gradient(135deg,var(--bluL),var(--card));border:2px solid var(--blu);">
-      <div class="card-hd" style="background:transparent;border:none;">
-        <span class="card-ttl" style="color:var(--blu);">💎 真實財報分析（扣除老師抽成）</span>
-        <span class="bdg" style="background:var(--blu);color:#fff;">最重要的數字</span>
-      </div>
-      <div class="card-bd">
-        <div class="sg sg4">
-          <div class="sc" style="border-top-color:var(--gold);">
-            <div class="sl">📦 原價面額總計</div>
-            <div class="sv sm" style="color:var(--gold);">$${fmt(fin.totalFace)}</div>
-            <div class="ss">未打折前的服務價值</div>
-          </div>
-          <div class="sc rose">
-            <div class="sl">💰 認列營收</div>
-            <div class="sv rose sm">$${fmt(fin.totalRev)}</div>
-            <div class="ss">客戶實際買單金額</div>
-          </div>
-          <div class="sc red">
-            <div class="sl">👩‍💼 老師抽成</div>
-            <div class="sv red sm">$${fmt(fin.totalCommission)}</div>
-            <div class="ss">${fin.saleCount} 筆交易合計</div>
-          </div>
-          <div class="sc ${realProfit>=0?'grn':'red'}">
-            <div class="sl">✨ 公司真實淨利</div>
-            <div class="sv ${realProfit>=0?'grn':'red'} sm">$${fmt(realProfit)}</div>
-            <div class="ss">營收-抽成-支出${salaryExp>0?'(不含薪資)':''}</div>
-          </div>
-        </div>
-        ${fin.totalAbsorbed>0?`<div class="notice" style="background:var(--redL);border-left-color:var(--red);color:var(--red);font-size:13px;margin-top:12px;">
-          ⚠️ <b>公司吸收的折讓：$${fmt(fin.totalAbsorbed)}</b>　
-          這是因為「客戶有打折但老師仍按原價抽成」造成的差額，直接侵蝕公司獲利。
-          <button class="btn btn-s btn-sm" style="margin-left:10px;" onclick="setP('staff')">看明細 →</button>
-        </div>`:''}
-        ${salaryExp>0?`<div class="notice" style="background:#fef3c7;border-left-color:#d97706;color:#92400e;font-size:13px;margin-top:12px;">
-          💡 <b>已自動避免重複扣除：</b>支出記帳中「薪資」類別 <b>$${fmt(salaryExp)}</b> 不再重複計入（因為「老師抽成」已從業績扣過了）。<br>
-          本月支出 $${fmt(exp)} − 薪資 $${fmt(salaryExp)} = 真正其他支出 $${fmt(otherExp)}
-        </div>`:''}
-        <div class="tm" style="margin-top:8px;font-size:12px;line-height:1.6;">
-          📐 計算公式：<br>
-          • 認列營收 = 客戶實付（已打折）= <b>$${fmt(fin.totalRev)}</b><br>
-          • 老師抽成 = 原價面額 × 抽成率 = <b>$${fmt(fin.totalCommission)}</b>（按原價計算，不受折扣影響）<br>
-          • 公司淨收 = 認列營收 − 老師抽成 = <b>$${fmt(fin.totalCompanyNet)}</b><br>
-          ${salaryExp>0?`• 其他支出 = 本月支出 $${fmt(exp)} − 薪資 $${fmt(salaryExp)} = <b>$${fmt(otherExp)}</b>（避免重複扣）<br>`:`• 本月支出 = <b>$${fmt(otherExp)}</b><br>`}
-          • 真實淨利 = 公司淨收 − ${salaryExp>0?'其他':'本月'}支出 = <b style="color:var(--blu);">$${fmt(realProfit)}</b>
-        </div>
-      </div>
-    </div>`;
-  })()}
+  <!-- 獲利診斷（暫時移除，稍後重加）-->
+  ${pgOverviewProfitDiagnosis(rev)}
+  `;
+}
 
-  <!-- 當月獲利重點 -->
-  <div class="card">
-    <div class="card-hd"><span class="card-ttl">💎 當月獲利重點</span><button class="btn btn-s btn-sm" onclick="setP('profit')">看完整分析 →</button></div>
-    <div class="card-bd">
-      <div class="sg sg3">
-        <div>
-          <div class="sl">💵 平均客單價</div>
-          <div class="sv sm rose">$${fmt(avgOrder)}</div>
-          <div class="ss">${orderCount} 筆訂單</div>
-        </div>
-        <div>
-          <div class="sl">🔁 回客率</div>
-          <div class="sv sm gold">${repeatRate}%</div>
-          <div class="ss">${repeatCustomers} / ${totalCustomers} 位回客</div>
-        </div>
-        <div>
-          <div class="sl">📈 淨利潤率</div>
-          <div class="sv sm ${profit>=0?'grn':'red'}">${rev>0?Math.round(profit/rev*100):0}%</div>
-          <div class="ss">$${fmt(profit)}</div>
-        </div>
-      </div>
-      <div style="margin-top:18px;border-top:1px solid var(--bdr);padding-top:14px;">
-        <div class="sl" style="margin-bottom:10px;">🏆 高毛利服務 TOP 3</div>
-        ${topItems.length===0?'<div class="tm">本月尚無服務記錄</div>':topItems.map((it,i)=>{
-          const medal=['🥇','🥈','🥉'][i];
-          const pct=svc>0?Math.round(it[1].total/svc*100):0;
-          return`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bdr);">
-            <div><span style="font-size:18px;margin-right:8px;">${medal}</span><b>${it[0]}</b><span class="tm" style="margin-left:8px;">${it[1].cnt} 次</span></div>
-            <div><span class="ap">$${fmt(it[1].total)}</span><span class="tm" style="margin-left:8px;">${pct}%</span></div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-  </div>
+// 當月獲利診斷（獨立函式，避免模板字串巢狀反引號問題）
+function pgOverviewProfitDiagnosis(rev){
+  const monthSales=getSales();
+  const custSet=[...new Set(monthSales.map(s=>s.customer).filter(x=>x))];
+  const avgTicket=custSet.length>0?Math.round(rev/custSet.length):0;
+  const cats={'紋繡':0,'做臉':0,'熱蠟':0,'美體':0,'產品':0,'其他':0};
+  monthSales.forEach(s=>{
+    const it=(s.item||'')+(s.subNote||'');
+    const amt=toN(s.amount);
+    if(it.includes('霧眉')||it.includes('霧唇')||it.includes('紋繡')||it.includes('補色'))cats['紋繡']+=amt;
+    else if(it.includes('做臉')||it.includes('臉部')||it.includes('護膚')||it.includes('清粉刺'))cats['做臉']+=amt;
+    else if(it.includes('熱蠟')||it.includes('除毛'))cats['熱蠟']+=amt;
+    else if(it.includes('按摩')||it.includes('美體')||it.includes('身體'))cats['美體']+=amt;
+    else if(s.type==='product')cats['產品']+=amt;
+    else cats['其他']+=amt;
+  });
+  const catArr=Object.entries(cats).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  const topCat=catArr.length>0?catArr[0][0]:'';
+  const isTech=topCat==='紋繡';
+  const depositUsed=monthSales.filter(s=>s.payMethod==='儲值扣款').reduce((a,s)=>a+toN(s.depositFaceAmount||s.amount),0);
+  const monthPurchase=getExp().filter(e=>e.category==='進貨成本').reduce((a,e)=>a+toN(e.amount),0);
 
-  <!-- 自動分流建議 -->
-  ${(()=>{
-    const fin=getMonthFinancials();
-    // 從支出中排除薪資類別（避免和「老師抽成」重複扣）
-    const salaryExp=getExp().filter(e=>e.category==='薪資').reduce((s,e)=>s+toN(e.amount),0);
-    const otherExp=exp-salaryExp;
-    const realProfit=fin.totalCompanyNet-otherExp;
-    return`<div class="card">
-    <div class="card-hd"><span class="card-ttl">💡 本月「真實淨利」自動分流建議</span><button class="btn btn-s btn-sm" onclick="openM('editAlloc')">調整比例</button></div>
-    <div class="card-bd">
-      <!-- 計算公式 -->
-      <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-bottom:14px;border-left:3px solid var(--blu);">
-        <div class="tm" style="font-size:13px;line-height:1.8;">
-          📐 <b>真實淨利計算</b>：<br>
-          認列營收 <b>$${fmt(fin.totalRev)}</b><br>
-          － 老師抽成 <b style="color:var(--red);">$${fmt(fin.totalCommission)}</b>（已從業績撥出）<br>
-          － 其他支出 <b style="color:var(--red);">$${fmt(otherExp)}</b>（房租、水電、進貨等${salaryExp>0?`，不含薪資 $${fmt(salaryExp)}`:''}）<br>
-          ─────────────<br>
-          ＝ 真實淨利 <b style="color:${realProfit>=0?'var(--grn)':'var(--red)'};font-size:16px;">$${fmt(realProfit)}</b>
-        </div>
-        ${salaryExp>0?`<div style="margin-top:10px;padding:8px;background:#fff;border-radius:6px;font-size:12px;color:#92400e;">
-          💡 <b>已自動避免重複扣抽成</b>：你在「支出記帳」記了 $${fmt(salaryExp)} 薪資，但這已經被「老師抽成」涵蓋了，所以不重複扣
-        </div>`:''}
-      </div>
+  let barsHtml='';
+  catArr.forEach(pair=>{
+    const k=pair[0],v=pair[1];
+    const pct=rev>0?Math.round(v/rev*100):0;
+    const isT=k==='紋繡';
+    barsHtml+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px;">'
+      +'<span style="width:44px;color:'+(isT?'#9333ea':'#333')+';font-weight:'+(isT?'700':'400')+';">'+k+'</span>'
+      +'<div style="flex:1;background:#f1f1f1;border-radius:6px;height:16px;overflow:hidden;"><div style="width:'+pct+'%;height:100%;background:'+(isT?'#9333ea':'#d1a054')+';"></div></div>'
+      +'<span style="width:70px;text-align:right;">$'+fmt(v)+'</span>'
+      +'<span style="width:36px;text-align:right;color:#999;">'+pct+'%</span></div>';
+  });
 
-      ${realProfit<=0?'<div class="empty" style="padding:20px;"><p>本月真實淨利為負或為零，無法分流。先檢查支出是否過高 🌸</p></div>':`
-      <div style="background:var(--bg2);padding:14px;border-radius:10px;margin-bottom:14px;">
-        <div class="sl">本月可分流真實淨利</div>
-        <div class="sv grn">$${fmt(realProfit)}</div>
-        <div class="ss">老師抽成已先撥出，這才是公司真正能分配的錢</div>
-      </div>
-      ${allocPlans.map(p=>{
-        const amt=Math.round(realProfit*p.pct/100);
-        return`<div style="margin-bottom:14px;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;background:var(--card);">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <div><b>${p.lbl}</b><span class="bdg" style="margin-left:8px;background:${p.color};color:#fff;">${p.pct}%</span></div>
-            <div style="font-family:'Noto Serif TC',serif;font-size:20px;font-weight:700;color:${p.color};">$${fmt(amt)}</div>
-          </div>
-          <div class="tm">${p.sub}</div>
-          <div class="pb" style="height:8px;margin-top:8px;"><div class="pf" style="width:${p.pct}%;height:8px;background:${p.color};"></div></div>
-        </div>`;
-      }).join('')}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-        <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;flex:1;min-width:160px;" onclick="recordHouseFund(${Math.round(realProfit*al.invest/100)})">💰 紀錄本月買房專款 $${fmt(Math.round(realProfit*al.invest/100))}</button>
-      </div>`}
-    </div>
-  </div>`;})()}
+  const diag1=isTech
+    ? '✅ <b style="color:#16a34a;">健康的技術財</b>：這個月利潤主要來自<b>紋繡</b>！<br>💡 下月策略：繼續維持紋繡行銷，這是可長久、高毛利的方向。'
+    : '⚠️ <b style="color:#d97706;">高風險的勞力財</b>：這個月利潤主要來自<b>'+topCat+'</b>（勞力密集）。<br>身體總有一天會累垮，這不是長久之計。<br>🎯 下月策略：加快把這群客人<b>轉化成紋繡客</b>——同樣的客人，紋繡賺更多又更省力。';
 
-  <div class="sg sg3">
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">💰 收入結構</span><button class="btn btn-p btn-sm" onclick="setP('order')">開立銷售單</button></div>
-      <div class="card-bd">
-        ${rev===0?'<div class="empty" style="padding:18px;"><p>本月尚無收入</p></div>':[
-          {lbl:'🌸 服務',val:svc,color:'var(--rose)'},
-          {lbl:'🧴 產品',val:prd,color:'var(--gold)'},
-          {lbl:'📚 課程',val:crs,color:'var(--pur)'},
-        ].map(({lbl,val,color})=>val>0?`
-          <div style="margin-bottom:14px;">
-            <div class="plbl"><span>${lbl}</span><span style="font-weight:700;color:${color};">$${fmt(val)}（${rev>0?Math.round(val/rev*100):0}%）</span></div>
-            <div class="pb" style="height:11px;"><div class="pf" style="width:${rev>0?Math.round(val/rev*100):0}%;height:11px;background:${color};"></div></div>
-          </div>`:'').join('')}
-      </div>
-    </div>
+  const diag2=depositUsed>0
+    ? '✓ 這代表你認真在「還清以前的工時債」。櫃檯這個月雖然沒收到這筆新現金，但<b>未來負債變輕了</b>——這叫「隱形獲利」，是良性循環。'
+    : '這個月幾乎沒有儲值消耗。如果儲值負債還很高，要提醒客人多來使用，加快消化。';
 
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">👩‍💼 本月業績</span><button class="btn btn-s btn-sm" onclick="setP('staff')">詳細</button></div>
-      <div class="card-bd">
-        ${Object.keys(staffSales).length===0?'<div class="empty" style="padding:18px;"><p>本月尚無業績</p></div>':
-          Object.entries(staffSales).sort((a,b)=>b[1]-a[1]).map(([u,v])=>`
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);">
-            <span style="font-size:15px;">${u}</span>
-            <span class="ap">$${fmt(v)}</span>
-          </div>`).join('')}
-      </div>
-    </div>
+  const diag3=monthPurchase>0
+    ? '⚠️ 檢查一下：這些是<b>真的用在客人身上</b>（拋棄式針頭、消耗的面膜），還是只因為<b>廠商打折就衝動囤貨</b>？<br>美業最怕利潤全變成「過期保養品躺在架上」。<br>🎯 下月提醒：不要再瞎買傳統做臉耗材，把資金留著當<b>轉型紋繡的預備金</b>。'
+    : '這個月沒有進貨支出，很好——把現金留著轉型紋繡。';
 
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">📋 課程待收款</span><button class="btn btn-s btn-sm" onclick="setP('courses')">管理</button></div>
-      <div class="card-bd">
-        ${pending.length===0?'<div class="empty" style="padding:18px;"><p>本月無待收款</p></div>':
-          pending.slice(0,5).map(s=>`
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);">
-            <div><div style="font-size:15px;">${s.studentName}</div><div class="tm">${s.courseName}</div></div>
-            <div style="text-align:right;"><div class="an">$${fmt(s.amount)}</div>
-              <button style="margin-top:4px;" class="btn btn-g btn-sm" onclick="markPaid('${s.id}')">收款</button>
-            </div>
-          </div>`).join('')}
-        ${pending.length>5?`<div class="tm" style="text-align:center;margin-top:10px;">還有 ${pending.length-5} 筆…</div>`:''}
-      </div>
-    </div>
-  </div>`;
+  return '<div class="card" style="margin-top:18px;background:linear-gradient(135deg,#f0fdf4,#fff);border:2px solid #16a34a;">'
+    +'<div class="card-hd" style="background:transparent;border:none;"><span class="card-ttl" style="color:#16a34a;">🎯 當月獲利診斷</span><span class="bdg" style="background:#16a34a;color:#fff;">紋繡轉型導向</span></div>'
+    +'<div class="card-bd">'
+    +'<div style="font-weight:800;font-size:15px;margin-bottom:8px;">📊 重點一：這個月靠什麼賺錢？</div>'
+    +'<div class="sg sg2" style="margin-bottom:10px;">'
+    +'<div class="sc"><div class="sl">平均客單價</div><div class="sv sm gold">$'+fmt(avgTicket)+'</div><div class="ss">'+custSet.length+' 位客人</div></div>'
+    +'<div class="sc"><div class="sl">最大營收來源</div><div class="sv sm" style="color:'+(isTech?'#16a34a':'#d97706')+';font-size:18px;">'+(topCat||'—')+'</div><div class="ss">'+(catArr.length>0?'$'+fmt(catArr[0][1]):'')+'</div></div>'
+    +'</div>'
+    +'<div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:6px;"><div class="tm" style="font-size:12px;margin-bottom:6px;">服務營收排名與佔比：</div>'+barsHtml+'</div>'
+    +'<div style="background:'+(isTech?'#f0fdf4':'#fffbeb')+';border-left:4px solid '+(isTech?'#16a34a':'#d97706')+';border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:16px;">'+diag1+'</div>'
+    +'<div style="font-weight:800;font-size:15px;margin-bottom:8px;">💳 重點二：有沒有在還「工時債」？</div>'
+    +'<div style="background:#fff;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:16px;">本月客人用<b>儲值金</b>消費了 <b style="color:#0891b2;">$'+fmt(depositUsed)+'</b><br>'+diag2+'</div>'
+    +'<div style="font-weight:800;font-size:15px;margin-bottom:8px;">📦 重點三：進貨有沒有變成死資產？</div>'
+    +'<div style="background:#fff;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;">本月進貨花了 <b style="color:#dc2626;">$'+fmt(monthPurchase)+'</b><br>'+diag3+'</div>'
+    +'</div></div>';
 }
 
 // ─── 獲利分析（季度＋月度深度分析）────────────────────
