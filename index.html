@@ -1162,7 +1162,7 @@ function appHTML(){
   const PAGES=[
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
-    {id:'profit',ico:'💎',lbl:'獲利分析'},
+    {id:'profit',ico:'💎',lbl:'季度年度分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
     {id:'pricelist',ico:'🏷️',lbl:'產品價目表'},
     {id:'customers',ico:'👤',lbl:'客戶管理'},
@@ -1824,160 +1824,164 @@ function pgOverviewProfitDiagnosis(rev){
 
 // ─── 獲利分析（季度＋月度深度分析）────────────────────
 function pgProfit(){
+  const curY=yr();
   const curQ=Math.ceil(S.month/3);
-  // 季度資料
-  const quarters=[1,2,3,4].map(q=>{
-    const months=[(q-1)*3+1,(q-1)*3+2,(q-1)*3+3];
-    const qRev=months.reduce((s,m)=>s+getRevTotal(m),0);
-    const qExp=months.reduce((s,m)=>s+getExpTotal(m),0);
-    const qSvc=months.reduce((s,m)=>s+getSvcTotal(m),0);
-    const qPrd=months.reduce((s,m)=>s+getPrdTotal(m),0);
-    const qCrs=months.reduce((s,m)=>s+getCrsTotal(m),0);
-    return{q,months,rev:qRev,exp:qExp,profit:qRev-qExp,svc:qSvc,prd:qPrd,crs:qCrs};
-  });
-  // 當月深度分析
-  const sales=getSales();
-  const rev=getRevTotal();
-  const profit=rev-getExpTotal();
-  const svc=getSvcTotal();
-  // 服務項目 ranking（按收入＋次數）
-  const itemMap={};
-  sales.filter(s=>s.type==='service').forEach(s=>{
-    const item=s.item||'未分類';
-    if(!itemMap[item])itemMap[item]={total:0,cnt:0,custs:new Set()};
-    itemMap[item].total+=toN(s.amount);
-    itemMap[item].cnt++;
-    if(s.customer)itemMap[item].custs.add(s.customer);
-  });
-  const itemList=Object.entries(itemMap).map(([k,v])=>({
-    name:k,total:v.total,cnt:v.cnt,
-    avg:Math.round(v.total/v.cnt),
-    custCount:v.custs.size,
-    pct:svc>0?Math.round(v.total/svc*100):0
-  })).sort((a,b)=>b.total-a.total);
-  // 客戶分析
-  const customers={};
-  sales.forEach(s=>{
-    const c=(s.customer||'').trim();
-    if(c){
-      if(!customers[c])customers[c]={total:0,cnt:0};
-      customers[c].total+=toN(s.amount);
-      customers[c].cnt++;
-    }
-  });
-  const customerList=Object.entries(customers).map(([k,v])=>({name:k,total:v.total,cnt:v.cnt})).sort((a,b)=>b.total-a.total);
-  const totalCustomers=customerList.length;
-  const repeatCustomers=customerList.filter(c=>c.cnt>1).length;
-  const repeatRate=totalCustomers>0?Math.round(repeatCustomers/totalCustomers*100):0;
-  const orderCount=sales.length;
-  const avgOrder=orderCount>0?Math.round(rev/orderCount):0;
-
-  return`
-  <div class="pg-ttl">💎 獲利分析</div>
-  <div class="pg-sub">${yr()}年 — 月度與季度獲利全貌</div>
-  <div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <div>💎 <b>商業分析</b>：哪個服務最賺、哪個客戶最忠誠、季度趨勢 — 適合每週/每月深度檢視</div>
-    <div style="display:flex;gap:6px;">
-      <button class="btn btn-sm" style="background:var(--blu);color:#fff;font-size:11px;" onclick="setP('overview')">📊 回到儀表板</button>
-      <button class="btn btn-sm" style="background:var(--pur);color:#fff;font-size:11px;" onclick="setP('advisor')">🩺 想看診斷報告</button>
-    </div>
-  </div>
-  ${moSel()}
-
-  <!-- 當月關鍵指標 -->
-  <div class="sg sg4">
-    <div class="sc rose">
-      <div class="sl">💵 平均客單價</div>
-      <div class="sv sm rose">$${fmt(avgOrder)}</div>
-      <div class="ss">${orderCount} 筆訂單</div>
-    </div>
-    <div class="sc gold">
-      <div class="sl">🔁 回客率</div>
-      <div class="sv sm gold">${repeatRate}%</div>
-      <div class="ss">${repeatCustomers} / ${totalCustomers}</div>
-    </div>
-    <div class="sc ${profit>=0?'grn':'red'}">
-      <div class="sl">📈 淨利潤</div>
-      <div class="sv sm ${profit>=0?'grn':'red'}">$${fmt(profit)}</div>
-      <div class="ss">利潤率 ${rev>0?Math.round(profit/rev*100):0}%</div>
-    </div>
-    <div class="sc pur">
-      <div class="sl">📅 當前季度</div>
-      <div class="sv sm" style="color:var(--pur);">第 ${curQ} 季</div>
-      <div class="ss">$${fmt(quarters[curQ-1].profit)} 淨利</div>
-    </div>
-  </div>
-
-  <!-- 季度獲利檢視 -->
-  <div class="card">
-    <div class="card-hd"><span class="card-ttl">📅 ${yr()}年 四季獲利對比</span></div>
-    <div class="card-bd">
-      <div class="sg sg4">
-        ${quarters.map(q=>{
-          const isCur=q.q===curQ;
-          return`<div style="border:2px solid ${isCur?'var(--rose)':'var(--bdr)'};border-radius:10px;padding:14px;background:${isCur?'var(--roseL)':'var(--card)'};">
-            <div class="sl">第 ${q.q} 季 (${q.months[0]}-${q.months[2]}月)${isCur?' <span class="bdg rose">當前</span>':''}</div>
-            <div style="margin-top:8px;">
-              <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span class="tm">營收</span><span class="ap">$${fmt(q.rev)}</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span class="tm">支出</span><span class="an">$${fmt(q.exp)}</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-top:1px solid var(--bdr);margin-top:4px;"><b>淨利</b><b class="${q.profit>=0?'ap':'an'}">$${fmt(q.profit)}</b></div>
-              <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;"><span class="tm">利潤率</span><span style="color:${q.profit>=0?'var(--grn)':'var(--red)'};">${q.rev>0?Math.round(q.profit/q.rev*100):0}%</span></div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-  </div>
-
-  <!-- 高毛利服務排行 -->
-  <div class="card">
-    <div class="card-hd"><span class="card-ttl">🏆 服務項目獲利排行（${MOS[S.month-1]}）</span></div>
-    <div class="tw"><table>
-      <thead><tr><th>排名</th><th>服務項目</th><th>次數</th><th>平均客單</th><th>客戶數</th><th>總收入</th><th>佔服務比例</th></tr></thead>
-      <tbody>${itemList.length===0?`<tr><td colspan="7"><div class="empty"><p>本月尚無服務記錄</p></div></td></tr>`:
-        itemList.map((it,i)=>{
-          const medal=['🥇','🥈','🥉'][i]||`${i+1}`;
-          return`<tr ${i<3?'style="background:var(--goldL);"':''}>
-            <td><span style="font-size:18px;">${medal}</span></td>
-            <td><b>${it.name}</b></td>
-            <td>${it.cnt}</td>
-            <td class="ag">$${fmt(it.avg)}</td>
-            <td>${it.custCount}</td>
-            <td class="ap">$${fmt(it.total)}</td>
-            <td><div class="pb" style="height:8px;width:80px;display:inline-block;vertical-align:middle;"><div class="pf" style="width:${it.pct}%;height:8px;background:var(--rose);"></div></div> ${it.pct}%</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table></div>
-  </div>
-
-  <!-- 客戶 TOP 10 -->
-  <div class="card">
-    <div class="card-hd"><span class="card-ttl">👥 本月客戶消費 TOP 10</span></div>
-    <div class="tw"><table>
-      <thead><tr><th>排名</th><th>客戶</th><th>消費次數</th><th>總消費</th><th>狀態</th></tr></thead>
-      <tbody>${customerList.length===0?`<tr><td colspan="5"><div class="empty"><p>本月尚無客戶記錄</p></div></td></tr>`:
-        customerList.slice(0,10).map((c,i)=>{
-          // 正確判斷新舊客：看這個客戶「第一次消費」是不是在本月
-          // 本月之前有消費紀錄 → 回客；第一次消費就在本月 → 新客
-          const allSales=(S.data.sales||[]).filter(s=>s.customer===c.name&&s.type!=='deposit');
-          const firstDate=allSales.map(s=>s.date).filter(d=>d).sort()[0]||'';
-          const thisMonthPrefix=`${yr()}-${String(S.month).padStart(2,'0')}`;
-          const isNew=firstDate.startsWith(thisMonthPrefix);
-          return`<tr>
-          <td>${i+1}</td>
-          <td><b>${c.name}</b></td>
-          <td>${c.cnt}</td>
-          <td class="ap">$${fmt(c.total)}</td>
-          <td>${isNew?'<span class="pill gold">新客</span>':'<span class="pill grn">回客</span>'}</td>
-        </tr>`;}).join('')}
-      </tbody>
-    </table></div>
-  </div>`;
+  const view=S.profitView||'quarter';
+  var html='<div class="pg-ttl">💎 季度年度分析</div>';
+  html+='<div class="pg-sub">季度看有沒有賺、年度看累積多少身家</div>';
+  html+='<div style="display:flex;gap:8px;margin:14px 0;">';
+  html+='<button class="btn '+(view==='quarter'?'btn-p':'btn-s')+'" style="flex:1;" onclick="S.profitView=\'quarter\';rerenderPage();">📊 季度損益表</button>';
+  html+='<button class="btn '+(view==='year'?'btn-p':'btn-s')+'" style="flex:1;" onclick="S.profitView=\'year\';rerenderPage();">🏛️ 年度資產負債表</button>';
+  html+='</div>';
+  html+=(view==='year'?renderBalanceSheet():renderQuarterPL());
+  return html;
 }
 
-// ─── 進修回本計畫（讓老闆無腦執行）────────────────
-// 計算單一進修目標的進度與行動建議
+// 讓 onclick 能重繪整頁
+window.rerenderPage=function(){var c=document.getElementById('pg-content');if(c)c.innerHTML=renderPage();};
+
+window.saveBalanceSheet=async function(){
+  const bs={
+    cash:toN(document.getElementById('bs_cash')?.value),
+    fixedAsset:toN(document.getElementById('bs_fixedAsset')?.value),
+    intangible:toN(document.getElementById('bs_intangible')?.value),
+    capital:toN(document.getElementById('bs_capital')?.value)
+  };
+  const settings=Object.assign({},S.data.settings||{},{balanceSheet:bs});
+  S.data.settings=settings;
+  await saveMain({settings});
+  toast('✅ 已儲存');
+  closeMod();
+  rerenderPage();
+};
+
+// ── 季度損益表 ──
+function renderQuarterPL(){
+  const curY=yr();
+  var html='';
+  // 四季各自的損益
+  const quarters=[1,2,3,4];
+  quarters.forEach(function(q){
+    const months=[(q-1)*3+1,(q-1)*3+2,(q-1)*3+3];
+    var rev=0,svc=0,prd=0,exp=0;
+    months.forEach(function(m){
+      rev+=getRevTotal(m); svc+=getSvcTotal(m); prd+=getPrdTotal(m); exp+=getExpTotal(m);
+    });
+    const net=rev-exp;
+    const hasData=rev>0||exp>0;
+    if(!hasData)return;
+    // 費用分類
+    var expByCat={};
+    months.forEach(function(m){
+      getExp(m).forEach(function(e){
+        const cat=e.category||'其他';
+        expByCat[cat]=(expByCat[cat]||0)+toN(e.amount);
+      });
+    });
+    var expRows='';
+    Object.keys(expByCat).sort(function(a,b){return expByCat[b]-expByCat[a];}).forEach(function(cat){
+      expRows+='<tr><td style="padding:4px 8px;color:#666;">　'+cat+'</td><td style="padding:4px 8px;text-align:right;color:#dc2626;">$'+fmt(expByCat[cat])+'</td></tr>';
+    });
+    html+='<div class="card" style="margin-bottom:14px;">';
+    html+='<div class="card-hd" style="background:'+(net>=0?'#f0fdf4':'#fef2f2')+';"><span class="card-ttl" style="color:'+(net>=0?'#16a34a':'#dc2626')+';">第 '+q+' 季損益（'+months[0]+'-'+months[2]+'月）</span></div>';
+    html+='<div class="card-bd"><table style="width:100%;border-collapse:collapse;font-size:14px;">';
+    html+='<tr style="border-bottom:2px solid #16a34a;"><td style="padding:6px 8px;font-weight:700;color:#16a34a;">📈 營業收入</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:#16a34a;">$'+fmt(rev)+'</td></tr>';
+    html+='<tr><td style="padding:4px 8px;color:#666;">　服務收入</td><td style="padding:4px 8px;text-align:right;">$'+fmt(svc)+'</td></tr>';
+    html+='<tr><td style="padding:4px 8px;color:#666;">　產品收入</td><td style="padding:4px 8px;text-align:right;">$'+fmt(prd)+'</td></tr>';
+    html+='<tr style="border-top:2px solid #dc2626;"><td style="padding:6px 8px;font-weight:700;color:#dc2626;">📉 營業費用</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:#dc2626;">$'+fmt(exp)+'</td></tr>';
+    html+=expRows;
+    html+='<tr style="border-top:3px double #333;background:'+(net>=0?'#f0fdf4':'#fef2f2')+';"><td style="padding:8px;font-weight:800;font-size:16px;">💰 季度淨利</td><td style="padding:8px;text-align:right;font-weight:800;font-size:18px;color:'+(net>=0?'#16a34a':'#dc2626')+';">$'+fmt(net)+'</td></tr>';
+    html+='</table>';
+    html+='<div style="margin-top:8px;font-size:13px;color:'+(net>=0?'#16a34a':'#dc2626')+';">'+(net>=0?'✓ 這一季有賺到真利潤':'✗ 這一季虧損，要檢討')+'</div>';
+    html+='</div></div>';
+  });
+  if(html==='')html='<div class="empty" style="padding:40px;"><div class="empty-ico">📊</div><p>今年還沒有損益資料</p></div>';
+  return html;
+}
+
+// ── 年度資產負債表 ──
+function renderBalanceSheet(){
+  const curY=yr();
+  const bs=(S.data.settings&&S.data.settings.balanceSheet)||{};
+  // 系統自動抓的數字
+  // 1. 庫存價值 = 各產品 庫存量 × 成本
+  var invValue=0;
+  (S.data.products||[]).forEach(function(p){
+    const inv=getInv(p.id);
+    const cost=getAvgCost(p.id);
+    invValue+=toN(inv.qty)*toN(cost);
+  });
+  invValue=Math.round(invValue);
+  // 2. 儲值負債
+  const liability=getTotalDepositLiability();
+  // 3. 今年累積盈餘 = 今年營收 - 今年支出
+  var yearRev=0,yearExp=0;
+  for(var m=1;m<=12;m++){yearRev+=getRevTotal(m);yearExp+=getExpTotal(m);}
+  const yearProfit=yearRev-yearExp;
+  // 你填的數字
+  const cash=toN(bs.cash);
+  const fixedAsset=toN(bs.fixedAsset);
+  const intangible=toN(bs.intangible);
+  const capital=toN(bs.capital);
+  // 資產總計
+  const totalAsset=cash+invValue+fixedAsset+intangible;
+  // 權益 = 創立資本 + 累積盈餘
+  const equity=capital+yearProfit;
+  // 負債+權益
+  const totalLE=liability+equity;
+  // 是否平衡
+  const balanced=Math.abs(totalAsset-totalLE)<1;
+  const diff=totalAsset-totalLE;
+
+  var html='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;">🏛️ 每年 12/31 結算一次。<b>系統自動抓的</b>直接顯示，<b>你要填的</b>（現金、設備、學費、資本）點「填寫」輸入。會計黃金公式：<b>資產 ＝ 負債 ＋ 權益</b>，兩邊要一樣。</div>';
+  html+='<div style="text-align:right;margin:10px 0;"><button class="btn btn-p" style="background:#9333ea;" onclick="openM(\'editBalanceSheet\')">✏️ 填寫／修改我的數字</button></div>';
+
+  // 資產區
+  html+='<div class="card" style="margin-bottom:14px;">';
+  html+='<div class="card-hd" style="background:#eff6ff;"><span class="card-ttl" style="color:#2563eb;">💎 資產（我擁有的）</span></div>';
+  html+='<div class="card-bd"><table style="width:100%;font-size:14px;">';
+  html+=blRow('💵 現金與銀行存款',cash,'你填','#2563eb');
+  html+=blRow('📦 庫存（產品+材料）',invValue,'系統自動','#16a34a');
+  html+=blRow('🛋️ 固定資產（美容床、儀器、裝潢）',fixedAsset,'你填','#2563eb');
+  html+=blRow('🎓 無形資產（進修學費）',intangible,'你填','#2563eb');
+  html+='<tr style="border-top:3px double #2563eb;background:#eff6ff;"><td style="padding:8px;font-weight:800;">資產總計</td><td style="padding:8px;text-align:right;font-weight:800;font-size:17px;color:#2563eb;">$'+fmt(totalAsset)+'</td><td></td></tr>';
+  html+='</table></div></div>';
+
+  // 負債+權益區
+  html+='<div class="card" style="margin-bottom:14px;">';
+  html+='<div class="card-hd" style="background:#fef2f2;"><span class="card-ttl" style="color:#dc2626;">📋 負債 ＋ 權益（錢從哪來的）</span></div>';
+  html+='<div class="card-bd"><table style="width:100%;font-size:14px;">';
+  html+='<tr><td colspan="3" style="padding:4px 8px;font-weight:700;color:#dc2626;">負債（欠別人的）</td></tr>';
+  html+=blRow('💳 未消耗儲值金（工時債）',liability,'系統自動','#dc2626');
+  html+='<tr><td colspan="3" style="padding:8px 8px 4px;font-weight:700;color:#9333ea;">權益（真正屬於你的）</td></tr>';
+  html+=blRow('🏦 創立資本（當初自己拿出來的）',capital,'你填','#9333ea');
+  html+=blRow('📈 今年累積盈餘',yearProfit,'系統自動','#9333ea');
+  html+='<tr style="border-top:3px double #dc2626;background:#fef2f2;"><td style="padding:8px;font-weight:800;">負債＋權益總計</td><td style="padding:8px;text-align:right;font-weight:800;font-size:17px;color:#dc2626;">$'+fmt(totalLE)+'</td><td></td></tr>';
+  html+='</table></div></div>';
+
+  // 黃金公式驗證
+  if(balanced){
+    html+='<div class="card" style="background:#f0fdf4;border:2px solid #16a34a;"><div class="card-bd" style="text-align:center;">';
+    html+='<div style="font-size:18px;font-weight:800;color:#16a34a;">✅ 帳目平衡！</div>';
+    html+='<div style="font-size:14px;color:#333;margin-top:6px;">資產 $'+fmt(totalAsset)+' ＝ 負債＋權益 $'+fmt(totalLE)+'</div>';
+    html+='<div style="font-size:13px;color:#16a34a;margin-top:4px;">會計黃金公式成立，你的帳是正確的 🎉</div>';
+    html+='</div></div>';
+  }else{
+    html+='<div class="card" style="background:#fffbeb;border:2px solid #d97706;"><div class="card-bd">';
+    html+='<div style="font-size:16px;font-weight:800;color:#d97706;">⚠️ 兩邊差了 $'+fmt(Math.abs(diff))+'</div>';
+    html+='<div style="font-size:13px;color:#333;margin-top:6px;line-height:1.7;">資產 $'+fmt(totalAsset)+'　vs　負債＋權益 $'+fmt(totalLE)+'<br>兩邊不一樣代表有數字沒填對。常見原因：<br>• 現金存款金額沒填或填錯<br>• 創立資本沒填<br>• 有些資產漏記了<br>💡 通常是「現金」欄位要調整——把差額 $'+fmt(Math.abs(diff))+' 補進現金或資本，就會平衡。</div>';
+    html+='</div></div>';
+  }
+  return html;
+}
+
+function blRow(label,amount,tag,color){
+  const tagColor=tag==='系統自動'?'#16a34a':'#9333ea';
+  return '<tr><td style="padding:6px 8px;">'+label+'</td>'
+    +'<td style="padding:6px 8px;text-align:right;color:'+color+';font-weight:600;">$'+fmt(amount)+'</td>'
+    +'<td style="padding:6px 8px;text-align:right;"><span style="font-size:10px;background:'+tagColor+';color:#fff;padding:1px 6px;border-radius:8px;">'+tag+'</span></td></tr>';
+}
+
 function analyzeLearnGoal(goal){
   const today=new Date();
   const startDate=new Date(goal.startDate);
@@ -9244,6 +9248,36 @@ function renderModal(){
   }
 
   // ─── 🌳 編輯聯想筆記節點 ───
+  // ─── 🏛️ 填寫資產負債表數字 ───
+  if(m.t==='editBalanceSheet'){
+    const bs=(S.data.settings&&S.data.settings.balanceSheet)||{};
+    c=`<div class="mttl">🏛️ 填寫我的資產負債表數字</div>
+    <div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:12px;">
+      這些是系統抓不到、只有你知道的數字。填一次即可，之後有變動再改。
+    </div>
+    <div class="fgrp" style="margin-top:12px;"><label>💵 現金與銀行存款</label>
+      <input type="number" id="bs_cash" value="${toN(bs.cash)||''}" placeholder="你所有戶頭+現金加起來">
+      <div class="tm" style="font-size:11px;margin-top:2px;">營業帳戶、個人週轉、手邊現金的總和</div>
+    </div>
+    <div class="fgrp" style="margin-top:10px;"><label>🛋️ 固定資產（設備裝潢）</label>
+      <input type="number" id="bs_fixedAsset" value="${toN(bs.fixedAsset)||''}" placeholder="美容床+儀器+冷氣+裝潢的現值">
+      <div class="tm" style="font-size:11px;margin-top:2px;">美容床、紋繡儀器、補光燈、冷氣、裝潢等，抓大概現值即可</div>
+    </div>
+    <div class="fgrp" style="margin-top:10px;"><label>🎓 無形資產（進修學費）</label>
+      <input type="number" id="bs_intangible" value="${toN(bs.intangible)||''}" placeholder="如：50萬霧眉霧唇進修">
+      <div class="tm" style="font-size:11px;margin-top:2px;">花大錢學的技術，是你的資產。可逐年攤提（例如每年減 1/5）</div>
+    </div>
+    <div class="fgrp" style="margin-top:10px;"><label>🏦 創立資本（當初自己拿出來的）</label>
+      <input type="number" id="bs_capital" value="${toN(bs.capital)||''}" placeholder="開店時自掏腰包的裝潢+週轉金">
+      <div class="tm" style="font-size:11px;margin-top:2px;">第一天開店時，你自己投入的錢</div>
+    </div>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" style="background:#9333ea;" onclick="saveBalanceSheet()">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
   // ─── 🌳 編輯聯想筆記關鍵字 ───
   if(m.t==='editMindNode'){
     const node=mindFind(S.data.mindNotes||[],m.x)||{};
