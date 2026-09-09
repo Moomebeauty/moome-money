@@ -3596,6 +3596,16 @@ window.viewPmuRecord=(id)=>{
         ${r.expectation?`期待：${r.expectation}<br>`:''}
         ${r.designNote?`設計溝通：${r.designNote}`:''}
       </div>
+      <div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-top:10px;">
+        <b>🔍 面診評估</b><br>
+        ${r.baseColor?`底色：${r.baseColor}<br>`:''}
+        ${r.hairFlow?`毛流：${r.hairFlow}<br>`:''}
+        ${r.boneState?`骨骼：${r.boneState}<br>`:''}
+        ${r.muscleState?`肌肉：${r.muscleState}<br>`:''}
+        ${r.leftBrow?`左眉：${r.leftBrow}<br>`:''}
+        ${r.rightBrow?`右眉：${r.rightBrow}<br>`:''}
+        ${r.faceMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">面診圈記：</div><img src="${r.faceMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
+      </div>
       <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
         <b>身體狀況</b><br>
         痼疾：${condStr}<br>過敏：${allergyStr}
@@ -5303,6 +5313,54 @@ function pmuDesignStage(t){
     </div>
 
     <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">🔍 顧客面診評估</span></div>
+      <div class="card-bd">
+        <div class="fgrp"><label>是否有底色？</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${['有，略有深度','有，偏淺淡','無，已施作淡色','無'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.baseColor===o?'#9333ea':'var(--bg2)'};color:${t.baseColor===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('baseColor','${o}')">${t.baseColor===o?'✓ ':''}${o}</button>`).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>原生毛流狀態</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${['完整毛流','前濃，後段缺','整體偏淡','左右分布不均'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.hairFlow===o?'#0891b2':'var(--bg2)'};color:${t.hairFlow===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('hairFlow','${o}')">${t.hairFlow===o?'✓ ':''}${o}</button>`).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>面部骨骼狀態</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${['整體明顯','後段眉骨高','眉骨不明顯','左右落差大'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.boneState===o?'#16a34a':'var(--bg2)'};color:${t.boneState===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('boneState','${o}')">${t.boneState===o?'✓ ':''}${o}</button>`).join('')}
+          </div>
+        </div>
+        <div class="fgrp" style="margin-top:12px;"><label>眉部肌肉狀態</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            ${['施力平均','眉頭發達','眉中發達','眉峰發達'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.muscleState===o?'#d97706':'var(--bg2)'};color:${t.muscleState===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('muscleState','${o}')">${t.muscleState===o?'✓ ':''}${o}</button>`).join('')}
+          </div>
+        </div>
+        <div class="fg fg2" style="margin-top:12px;">
+          <div class="fgrp"><label>左眉型狀況</label>
+            <input type="text" id="pmu_leftBrow" value="${(t.leftBrow||'').replace(/"/g,'&quot;')}" placeholder="詳細記錄左眉" oninput="S.treatment.leftBrow=this.value">
+          </div>
+          <div class="fgrp"><label>右眉型狀況</label>
+            <input type="text" id="pmu_rightBrow" value="${(t.rightBrow||'').replace(/"/g,'&quot;')}" placeholder="詳細記錄右眉" oninput="S.treatment.rightBrow=this.value">
+          </div>
+        </div>
+
+        <!-- 全臉圈記圖 -->
+        <div style="margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+            <label style="font-weight:700;color:#9333ea;">✏️ 全臉面診圈記（用 iPad 筆圈起部位）</label>
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas()">🗑️ 清除筆跡</button>
+            </div>
+          </div>
+          <div class="tm" style="font-size:11px;margin-bottom:6px;">在人臉圖上圈記毛流、骨骼、肌肉的狀況，存檔後在客戶檔案隨時查得到</div>
+          <div style="border:2px solid #e5d5f5;border-radius:12px;overflow:hidden;background:#fff;position:relative;">
+            <canvas id="pmu_face_canvas" width="600" height="480" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
       <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知）</span></div>
       <div class="card-bd">
         <div class="fgrp"><label>有無痼疾/現症治療中（含皮膚病）？</label>
@@ -5515,6 +5573,62 @@ window.pmuSet=(field,val)=>{
   pmuSaveInputs();
   S.treatment[field]=val;
   const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},60);
+};
+
+// ── 全臉面診圈記畫布 ──
+var _faceCanvas=null,_faceCtx=null,_faceDrawing=false,_faceHasContent=false;
+function drawFaceTemplate(ctx,w,h){
+  ctx.clearRect(0,0,w,h);
+  var cx=w/2;
+  ctx.strokeStyle='#c9b8dd';ctx.lineWidth=2;
+  // 臉型
+  ctx.beginPath();ctx.ellipse(cx,h*0.5,w*0.28,h*0.42,0,0,Math.PI*2);
+  ctx.fillStyle='#fdfbff';ctx.fill();ctx.stroke();
+  // 髮際線
+  ctx.beginPath();ctx.moveTo(cx-w*0.24,h*0.22);ctx.quadraticCurveTo(cx,h*0.12,cx+w*0.24,h*0.22);ctx.stroke();
+  // 雙眉
+  ctx.lineWidth=2.5;ctx.strokeStyle='#9333ea';
+  ctx.beginPath();ctx.moveTo(cx-w*0.19,h*0.36);ctx.quadraticCurveTo(cx-w*0.11,h*0.32,cx-w*0.04,h*0.35);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+w*0.04,h*0.35);ctx.quadraticCurveTo(cx+w*0.11,h*0.32,cx+w*0.19,h*0.36);ctx.stroke();
+  ctx.fillStyle='#9333ea';ctx.font='12px sans-serif';ctx.textAlign='center';
+  ctx.fillText('左眉',cx-w*0.12,h*0.30);ctx.fillText('右眉',cx+w*0.12,h*0.30);
+  // 眼睛
+  ctx.lineWidth=2;ctx.strokeStyle='#c9b8dd';
+  ctx.beginPath();ctx.ellipse(cx-w*0.11,h*0.44,w*0.055,h*0.028,0,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.ellipse(cx+w*0.11,h*0.44,w*0.055,h*0.028,0,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#e5d5f5';
+  ctx.beginPath();ctx.arc(cx-w*0.11,h*0.44,w*0.02,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+w*0.11,h*0.44,w*0.02,0,Math.PI*2);ctx.fill();
+  // 鼻
+  ctx.beginPath();ctx.moveTo(cx,h*0.46);ctx.lineTo(cx-w*0.03,h*0.58);ctx.quadraticCurveTo(cx,h*0.61,cx+w*0.03,h*0.58);ctx.stroke();
+  ctx.beginPath();ctx.arc(cx-w*0.035,h*0.585,w*0.02,0,Math.PI,true);ctx.stroke();
+  ctx.beginPath();ctx.arc(cx+w*0.035,h*0.585,w*0.02,0,Math.PI,true);ctx.stroke();
+  // 嘴
+  ctx.beginPath();ctx.moveTo(cx-w*0.07,h*0.7);ctx.quadraticCurveTo(cx,h*0.67,cx+w*0.07,h*0.7);ctx.quadraticCurveTo(cx,h*0.74,cx-w*0.07,h*0.7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx-w*0.07,h*0.7);ctx.lineTo(cx+w*0.07,h*0.7);ctx.stroke();
+}
+window.initFaceCanvas=function(){
+  var canvas=document.getElementById('pmu_face_canvas');
+  if(!canvas)return;
+  _faceCanvas=canvas;var ctx=canvas.getContext('2d');_faceCtx=ctx;_faceHasContent=false;
+  drawFaceTemplate(ctx,canvas.width,canvas.height);
+  if(S.treatment&&S.treatment.faceMarkup){
+    var img=new Image();img.onload=function(){ctx.drawImage(img,0,0,canvas.width,canvas.height);_faceHasContent=true;};img.src=S.treatment.faceMarkup;
+  }
+  ctx.lineCap='round';ctx.lineJoin='round';
+  function getPos(e){var rect=canvas.getBoundingClientRect();var sx=canvas.width/rect.width,sy=canvas.height/rect.height;var x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;var y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;return{x:x*sx,y:y*sy};}
+  function start(e){e.preventDefault();_faceDrawing=true;var p=getPos(e);ctx.strokeStyle='#dc2626';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.x,p.y);}
+  function move(e){if(!_faceDrawing)return;e.preventDefault();var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();_faceHasContent=true;}
+  function end(){if(_faceDrawing){_faceDrawing=false;if(_faceCanvas&&S.treatment)S.treatment.faceMarkup=_faceCanvas.toDataURL('image/png');}}
+  canvas.onmousedown=start;canvas.onmousemove=move;canvas.onmouseup=end;canvas.onmouseleave=end;
+  canvas.ontouchstart=start;canvas.ontouchmove=move;canvas.ontouchend=end;
+};
+window.clearFaceCanvas=function(){
+  if(!_faceCanvas||!_faceCtx)return;
+  drawFaceTemplate(_faceCtx,_faceCanvas.width,_faceCanvas.height);
+  _faceHasContent=false;
+  if(S.treatment)S.treatment.faceMarkup='';
 };
 
 // 前往下一階段（具名函式，避免 onclick 內嵌失敗）
@@ -5612,6 +5726,8 @@ window.pmuSubmit=async()=>{
     isMinor:t.isMinor,guardianName:t.guardianName,
     date:t.date,staff:t.staff,serviceType:t.serviceType,
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
+    baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,
+    leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
     startTime:t.startTime,endTime:t.endTime,
@@ -12654,6 +12770,7 @@ window.startPmuFlow=()=>{
     serviceType:'霧眉',
     designNote:'',designStyle:'',expectation:'',
     conditions:[],conditionNote:'',allergies:[],allergyNote:'',
+    baseColor:'',hairFlow:'',boneState:'',muscleState:'',leftBrow:'',rightBrow:'',faceMarkup:'',
     source:'',
     consentAgreed:false,consentSignature:null,consentSignedAt:'',
     startTime:'',endTime:'',numbCream:'',numbTime:'',tools:[],pigments:[],operationNote:'',
@@ -12663,6 +12780,7 @@ window.startPmuFlow=()=>{
   };
   S.page='treatment';
   render();
+  setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},120);
 };
 
 window.pmuGoStage=(stage)=>{
@@ -12672,6 +12790,9 @@ window.pmuGoStage=(stage)=>{
   const c=$('pg-content');if(c)c.innerHTML=renderPage();
   if(stage==='consent'){
     setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},100);
+  }
+  if(stage==='design'){
+    setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},100);
   }
 };
 
@@ -12686,6 +12807,7 @@ function pmuSaveInputs(){
   set('pmu_conditionNote','conditionNote');set('pmu_allergyNote','allergyNote');
   set('pmu_operationNote','operationNote');
   set('pmu_referrer','referrer');
+  set('pmu_leftBrow','leftBrow');set('pmu_rightBrow','rightBrow');
   set('pmu_numbTime','numbTime');set('pmu_startTime','startTime');set('pmu_endTime','endTime');
 }
 
