@@ -786,7 +786,7 @@ async function initDefaults(){
   await saveMain({services,suppliers,initialized:true});
 }
 
-async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');}catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}}
+async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');return true;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗：'+(e.message||e));return false;}}
 async function addSub(col,data){
   // 不在這裡 push 本地，因為 onSnapshot 的 pendingWrites 已經會更新 S.data[col]
   setSyncing('syncing');
@@ -3484,15 +3484,54 @@ window.pmuTermsReset=()=>{
 window.uploadPmuDefaultBg=function(key,input){
   var file=input.files&&input.files[0];
   if(!file)return;
+  toast('處理圖片中...');
   var reader=new FileReader();
-  reader.onload=async function(ev){
-    var settingKey=key==='face'?'pmuFaceBg':'pmuAnatomyBg';
-    var settings=Object.assign({},S.data.settings||{});
-    settings[settingKey]=ev.target.result;
-    S.data.settings=settings;
-    await saveMain({settings});
-    toast('✅ 底圖已設定，以後做紋繡會自動帶入');
-    openM('pmuSettings');
+  reader.onload=function(ev){
+    // 先載入圖片，壓縮到合理大小（避免超過 Firebase 限制）
+    var img=new Image();
+    img.onload=async function(){
+      try{
+        // 壓縮：最長邊限制 800px，轉 JPEG 品質 0.75
+        var maxSide=800;
+        var w=img.width,h=img.height;
+        if(w>maxSide||h>maxSide){
+          var r=Math.min(maxSide/w,maxSide/h);
+          w=Math.round(w*r);h=Math.round(h*r);
+        }
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        var ctx=canvas.getContext('2d');
+        ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        var compressed=canvas.toDataURL('image/jpeg',0.75);
+        // 檢查大小（base64 約為實際的 1.33 倍，Firebase 單欄位建議 <900KB）
+        var sizeKB=Math.round(compressed.length/1024);
+        if(sizeKB>900){
+          // 再壓一次
+          compressed=canvas.toDataURL('image/jpeg',0.5);
+          sizeKB=Math.round(compressed.length/1024);
+        }
+        if(sizeKB>950){
+          alert('圖片太大（'+sizeKB+'KB），壓縮後仍超過限制。\\n請用小一點的圖，或先用手機/電腦把圖片縮小再上傳。');
+          return;
+        }
+        var settingKey=key==='face'?'pmuFaceBg':'pmuAnatomyBg';
+        var settings=Object.assign({},S.data.settings||{});
+        settings[settingKey]=compressed;
+        var ok=await saveMain({settings});
+        if(ok){
+          S.data.settings=settings;
+          toast('✅ 底圖已儲存（'+sizeKB+'KB），以後做紋繡會自動帶入');
+          openM('pmuSettings');
+        }else{
+          alert('雲端儲存失敗，圖片可能還是太大。\\n請換一張更小的圖再試。');
+        }
+      }catch(err){
+        alert('儲存失敗：'+(err.message||err)+'\\n可能是圖片太大，請換小一點的圖。');
+      }
+    };
+    img.onerror=function(){alert('圖片讀取失敗，請換一張圖試試');};
+    img.src=ev.target.result;
   };
   reader.readAsDataURL(file);
 };
@@ -5796,14 +5835,26 @@ window.initFaceCanvas=function(){
 window.uploadFaceBg=function(key,input){
   var file=input.files&&input.files[0];
   if(!file){return;}
+  toast('處理圖片中...');
   var reader=new FileReader();
   reader.onload=function(ev){
-    var bgKey=key==='face'?'faceBg':'anatomyBg';
-    var markupKey=key==='face'?'faceMarkup':'anatomyMarkup';
-    if(S.treatment){S.treatment[bgKey]=ev.target.result;S.treatment[markupKey]='';}
-    var canvasId=key==='face'?'pmu_face_canvas':'pmu_anatomy_canvas';
-    initOneFaceCanvas(key,canvasId,true);
-    toast('✅ 底圖已上傳，可以開始圈記');
+    var img=new Image();
+    img.onload=function(){
+      var maxSide=800;var w=img.width,h=img.height;
+      if(w>maxSide||h>maxSide){var r=Math.min(maxSide/w,maxSide/h);w=Math.round(w*r);h=Math.round(h*r);}
+      var canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      var ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+      var compressed=canvas.toDataURL('image/jpeg',0.75);
+      if(Math.round(compressed.length/1024)>900)compressed=canvas.toDataURL('image/jpeg',0.5);
+      var bgKey=key==='face'?'faceBg':'anatomyBg';
+      var markupKey=key==='face'?'faceMarkup':'anatomyMarkup';
+      if(S.treatment){S.treatment[bgKey]=compressed;S.treatment[markupKey]='';}
+      var canvasId=key==='face'?'pmu_face_canvas':'pmu_anatomy_canvas';
+      initOneFaceCanvas(key,canvasId,true);
+      toast('✅ 底圖已上傳，可以開始圈記');
+    };
+    img.onerror=function(){alert('圖片讀取失敗，請換一張');};
+    img.src=ev.target.result;
   };
   reader.readAsDataURL(file);
 };
