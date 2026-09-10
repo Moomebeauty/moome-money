@@ -3481,6 +3481,22 @@ window.pmuTermsReset=()=>{
   toast('已還原，記得按儲存');
 };
 
+window.uploadPmuDefaultBg=function(key,input){
+  var file=input.files&&input.files[0];
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=async function(ev){
+    var settingKey=key==='face'?'pmuFaceBg':'pmuAnatomyBg';
+    var settings=Object.assign({},S.data.settings||{});
+    settings[settingKey]=ev.target.result;
+    S.data.settings=settings;
+    await saveMain({settings});
+    toast('✅ 底圖已設定，以後做紋繡會自動帶入');
+    openM('pmuSettings');
+  };
+  reader.readAsDataURL(file);
+};
+
 window.savePmuTouchupDays=async(val)=>{
   const days=parseInt(val)||90;
   const settings={...(S.data.settings||{}),pmuTouchupDays:days};
@@ -3604,7 +3620,8 @@ window.viewPmuRecord=(id)=>{
         ${r.muscleState?`肌肉：${r.muscleState}<br>`:''}
         ${r.leftBrow?`左眉：${r.leftBrow}<br>`:''}
         ${r.rightBrow?`右眉：${r.rightBrow}<br>`:''}
-        ${r.faceMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">面診圈記：</div><img src="${r.faceMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
+        ${r.faceMarkup||r.faceBg?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 素顏五官圈記：</div><div style="position:relative;display:inline-block;max-width:100%;">${r.faceBg?`<img src="${r.faceBg}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;display:block;">`:''}${r.faceMarkup?`<img src="${r.faceMarkup}" style="position:absolute;top:0;left:0;max-width:100%;width:100%;height:100%;">`:''}</div></div>`:''}
+        ${r.anatomyMarkup||r.anatomyBg?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 骨骼肌肉圈記：</div><div style="position:relative;display:inline-block;max-width:100%;">${r.anatomyBg?`<img src="${r.anatomyBg}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;display:block;">`:''}${r.anatomyMarkup?`<img src="${r.anatomyMarkup}" style="position:absolute;top:0;left:0;max-width:100%;width:100%;height:100%;">`:''}</div></div>`:''}
       </div>
       <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
         <b>身體狀況</b><br>
@@ -5344,17 +5361,38 @@ function pmuDesignStage(t){
           </div>
         </div>
 
-        <!-- 全臉圈記圖 -->
+        <!-- 面診圈記圖（兩張：素顏五官 + 骨骼肌肉）-->
         <div style="margin-top:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
-            <label style="font-weight:700;color:#9333ea;">✏️ 全臉面診圈記（用 iPad 筆圈起部位）</label>
-            <div style="display:flex;gap:6px;">
-              <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas()">🗑️ 清除筆跡</button>
+          <div style="font-weight:700;color:#9333ea;margin-bottom:8px;">✏️ 面診圈記（用 iPad 筆圈起部位）</div>
+          <div class="tm" style="font-size:11px;margin-bottom:10px;">可上傳你的 AI 生成圖當底圖，或用系統內建線稿。在上面圈記，存檔後客戶檔案隨時查得到。</div>
+
+          <!-- 圖一：素顏五官 -->
+          <div style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+              <span style="font-weight:700;color:#9333ea;font-size:14px;">🔹 素顏五官圖</span>
+              <div style="display:flex;gap:6px;">
+                <label class="btn btn-s btn-sm" style="cursor:pointer;">📷 上傳底圖<input type="file" accept="image/*" style="display:none;" onchange="uploadFaceBg('face',this)"></label>
+                <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas('face')">🗑️ 清除筆跡</button>
+              </div>
+            </div>
+            <div style="border:2px solid #e5d5f5;border-radius:12px;overflow:hidden;background:#fff;">
+              <canvas id="pmu_face_canvas" width="600" height="480" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;"></canvas>
             </div>
           </div>
-          <div class="tm" style="font-size:11px;margin-bottom:6px;">在人臉圖上圈記毛流、骨骼、肌肉的狀況，存檔後在客戶檔案隨時查得到</div>
-          <div style="border:2px solid #e5d5f5;border-radius:12px;overflow:hidden;background:#fff;position:relative;">
-            <canvas id="pmu_face_canvas" width="600" height="480" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;"></canvas>
+
+          <!-- 圖二：骨骼肌肉 -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+              <span style="font-weight:700;color:#0891b2;font-size:14px;">🔹 骨骼肌肉對照圖</span>
+              <div style="display:flex;gap:6px;">
+                <label class="btn btn-s btn-sm" style="cursor:pointer;">📷 上傳底圖<input type="file" accept="image/*" style="display:none;" onchange="uploadFaceBg('anatomy',this)"></label>
+                <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas('anatomy')">🗑️ 清除筆跡</button>
+              </div>
+            </div>
+            <div class="tm" style="font-size:11px;margin-bottom:4px;">建議上傳你用 AI 生的「左骨骼右肌肉」對照圖</div>
+            <div style="border:2px solid #cceef5;border-radius:12px;overflow:hidden;background:#fff;">
+              <canvas id="pmu_anatomy_canvas" width="600" height="480" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;"></canvas>
+            </div>
           </div>
         </div>
       </div>
@@ -5580,55 +5618,203 @@ window.pmuSet=(field,val)=>{
 var _faceCanvas=null,_faceCtx=null,_faceDrawing=false,_faceHasContent=false;
 function drawFaceTemplate(ctx,w,h){
   ctx.clearRect(0,0,w,h);
-  var cx=w/2;
-  ctx.strokeStyle='#c9b8dd';ctx.lineWidth=2;
-  // 臉型
-  ctx.beginPath();ctx.ellipse(cx,h*0.5,w*0.28,h*0.42,0,0,Math.PI*2);
-  ctx.fillStyle='#fdfbff';ctx.fill();ctx.stroke();
+  var cx=w/2, cy=h*0.5;
+  // 底色柔和漸層（營造立體感）
+  var grad=ctx.createRadialGradient(cx,cy*0.9,w*0.05,cx,cy,w*0.42);
+  grad.addColorStop(0,'#fffdfe');
+  grad.addColorStop(1,'#f6eefc');
+
+  // ===== 臉型（鵝蛋臉，含下顎立體線）=====
+  ctx.beginPath();
+  ctx.moveTo(cx,h*0.10);
+  // 右臉頰→下顎
+  ctx.bezierCurveTo(cx+w*0.22,h*0.11, cx+w*0.30,h*0.34, cx+w*0.27,h*0.52);
+  ctx.bezierCurveTo(cx+w*0.25,h*0.68, cx+w*0.15,h*0.82, cx,h*0.90);
+  // 左臉頰
+  ctx.bezierCurveTo(cx-w*0.15,h*0.82, cx-w*0.25,h*0.68, cx-w*0.27,h*0.52);
+  ctx.bezierCurveTo(cx-w*0.30,h*0.34, cx-w*0.22,h*0.11, cx,h*0.10);
+  ctx.closePath();
+  ctx.fillStyle=grad;ctx.fill();
+  ctx.strokeStyle='#b89dd4';ctx.lineWidth=2.2;ctx.stroke();
+
+  // 臉頰立體陰影線（顴骨）
+  ctx.strokeStyle='#e3d3f0';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx-w*0.20,h*0.42);ctx.quadraticCurveTo(cx-w*0.17,h*0.52,cx-w*0.13,h*0.60);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+w*0.20,h*0.42);ctx.quadraticCurveTo(cx+w*0.17,h*0.52,cx+w*0.13,h*0.60);ctx.stroke();
+
   // 髮際線
-  ctx.beginPath();ctx.moveTo(cx-w*0.24,h*0.22);ctx.quadraticCurveTo(cx,h*0.12,cx+w*0.24,h*0.22);ctx.stroke();
-  // 雙眉
-  ctx.lineWidth=2.5;ctx.strokeStyle='#9333ea';
-  ctx.beginPath();ctx.moveTo(cx-w*0.19,h*0.36);ctx.quadraticCurveTo(cx-w*0.11,h*0.32,cx-w*0.04,h*0.35);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(cx+w*0.04,h*0.35);ctx.quadraticCurveTo(cx+w*0.11,h*0.32,cx+w*0.19,h*0.36);ctx.stroke();
-  ctx.fillStyle='#9333ea';ctx.font='12px sans-serif';ctx.textAlign='center';
-  ctx.fillText('左眉',cx-w*0.12,h*0.30);ctx.fillText('右眉',cx+w*0.12,h*0.30);
-  // 眼睛
-  ctx.lineWidth=2;ctx.strokeStyle='#c9b8dd';
-  ctx.beginPath();ctx.ellipse(cx-w*0.11,h*0.44,w*0.055,h*0.028,0,0,Math.PI*2);ctx.stroke();
-  ctx.beginPath();ctx.ellipse(cx+w*0.11,h*0.44,w*0.055,h*0.028,0,0,Math.PI*2);ctx.stroke();
-  ctx.fillStyle='#e5d5f5';
-  ctx.beginPath();ctx.arc(cx-w*0.11,h*0.44,w*0.02,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(cx+w*0.11,h*0.44,w*0.02,0,Math.PI*2);ctx.fill();
-  // 鼻
-  ctx.beginPath();ctx.moveTo(cx,h*0.46);ctx.lineTo(cx-w*0.03,h*0.58);ctx.quadraticCurveTo(cx,h*0.61,cx+w*0.03,h*0.58);ctx.stroke();
-  ctx.beginPath();ctx.arc(cx-w*0.035,h*0.585,w*0.02,0,Math.PI,true);ctx.stroke();
-  ctx.beginPath();ctx.arc(cx+w*0.035,h*0.585,w*0.02,0,Math.PI,true);ctx.stroke();
-  // 嘴
-  ctx.beginPath();ctx.moveTo(cx-w*0.07,h*0.7);ctx.quadraticCurveTo(cx,h*0.67,cx+w*0.07,h*0.7);ctx.quadraticCurveTo(cx,h*0.74,cx-w*0.07,h*0.7);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(cx-w*0.07,h*0.7);ctx.lineTo(cx+w*0.07,h*0.7);ctx.stroke();
+  ctx.strokeStyle='#cbb8e0';ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(cx-w*0.20,h*0.20);ctx.quadraticCurveTo(cx,h*0.09,cx+w*0.20,h*0.20);ctx.stroke();
+
+  // ===== 眉毛（有毛流感的雙線）=====
+  ctx.strokeStyle='#9333ea';ctx.lineWidth=2.6;ctx.lineCap='round';
+  // 左眉（上緣）
+  ctx.beginPath();ctx.moveTo(cx-w*0.20,h*0.345);
+  ctx.bezierCurveTo(cx-w*0.15,h*0.30, cx-w*0.09,h*0.305, cx-w*0.035,h*0.335);ctx.stroke();
+  // 左眉（下緣，較細，做出厚度）
+  ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(cx-w*0.19,h*0.365);
+  ctx.quadraticCurveTo(cx-w*0.12,h*0.345,cx-w*0.04,h*0.355);ctx.stroke();
+  // 右眉（上緣）
+  ctx.lineWidth=2.6;
+  ctx.beginPath();ctx.moveTo(cx+w*0.035,h*0.335);
+  ctx.bezierCurveTo(cx+w*0.09,h*0.305, cx+w*0.15,h*0.30, cx+w*0.20,h*0.345);ctx.stroke();
+  // 右眉（下緣）
+  ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(cx+w*0.04,h*0.355);
+  ctx.quadraticCurveTo(cx+w*0.12,h*0.345,cx+w*0.19,h*0.365);ctx.stroke();
+  // 眉標籤
+  ctx.fillStyle='#9333ea';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+  ctx.fillText('左眉',cx-w*0.115,h*0.28);
+  ctx.fillText('右眉',cx+w*0.115,h*0.28);
+
+  // ===== 眼睛（含雙眼皮、眼神光，有立體度）=====
+  ctx.strokeStyle='#a98fc7';ctx.lineWidth=2;
+  // 左眼輪廓（杏眼）
+  ctx.beginPath();
+  ctx.moveTo(cx-w*0.165,h*0.44);
+  ctx.quadraticCurveTo(cx-w*0.11,h*0.415,cx-w*0.055,h*0.44);
+  ctx.quadraticCurveTo(cx-w*0.11,h*0.475,cx-w*0.165,h*0.44);
+  ctx.stroke();
+  // 左雙眼皮
+  ctx.lineWidth=1.2;ctx.strokeStyle='#c9b3e0';
+  ctx.beginPath();ctx.moveTo(cx-w*0.15,h*0.428);ctx.quadraticCurveTo(cx-w*0.11,h*0.412,cx-w*0.07,h*0.428);ctx.stroke();
+  // 右眼輪廓
+  ctx.lineWidth=2;ctx.strokeStyle='#a98fc7';
+  ctx.beginPath();
+  ctx.moveTo(cx+w*0.055,h*0.44);
+  ctx.quadraticCurveTo(cx+w*0.11,h*0.415,cx+w*0.165,h*0.44);
+  ctx.quadraticCurveTo(cx+w*0.11,h*0.475,cx+w*0.055,h*0.44);
+  ctx.stroke();
+  // 右雙眼皮
+  ctx.lineWidth=1.2;ctx.strokeStyle='#c9b3e0';
+  ctx.beginPath();ctx.moveTo(cx+w*0.07,h*0.428);ctx.quadraticCurveTo(cx+w*0.11,h*0.412,cx+w*0.15,h*0.428);ctx.stroke();
+  // 眼珠（含眼神光立體）
+  ctx.fillStyle='#8b6fb0';
+  ctx.beginPath();ctx.arc(cx-w*0.11,h*0.445,w*0.022,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+w*0.11,h*0.445,w*0.022,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(cx-w*0.105,h*0.44,w*0.007,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+w*0.115,h*0.44,w*0.007,0,Math.PI*2);ctx.fill();
+
+  // ===== 鼻子（立體鼻樑+鼻頭）=====
+  ctx.strokeStyle='#c9b3e0';ctx.lineWidth=1.5;
+  // 鼻樑（左右兩條，做出立體）
+  ctx.beginPath();ctx.moveTo(cx-w*0.02,h*0.44);ctx.lineTo(cx-w*0.03,h*0.565);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+w*0.02,h*0.44);ctx.lineTo(cx+w*0.03,h*0.565);ctx.stroke();
+  // 鼻頭
+  ctx.strokeStyle='#b89dd4';ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.arc(cx,h*0.575,w*0.035,Math.PI*0.15,Math.PI*0.85,false);ctx.stroke();
+  // 鼻翼
+  ctx.lineWidth=1.5;ctx.strokeStyle='#c9b3e0';
+  ctx.beginPath();ctx.arc(cx-w*0.045,h*0.575,w*0.018,Math.PI*0.6,Math.PI*1.5,false);ctx.stroke();
+  ctx.beginPath();ctx.arc(cx+w*0.045,h*0.575,w*0.018,Math.PI*1.5,Math.PI*2.4,false);ctx.stroke();
+
+  // ===== 嘴唇（立體唇形）=====
+  ctx.strokeStyle='#c99bb5';ctx.lineWidth=2;
+  // 上唇（M型）
+  ctx.beginPath();
+  ctx.moveTo(cx-w*0.075,h*0.685);
+  ctx.quadraticCurveTo(cx-w*0.04,h*0.665,cx,h*0.678);
+  ctx.quadraticCurveTo(cx+w*0.04,h*0.665,cx+w*0.075,h*0.685);
+  ctx.stroke();
+  // 下唇（飽滿）
+  ctx.beginPath();
+  ctx.moveTo(cx-w*0.075,h*0.685);
+  ctx.quadraticCurveTo(cx,h*0.725,cx+w*0.075,h*0.685);
+  ctx.stroke();
+  // 唇中線
+  ctx.lineWidth=1.2;ctx.strokeStyle='#d9b3c5';
+  ctx.beginPath();ctx.moveTo(cx-w*0.07,h*0.687);ctx.quadraticCurveTo(cx,h*0.695,cx+w*0.07,h*0.687);ctx.stroke();
+  // 人中
+  ctx.beginPath();ctx.moveTo(cx-w*0.012,h*0.62);ctx.lineTo(cx-w*0.012,h*0.665);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+w*0.012,h*0.62);ctx.lineTo(cx+w*0.012,h*0.665);ctx.stroke();
+
+  // 下巴立體線
+  ctx.strokeStyle='#e3d3f0';ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.arc(cx,h*0.80,w*0.06,Math.PI*0.2,Math.PI*0.8,false);ctx.stroke();
 }
-window.initFaceCanvas=function(){
-  var canvas=document.getElementById('pmu_face_canvas');
+// 兩個面診畫布的狀態
+var _faceCanvases={face:{canvas:null,ctx:null,drawing:false,bg:null},anatomy:{canvas:null,ctx:null,drawing:false,bg:null}};
+
+function initOneFaceCanvas(key,canvasId,useTemplate){
+  var canvas=document.getElementById(canvasId);
   if(!canvas)return;
-  _faceCanvas=canvas;var ctx=canvas.getContext('2d');_faceCtx=ctx;_faceHasContent=false;
-  drawFaceTemplate(ctx,canvas.width,canvas.height);
-  if(S.treatment&&S.treatment.faceMarkup){
-    var img=new Image();img.onload=function(){ctx.drawImage(img,0,0,canvas.width,canvas.height);_faceHasContent=true;};img.src=S.treatment.faceMarkup;
+  var ctx=canvas.getContext('2d');
+  var st=_faceCanvases[key];
+  st.canvas=canvas;st.ctx=ctx;st.drawing=false;
+  // 決定底圖：優先用已存的上傳圖，其次已存的圈記，其次線稿模板
+  var markupKey=key==='face'?'faceMarkup':'anatomyMarkup';
+  var bgKey=key==='face'?'faceBg':'anatomyBg';
+  function redraw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    var bg=S.treatment&&S.treatment[bgKey];
+    if(bg){
+      // 用上傳的底圖
+      var img=new Image();
+      img.onload=function(){
+        // 等比置中鋪滿
+        var r=Math.min(canvas.width/img.width,canvas.height/img.height);
+        var iw=img.width*r,ih=img.height*r;
+        ctx.drawImage(img,(canvas.width-iw)/2,(canvas.height-ih)/2,iw,ih);
+        loadMarkup();
+      };
+      img.src=bg;
+    }else if(useTemplate&&key==='face'){
+      drawFaceTemplate(ctx,canvas.width,canvas.height);
+      loadMarkup();
+    }else{
+      // 骨骼肌肉沒底圖 → 提示文字
+      ctx.fillStyle='#f8fbfc';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle='#9bbcc5';ctx.font='16px sans-serif';ctx.textAlign='center';
+      ctx.fillText('請點「📷 上傳底圖」放入骨骼肌肉對照圖',canvas.width/2,canvas.height/2-10);
+      ctx.font='13px sans-serif';
+      ctx.fillText('（用你的 AI 生成圖）',canvas.width/2,canvas.height/2+16);
+      loadMarkup();
+    }
   }
+  function loadMarkup(){
+    var mk=S.treatment&&S.treatment[markupKey];
+    if(mk){var mi=new Image();mi.onload=function(){ctx.drawImage(mi,0,0,canvas.width,canvas.height);};mi.src=mk;}
+  }
+  st.redraw=redraw;
+  redraw();
   ctx.lineCap='round';ctx.lineJoin='round';
   function getPos(e){var rect=canvas.getBoundingClientRect();var sx=canvas.width/rect.width,sy=canvas.height/rect.height;var x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;var y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;return{x:x*sx,y:y*sy};}
-  function start(e){e.preventDefault();_faceDrawing=true;var p=getPos(e);ctx.strokeStyle='#dc2626';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.x,p.y);}
-  function move(e){if(!_faceDrawing)return;e.preventDefault();var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();_faceHasContent=true;}
-  function end(){if(_faceDrawing){_faceDrawing=false;if(_faceCanvas&&S.treatment)S.treatment.faceMarkup=_faceCanvas.toDataURL('image/png');}}
+  function start(e){e.preventDefault();st.drawing=true;var p=getPos(e);ctx.strokeStyle='#dc2626';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.x,p.y);}
+  function move(e){if(!st.drawing)return;e.preventDefault();var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();}
+  function end(){if(st.drawing){st.drawing=false;if(S.treatment)S.treatment[markupKey]=canvas.toDataURL('image/png');}}
   canvas.onmousedown=start;canvas.onmousemove=move;canvas.onmouseup=end;canvas.onmouseleave=end;
   canvas.ontouchstart=start;canvas.ontouchmove=move;canvas.ontouchend=end;
+}
+
+window.initFaceCanvas=function(){
+  initOneFaceCanvas('face','pmu_face_canvas',true);
+  initOneFaceCanvas('anatomy','pmu_anatomy_canvas',false);
 };
-window.clearFaceCanvas=function(){
-  if(!_faceCanvas||!_faceCtx)return;
-  drawFaceTemplate(_faceCtx,_faceCanvas.width,_faceCanvas.height);
-  _faceHasContent=false;
-  if(S.treatment)S.treatment.faceMarkup='';
+
+window.uploadFaceBg=function(key,input){
+  var file=input.files&&input.files[0];
+  if(!file){return;}
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var bgKey=key==='face'?'faceBg':'anatomyBg';
+    var markupKey=key==='face'?'faceMarkup':'anatomyMarkup';
+    if(S.treatment){S.treatment[bgKey]=ev.target.result;S.treatment[markupKey]='';}
+    var canvasId=key==='face'?'pmu_face_canvas':'pmu_anatomy_canvas';
+    initOneFaceCanvas(key,canvasId,true);
+    toast('✅ 底圖已上傳，可以開始圈記');
+  };
+  reader.readAsDataURL(file);
+};
+
+window.clearFaceCanvas=function(key){
+  key=key||'face';
+  var st=_faceCanvases[key];
+  if(!st||!st.redraw)return;
+  var markupKey=key==='face'?'faceMarkup':'anatomyMarkup';
+  if(S.treatment)S.treatment[markupKey]='';
+  st.redraw();
 };
 
 // 前往下一階段（具名函式，避免 onclick 內嵌失敗）
@@ -5727,7 +5913,7 @@ window.pmuSubmit=async()=>{
     date:t.date,staff:t.staff,serviceType:t.serviceType,
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,
-    leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,
+    leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,faceBg:t.faceBg,anatomyMarkup:t.anatomyMarkup,anatomyBg:t.anatomyBg,
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
     startTime:t.startTime,endTime:t.endTime,
@@ -9362,6 +9548,23 @@ function renderModal(){
         <input type="number" id="pmu_touchupDays" value="${toN(S2.pmuTouchupDays)||90}" style="margin-top:4px;" onchange="savePmuTouchupDays(this.value)">
         <div class="tm" style="font-size:11px;margin-top:4px;">預設 90 天（3個月）。做完紋繡系統會自動算補色日期</div>
       </div>
+
+      <div style="font-weight:700;color:#9333ea;margin:16px 0 8px;">🖼️ 面診底圖（設定一次，做紋繡時自動帶入）</div>
+      <div class="tm" style="font-size:12px;margin-bottom:10px;line-height:1.7;">
+        上傳你的 AI 生成圖（素顏五官圖、骨骼肌肉對照圖）。設定後，每次做紋繡都會自動用這張當底圖，你只要圈記就好，不用每次重傳。
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:130px;text-align:center;">
+          <div style="font-size:13px;font-weight:700;color:#9333ea;margin-bottom:6px;">🔹 素顏五官圖</div>
+          ${S2.pmuFaceBg?`<img src="${S2.pmuFaceBg}" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px;">`:`<div style="width:100%;height:100px;background:var(--bg2);border:2px dashed #ccc;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;margin-bottom:6px;">尚未設定</div>`}
+          <label class="btn btn-s btn-sm" style="cursor:pointer;width:100%;">📷 ${S2.pmuFaceBg?'更換':'上傳'}<input type="file" accept="image/*" style="display:none;" onchange="uploadPmuDefaultBg('face',this)"></label>
+        </div>
+        <div style="flex:1;min-width:130px;text-align:center;">
+          <div style="font-size:13px;font-weight:700;color:#0891b2;margin-bottom:6px;">🔹 骨骼肌肉圖</div>
+          ${S2.pmuAnatomyBg?`<img src="${S2.pmuAnatomyBg}" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px;">`:`<div style="width:100%;height:100px;background:var(--bg2);border:2px dashed #ccc;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;margin-bottom:6px;">尚未設定</div>`}
+          <label class="btn btn-s btn-sm" style="cursor:pointer;width:100%;">📷 ${S2.pmuAnatomyBg?'更換':'上傳'}<input type="file" accept="image/*" style="display:none;" onchange="uploadPmuDefaultBg('anatomy',this)"></label>
+        </div>
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
     S.modal.lg=true;
@@ -12770,7 +12973,7 @@ window.startPmuFlow=()=>{
     serviceType:'霧眉',
     designNote:'',designStyle:'',expectation:'',
     conditions:[],conditionNote:'',allergies:[],allergyNote:'',
-    baseColor:'',hairFlow:'',boneState:'',muscleState:'',leftBrow:'',rightBrow:'',faceMarkup:'',
+    baseColor:'',hairFlow:'',boneState:'',muscleState:'',leftBrow:'',rightBrow:'',faceMarkup:'',faceBg:(S.data.settings&&S.data.settings.pmuFaceBg)||'',anatomyMarkup:'',anatomyBg:(S.data.settings&&S.data.settings.pmuAnatomyBg)||'',
     source:'',
     consentAgreed:false,consentSignature:null,consentSignedAt:'',
     startTime:'',endTime:'',numbCream:'',numbTime:'',tools:[],pigments:[],operationNote:'',
