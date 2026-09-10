@@ -391,6 +391,12 @@ const DEFAULT_PMU_YEARLY_MSG=`親愛的 {客戶} 您好 🌸
 想預約或有任何問題，都可以直接回覆我唷～
 好久不見，很想念您 🌷`;
 
+const DEFAULT_PMU_FACE_QUESTIONS=[
+  {key:'baseColor',label:'是否有底色？',options:['有，略有深度','有，偏淺淡','無，已施作淡色','無']},
+  {key:'hairFlow',label:'原生毛流狀態',options:['完整毛流','前濃，後段缺','整體偏淡','左右分布不均']},
+  {key:'boneState',label:'面部骨骼狀態',options:['整體明顯','後段眉骨高','眉骨不明顯','左右落差大']},
+  {key:'muscleState',label:'眉部肌肉狀態',options:['施力平均','眉頭發達','眉中發達','眉峰發達']}
+];
 const DEFAULT_PMU_TOOLS_D=['圓針','排針','霧針','手工排','機器','1針','3針','5針'];
 const DEFAULT_PMU_PIGMENTS_D=['棕色','咖啡色','灰棕色','紅棕色','橘調','奶茶色','深棕'];
 const DEFAULT_PMU_NUMBCREAMS_D=['表面麻','注射前麻','二次麻','舒緩凝膠'];
@@ -3653,10 +3659,21 @@ window.viewPmuRecord=(id)=>{
       </div>
       <div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-top:10px;">
         <b>🔍 面診評估</b><br>
-        ${r.baseColor?`底色：${r.baseColor}<br>`:''}
-        ${r.hairFlow?`毛流：${r.hairFlow}<br>`:''}
-        ${r.boneState?`骨骼：${r.boneState}<br>`:''}
-        ${r.muscleState?`肌肉：${r.muscleState}<br>`:''}
+        ${(()=>{
+          // 新版：動態題目答案
+          const qs=S.data.settings?.pmuFaceQuestions||DEFAULT_PMU_FACE_QUESTIONS;
+          const ans=r.faceAnswers||{};
+          let out='';
+          qs.forEach(q=>{if(ans[q.key])out+=`${q.label.replace('？','')}：${ans[q.key]}<br>`;});
+          // 舊版欄位（向下相容，如果 faceAnswers 沒資料才用）
+          if(!out){
+            if(r.baseColor)out+=`底色：${r.baseColor}<br>`;
+            if(r.hairFlow)out+=`毛流：${r.hairFlow}<br>`;
+            if(r.boneState)out+=`骨骼：${r.boneState}<br>`;
+            if(r.muscleState)out+=`肌肉：${r.muscleState}<br>`;
+          }
+          return out;
+        })()}
         ${r.leftBrow?`左眉：${r.leftBrow}<br>`:''}
         ${r.rightBrow?`右眉：${r.rightBrow}<br>`:''}
         ${r.faceMarkup||r.faceBg?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 素顏五官圈記：</div><div style="position:relative;display:inline-block;max-width:100%;">${r.faceBg?`<img src="${r.faceBg}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;display:block;">`:''}${r.faceMarkup?`<img src="${r.faceMarkup}" style="position:absolute;top:0;left:0;max-width:100%;width:100%;height:100%;">`:''}</div></div>`:''}
@@ -5371,26 +5388,19 @@ function pmuDesignStage(t){
     <div class="card" style="margin-bottom:14px;">
       <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">🔍 顧客面診評估</span></div>
       <div class="card-bd">
-        <div class="fgrp"><label>是否有底色？</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${['有，略有深度','有，偏淺淡','無，已施作淡色','無'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.baseColor===o?'#9333ea':'var(--bg2)'};color:${t.baseColor===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('baseColor','${o}')">${t.baseColor===o?'✓ ':''}${o}</button>`).join('')}
-          </div>
-        </div>
-        <div class="fgrp" style="margin-top:12px;"><label>原生毛流狀態</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${['完整毛流','前濃，後段缺','整體偏淡','左右分布不均'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.hairFlow===o?'#0891b2':'var(--bg2)'};color:${t.hairFlow===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('hairFlow','${o}')">${t.hairFlow===o?'✓ ':''}${o}</button>`).join('')}
-          </div>
-        </div>
-        <div class="fgrp" style="margin-top:12px;"><label>面部骨骼狀態</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${['整體明顯','後段眉骨高','眉骨不明顯','左右落差大'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.boneState===o?'#16a34a':'var(--bg2)'};color:${t.boneState===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('boneState','${o}')">${t.boneState===o?'✓ ':''}${o}</button>`).join('')}
-          </div>
-        </div>
-        <div class="fgrp" style="margin-top:12px;"><label>眉部肌肉狀態</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${['施力平均','眉頭發達','眉中發達','眉峰發達'].map(o=>`<button type="button" style="padding:6px 12px;background:${t.muscleState===o?'#d97706':'var(--bg2)'};color:${t.muscleState===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('muscleState','${o}')">${t.muscleState===o?'✓ ':''}${o}</button>`).join('')}
-          </div>
-        </div>
+        ${(()=>{
+          const questions=S.data.settings?.pmuFaceQuestions||DEFAULT_PMU_FACE_QUESTIONS;
+          const colors=['#9333ea','#0891b2','#16a34a','#d97706','#dc2626','#7e22ce'];
+          return questions.map((q,qi)=>{
+            const val=(t.faceAnswers&&t.faceAnswers[q.key])||'';
+            const col=colors[qi%colors.length];
+            return`<div class="fgrp" style="${qi>0?'margin-top:12px;':''}"><label>${q.label}</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                ${(q.options||[]).map(o=>`<button type="button" style="padding:6px 12px;background:${val===o?col:'var(--bg2)'};color:${val===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSetFaceAnswer('${q.key}','${o.replace(/'/g,"&#39;")}')">${val===o?'✓ ':''}${o}</button>`).join('')}
+              </div>
+            </div>`;
+          }).join('');
+        })()}
         <div class="fg fg2" style="margin-top:12px;">
           <div class="fgrp"><label>左眉型狀況</label>
             <input type="text" id="pmu_leftBrow" value="${(t.leftBrow||'').replace(/"/g,'&quot;')}" placeholder="詳細記錄左眉" oninput="S.treatment.leftBrow=this.value">
@@ -5411,7 +5421,8 @@ function pmuDesignStage(t){
               <span style="font-weight:700;color:#9333ea;font-size:14px;">🔹 素顏五官圖</span>
               <div style="display:flex;gap:6px;">
                 <label class="btn btn-s btn-sm" style="cursor:pointer;">📷 上傳底圖<input type="file" accept="image/*" style="display:none;" onchange="uploadFaceBg('face',this)"></label>
-                <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas('face')">🗑️ 清除筆跡</button>
+                <button type="button" class="btn btn-s btn-sm" onclick="undoFaceCanvas('face')">↩️ 復原上一筆</button>
+                <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas('face')">🗑️ 全部清除</button>
               </div>
             </div>
             <div style="border:2px solid #e5d5f5;border-radius:12px;overflow:hidden;background:#fff;">
@@ -5425,7 +5436,8 @@ function pmuDesignStage(t){
               <span style="font-weight:700;color:#0891b2;font-size:14px;">🔹 骨骼肌肉對照圖</span>
               <div style="display:flex;gap:6px;">
                 <label class="btn btn-s btn-sm" style="cursor:pointer;">📷 上傳底圖<input type="file" accept="image/*" style="display:none;" onchange="uploadFaceBg('anatomy',this)"></label>
-                <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas('anatomy')">🗑️ 清除筆跡</button>
+                <button type="button" class="btn btn-s btn-sm" onclick="undoFaceCanvas('anatomy')">↩️ 復原上一筆</button>
+                <button type="button" class="btn btn-y btn-sm" onclick="clearFaceCanvas('anatomy')">🗑️ 全部清除</button>
               </div>
             </div>
             <div class="tm" style="font-size:11px;margin-bottom:4px;">建議上傳你用 AI 生的「左骨骼右肌肉」對照圖</div>
@@ -5653,6 +5665,49 @@ window.pmuSet=(field,val)=>{
   setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},60);
 };
 
+window.pmuSetFaceAnswer=(key,val)=>{
+  if(!S.treatment)return;
+  pmuSaveInputs();
+  if(!S.treatment.faceAnswers)S.treatment.faceAnswers={};
+  S.treatment.faceAnswers[key]=val;
+  const c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},60);
+};
+
+// ═══ 🔍 面診題目編輯 ═══
+function renderFaceQEditor(q,qi){
+  var opts=(q.options||[]).map(function(o,oi){
+    return '<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">'
+      +'<input type="text" value="'+(o||'').replace(/"/g,'&quot;')+'" onchange="fqEditOption('+qi+','+oi+',this.value)" style="flex:1;font-size:13px;">'
+      +'<button class="bdel" onclick="fqDelOption('+qi+','+oi+')">×</button></div>';
+  }).join('');
+  return '<div style="background:var(--bg2);padding:12px;border-radius:8px;margin-bottom:10px;">'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">'
+    +'<input type="text" value="'+(q.label||'').replace(/"/g,'&quot;')+'" placeholder="題目名稱" onchange="fqEditLabel('+qi+',this.value)" style="flex:1;font-weight:700;font-size:14px;">'
+    +'<button class="bdel" onclick="fqDelQuestion('+qi+')" title="刪除整個題目">🗑️</button></div>'
+    +'<div style="padding-left:8px;">'+opts
+    +'<button class="btn btn-s btn-sm" style="margin-top:4px;" onclick="fqAddOption('+qi+')">＋ 加選項</button></div></div>';
+}
+function fqRerender(){var el=document.getElementById('fq_list');if(el&&S.modal&&S.modal.fqDraft)el.innerHTML=S.modal.fqDraft.map(function(q,qi){return renderFaceQEditor(q,qi);}).join('');}
+window.fqEditLabel=function(qi,val){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi])S.modal.fqDraft[qi].label=val;};
+window.fqEditOption=function(qi,oi,val){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]&&S.modal.fqDraft[qi].options)S.modal.fqDraft[qi].options[oi]=val;};
+window.fqDelOption=function(qi,oi){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]){S.modal.fqDraft[qi].options.splice(oi,1);fqRerender();}};
+window.fqAddOption=function(qi){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]){if(!S.modal.fqDraft[qi].options)S.modal.fqDraft[qi].options=[];S.modal.fqDraft[qi].options.push('');fqRerender();}};
+window.fqDelQuestion=function(qi){if(S.modal&&S.modal.fqDraft){if(!confirm('刪除整個題目「'+(S.modal.fqDraft[qi].label||'')+'」？'))return;S.modal.fqDraft.splice(qi,1);fqRerender();}};
+window.fqAddQuestion=function(){if(!S.modal)return;if(!S.modal.fqDraft)S.modal.fqDraft=[];S.modal.fqDraft.push({key:'q_'+uid(),label:'',options:['']});fqRerender();};
+window.fqReset=function(){if(!confirm('還原成預設題目？'))return;S.modal.fqDraft=JSON.parse(JSON.stringify(DEFAULT_PMU_FACE_QUESTIONS));fqRerender();};
+window.saveFaceQuestions=async function(){
+  var qs=(S.modal.fqDraft||[]).filter(function(q){return (q.label||'').trim();}).map(function(q){
+    return {key:q.key||('q_'+uid()),label:q.label.trim(),options:(q.options||[]).map(function(o){return (o||'').trim();}).filter(function(o){return o;})};
+  });
+  var settings=Object.assign({},S.data.settings||{},{pmuFaceQuestions:qs});
+  S.data.settings=settings;
+  await saveMain({settings});
+  S.modal.fqDraft=null;
+  toast('✅ 面診題目已儲存');
+  openM('pmuSettings');
+};
+
 // ── 全臉面診圈記畫布 ──
 var _faceCanvas=null,_faceCtx=null,_faceDrawing=false,_faceHasContent=false;
 function drawFaceTemplate(ctx,w,h){
@@ -5817,15 +5872,37 @@ function initOneFaceCanvas(key,canvasId,useTemplate){
     if(mk){var mi=new Image();mi.onload=function(){ctx.drawImage(mi,0,0,canvas.width,canvas.height);};mi.src=mk;}
   }
   st.redraw=redraw;
+  st.history=st.history||[];
   redraw();
   ctx.lineCap='round';ctx.lineJoin='round';
   function getPos(e){var rect=canvas.getBoundingClientRect();var sx=canvas.width/rect.width,sy=canvas.height/rect.height;var x=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;var y=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;return{x:x*sx,y:y*sy};}
-  function start(e){e.preventDefault();st.drawing=true;var p=getPos(e);ctx.strokeStyle='#dc2626';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.x,p.y);}
+  function start(e){
+    e.preventDefault();
+    // 下筆前，先把目前畫面存進歷史（供復原）
+    try{st.history.push(canvas.toDataURL('image/png'));if(st.history.length>20)st.history.shift();}catch(err){}
+    st.drawing=true;var p=getPos(e);ctx.strokeStyle='#dc2626';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.x,p.y);
+  }
   function move(e){if(!st.drawing)return;e.preventDefault();var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();}
   function end(){if(st.drawing){st.drawing=false;if(S.treatment)S.treatment[markupKey]=canvas.toDataURL('image/png');}}
   canvas.onmousedown=start;canvas.onmousemove=move;canvas.onmouseup=end;canvas.onmouseleave=end;
   canvas.ontouchstart=start;canvas.ontouchmove=move;canvas.ontouchend=end;
 }
+
+// 復原上一筆
+window.undoFaceCanvas=function(key){
+  key=key||'face';
+  var st=_faceCanvases[key];
+  if(!st||!st.canvas||!st.history||st.history.length===0){toast('沒有可復原的筆跡');return;}
+  var prev=st.history.pop();
+  var markupKey=key==='face'?'faceMarkup':'anatomyMarkup';
+  var img=new Image();
+  img.onload=function(){
+    st.ctx.clearRect(0,0,st.canvas.width,st.canvas.height);
+    st.ctx.drawImage(img,0,0,st.canvas.width,st.canvas.height);
+    if(S.treatment)S.treatment[markupKey]=st.canvas.toDataURL('image/png');
+  };
+  img.src=prev;
+};
 
 window.initFaceCanvas=function(){
   initOneFaceCanvas('face','pmu_face_canvas',true);
@@ -5963,7 +6040,7 @@ window.pmuSubmit=async()=>{
     isMinor:t.isMinor,guardianName:t.guardianName,
     date:t.date,staff:t.staff,serviceType:t.serviceType,
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
-    baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,
+    baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,faceAnswers:t.faceAnswers,
     leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,faceBg:t.faceBg,anatomyMarkup:t.anatomyMarkup,anatomyBg:t.anatomyBg,
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
@@ -9600,6 +9677,12 @@ function renderModal(){
         <div class="tm" style="font-size:11px;margin-top:4px;">預設 90 天（3個月）。做完紋繡系統會自動算補色日期</div>
       </div>
 
+      <div style="font-weight:700;color:#9333ea;margin:16px 0 8px;">🔍 面診評估題目（自由編輯）</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:6px;">
+        <div><b style="font-size:14px;">面診題目與選項</b><div class="tm" style="font-size:11px;">底色、毛流、骨骼、肌肉...可改名、加選項、新增題目</div></div>
+        <button class="btn btn-s btn-sm" onclick="openM('pmuFaceQuestions')">✏️ 編輯</button>
+      </div>
+
       <div style="font-weight:700;color:#9333ea;margin:16px 0 8px;">🖼️ 面診底圖（設定一次，做紋繡時自動帶入）</div>
       <div class="tm" style="font-size:12px;margin-bottom:10px;line-height:1.7;">
         上傳你的 AI 生成圖（素顏五官圖、骨骼肌肉對照圖）。設定後，每次做紋繡都會自動用這張當底圖，你只要圈記就好，不用每次重傳。
@@ -9711,6 +9794,28 @@ function renderModal(){
     <div class="mbtns">
       <button class="btn btn-s" onclick="closeMod()">取消</button>
       <button class="btn btn-p" style="background:#9333ea;" onclick="saveBalanceSheet()">✓ 儲存</button>
+    </div>`;
+    S.modal.lg=true;
+  }
+
+  // ─── 🔍 編輯面診題目 ───
+  if(m.t==='pmuFaceQuestions'){
+    if(!S.modal.fqDraft){
+      S.modal.fqDraft=JSON.parse(JSON.stringify(S.data.settings?.pmuFaceQuestions||DEFAULT_PMU_FACE_QUESTIONS));
+    }
+    const qs=S.modal.fqDraft;
+    c=`<div class="mttl">🔍 編輯面診評估題目</div>
+    <div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:12px;">
+      改題目名稱、增刪選項、新增或刪除整個題目。做紋繡時就會用你設定的題目。
+    </div>
+    <div id="fq_list" style="max-height:55vh;overflow-y:auto;margin-top:12px;">
+      ${qs.map((q,qi)=>renderFaceQEditor(q,qi)).join('')}
+    </div>
+    <button class="btn btn-s btn-sm" style="margin-top:10px;" onclick="fqAddQuestion()">＋ 新增一個題目</button>
+    <div class="mbtns">
+      <button class="btn btn-s" onclick="S.modal.fqDraft=null;openM('pmuSettings')">取消</button>
+      <button class="btn btn-y" onclick="fqReset()">↺ 還原預設</button>
+      <button class="btn btn-p" style="background:#9333ea;" onclick="saveFaceQuestions()">✓ 儲存</button>
     </div>`;
     S.modal.lg=true;
   }
@@ -13024,7 +13129,7 @@ window.startPmuFlow=()=>{
     serviceType:'霧眉',
     designNote:'',designStyle:'',expectation:'',
     conditions:[],conditionNote:'',allergies:[],allergyNote:'',
-    baseColor:'',hairFlow:'',boneState:'',muscleState:'',leftBrow:'',rightBrow:'',faceMarkup:'',faceBg:(S.data.settings&&S.data.settings.pmuFaceBg)||'',anatomyMarkup:'',anatomyBg:(S.data.settings&&S.data.settings.pmuAnatomyBg)||'',
+    baseColor:'',hairFlow:'',boneState:'',muscleState:'',faceAnswers:{},leftBrow:'',rightBrow:'',faceMarkup:'',faceBg:(S.data.settings&&S.data.settings.pmuFaceBg)||'',anatomyMarkup:'',anatomyBg:(S.data.settings&&S.data.settings.pmuAnatomyBg)||'',
     source:'',
     consentAgreed:false,consentSignature:null,consentSignedAt:'',
     startTime:'',endTime:'',numbCream:'',numbTime:'',tools:[],pigments:[],operationNote:'',
