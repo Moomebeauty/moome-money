@@ -391,6 +391,24 @@ const DEFAULT_PMU_YEARLY_MSG=`親愛的 {客戶} 您好 🌸
 想預約或有任何問題，都可以直接回覆我唷～
 好久不見，很想念您 🌷`;
 
+// 補色價目表（可在基本設定編輯）
+const DEFAULT_PMU_PRICING={
+  '霧眉':{
+    firstPrice:8800, firstDiscount:6800,
+    freeMonths:3,          // 3個月內免費補色
+    m4to12:3000,           // 第4~12個月固定價
+    y1to2Discount:0.6,     // 第1~2年 6折
+    over2Discount:0.8      // 超過2年 8折
+  },
+  '霧唇':{
+    firstPrice:10800, firstDiscount:8800,
+    freeMonths:3,
+    m4to12:4000,
+    y1to2Discount:0.6,
+    over2Discount:0.8
+  }
+};
+
 const DEFAULT_PMU_FACE_QUESTIONS=[
   {key:'baseColor',label:'是否有底色？',options:['有，略有深度','有，偏淺淡','無，已施作淡色','無']},
   {key:'hairFlow',label:'原生毛流狀態',options:['完整毛流','前濃，後段缺','整體偏淡','左右分布不均']},
@@ -1643,8 +1661,26 @@ function pgOverview(){
     let html='';
     if(touchupDue.length>0){
       html+=`<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#9333ea;">
-        🎨 <b>補色提醒（${touchupDue.length} 位）</b>：${touchupDue.map(r=>`${r.customer}（${r.touchupDate}${r.touchupDate<todayStr?' 已過期':''}）`).join('、')}
-        <div style="margin-top:6px;">${touchupDue.map(r=>`<button class="btn btn-sm" style="background:#9333ea;color:#fff;margin:2px;" onclick="pmuSendTouchup('${r.id}')">💬 傳訊給 ${r.customer}</button>`).join('')}</div>
+        🎨 <b>補色提醒（${touchupDue.length} 位）</b>
+        <div style="margin-top:8px;">${touchupDue.map(r=>{
+          const tp=getTouchupPrice(r);
+          const overdue=r.touchupDate<todayStr;
+          let priceTag='';
+          if(tp){
+            if(tp.isFree){
+              priceTag=`<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700;">🎁 免費補色</span>`;
+            }else{
+              priceTag=`<span style="background:#9333ea;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700;">${tp.label} $${fmt(tp.price)}</span>`;
+            }
+          }
+          return`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <b style="color:#9333ea;">${r.customer}</b>
+            <span class="tm" style="font-size:12px;">${r.serviceType||''}　${r.touchupDate}${overdue?' <span style="color:#dc2626;">已過期</span>':''}</span>
+            ${priceTag}
+            ${tp&&!tp.isFree?`<span class="tm" style="font-size:11px;">${tp.note}</span>`:''}
+            <button class="btn btn-sm" style="background:#9333ea;color:#fff;margin-left:auto;" onclick="pmuSendTouchup('${r.id}')">💬 傳訊</button>
+          </div>`;
+        }).join('')}</div>
       </div>`;
     }
     if(yearlyDue.length>0){
@@ -3233,6 +3269,7 @@ function pgCustomerDetail(c){
               ${r.numbCream?`麻膏：${r.numbCream}　`:''}${r.numbTime?`敷麻：${r.numbTime}<br>`:''}
               ${r.operationNote?`備註：${r.operationNote}<br>`:''}
               ${r.touchupDate?`📅 補色日：<b style="color:${touchupOver?'var(--red)':'#9333ea'};">${r.touchupDate}</b>${r.touchupDone?'（已補色✓）':touchupOver?'（已過期）':'（未補色）'}<br>`:''}
+              ${(()=>{const tp=getTouchupPrice(r);if(!tp)return'';return`💰 現在補色：${tp.isFree?'<b style="color:#16a34a;">🎁 免費</b>':`<b style="color:#9333ea;">${tp.label} $${fmt(tp.price)}</b> <span class="tm">${tp.note}</span>`}<br>`;})()}
               ${r.oneYearDate?`🗓️ 滿一年：${r.oneYearDate}`:''}
             </div>
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
@@ -3251,13 +3288,47 @@ function pgCustomerDetail(c){
 }
 
 // 補色提醒：複製訊息
+// 計算某筆紋繡紀錄「現在補色該收多少」
+function getTouchupPrice(r){
+  const pricing=(S.data.settings&&S.data.settings.pmuPricing)||DEFAULT_PMU_PRICING;
+  const svc=(r.serviceType||'').includes('唇')?'霧唇':'霧眉';
+  const p=pricing[svc];
+  if(!p)return null;
+  const start=new Date(r.date);
+  const now=new Date();
+  const monthsDiff=(now.getFullYear()-start.getFullYear())*12+(now.getMonth()-start.getMonth());
+  const freeMonths=toN(p.freeMonths)||3;
+  var price,label,isFree=false,note='';
+  if(monthsDiff<freeMonths){
+    price=0;isFree=true;label='免費補色';note='（'+freeMonths+'個月內免費一次）';
+  }else if(monthsDiff<12){
+    price=toN(p.m4to12);label='回娘家補色';note='（第'+(freeMonths+1)+'~12個月）';
+  }else if(monthsDiff<24){
+    const base=toN(p.firstDiscount)||toN(p.firstPrice);
+    price=Math.round(base*(toN(p.y1to2Discount)||0.6));
+    label='老客回娘家';note='（第1~2年 '+Math.round((toN(p.y1to2Discount)||0.6)*10)+'折）';
+  }else{
+    const base=toN(p.firstDiscount)||toN(p.firstPrice);
+    price=Math.round(base*(toN(p.over2Discount)||0.8));
+    label='久違回娘家';note='（超過2年 '+Math.round((toN(p.over2Discount)||0.8)*10)+'折）';
+  }
+  return {svc:svc,price:price,label:label,isFree:isFree,note:note,monthsDiff:monthsDiff};
+}
+
 window.pmuSendTouchup=(id)=>{
   const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
   if(!r)return;
+  const tp=getTouchupPrice(r);
+  const priceStr=tp?(tp.isFree?'免費':'$'+fmt(tp.price)):'';
   const tmpl=S.data.settings?.pmuTouchupMsg||DEFAULT_PMU_TOUCHUP_MSG;
-  const msg=tmpl.replace(/\{客戶\}/g,r.customer||'').replace(/\{服務\}/g,r.serviceType||'').replace(/\{補色日期\}/g,r.touchupDate||'');
+  const msg=tmpl.replace(/\{客戶\}/g,r.customer||'').replace(/\{服務\}/g,r.serviceType||'').replace(/\{補色日期\}/g,r.touchupDate||'').replace(/\{補色價格\}/g,priceStr);
+  const priceHint=tp?`<div style="background:${tp.isFree?'#f0fdf4':'#faf5ff'};border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:14px;">
+    💰 <b>這次補色該收：</b>${tp.isFree?'<span style="color:#16a34a;font-weight:700;">🎁 免費（'+r.serviceType+'）</span>':'<span style="color:#9333ea;font-weight:700;">'+tp.label+' $'+fmt(tp.price)+'</span> '+tp.note}
+    <div class="tm" style="font-size:11px;margin-top:2px;">距首次施作約 ${tp.monthsDiff} 個月　（這是給你看的，訊息裡可用 {補色價格} 帶入）</div>
+  </div>`:'';
   const html=`<div class="mttl">💬 傳給 ${r.customer} 的補色提醒</div>
-    <textarea id="pmu_msg_copy" rows="10" readonly style="width:100%;font-size:14px;line-height:1.7;background:var(--bg2);">${msg}</textarea>
+    ${priceHint}
+    <textarea id="pmu_msg_copy" rows="9" readonly style="width:100%;font-size:14px;line-height:1.7;background:var(--bg2);">${msg}</textarea>
     <div class="mbtns">
       <button class="btn btn-s" onclick="closeMod()">關閉</button>
       <button class="btn btn-y" onclick="pmuMarkTouchupDone('${id}')">✓ 標記已補色</button>
