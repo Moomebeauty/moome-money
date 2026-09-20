@@ -785,7 +785,7 @@ function startSync(){
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos'].forEach(col=>{
     const unsub=onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -3283,6 +3283,25 @@ function pgCustomerDetail(c){
               ${(()=>{const tp=getTouchupPrice(r);if(!tp)return'';return`💰 現在補色：${tp.isFree?'<b style="color:#16a34a;">🎁 免費</b>':`<b style="color:#9333ea;">${tp.label} $${fmt(tp.price)}</b> <span class="tm">${tp.note}</span>`}<br>`;})()}
               ${r.oneYearDate?`🗓️ 滿一年：${r.oneYearDate}`:''}
             </div>
+            ${(()=>{
+              const photos=(S.data.pmuPhotos||[]).filter(p=>p.recordId===r.id);
+              const before=photos.filter(p=>p.type==='before');
+              const after=photos.filter(p=>p.type==='after');
+              if(before.length===0&&after.length===0)return'';
+              let h='<div style="margin-top:10px;">';
+              if(before.length>0){
+                h+='<div class="tm" style="font-size:12px;margin-bottom:4px;">📷 術前照片：</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">';
+                before.forEach(p=>{h+=`<img src="${p.img}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--bdr);">`;});
+                h+='</div>';
+              }
+              if(after.length>0){
+                h+='<div class="tm" style="font-size:12px;margin-bottom:4px;">📸 術後照片：</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+                after.forEach(p=>{h+=`<img src="${p.img}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--bdr);">`;});
+                h+='</div>';
+              }
+              h+='</div>';
+              return h;
+            })()}
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
               <button class="btn btn-s btn-sm" onclick="viewPmuRecord('${r.id}')">📋 看完整</button>
               <label class="btn btn-sm" style="background:#0891b2;color:#fff;cursor:pointer;">📷 補照片<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotoToPmuRecord('${r.id}',this)"></label>
@@ -5580,15 +5599,15 @@ window.pmuUploadPhoto=function(when,input){
   });
 };
 
-// 事後補照片到已完成的紋繡紀錄
+// 事後補照片到已完成的紋繡紀錄（存 pmuPhotos 子集合）
 window.addPhotoToPmuRecord=function(recId,input){
   var files=input.files;
   if(!files||files.length===0)return;
   var rec=(S.data.pmuRecords||[]).find(function(x){return x.id===recId;});
   if(!rec){alert('找不到紀錄');return;}
-  if(!rec.photosAfter)rec.photosAfter=[];
-  var canAdd=Math.max(0,3-rec.photosAfter.length);
-  if(canAdd===0){alert('這筆紀錄照片已達上限（3張）');return;}
+  var existing=(S.data.pmuPhotos||[]).filter(function(p){return p.recordId===recId;}).length;
+  var canAdd=Math.max(0,8-existing);
+  if(canAdd===0){alert('這筆紀錄照片已達上限（8張）');return;}
   var toProcess=Array.prototype.slice.call(files,0,canAdd);
   var remaining=toProcess.length;
   toast('處理照片中...');
@@ -5603,15 +5622,11 @@ window.addPhotoToPmuRecord=function(recId,input){
         var ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
         var compressed=canvas.toDataURL('image/jpeg',0.55);
         if(Math.round(compressed.length/1024)>200)compressed=canvas.toDataURL('image/jpeg',0.4);
-        rec.photosAfter.push(compressed);
+        try{
+          await addSub('pmuPhotos',{recordId:recId,customer:rec.customer,type:'after',img:compressed});
+        }catch(e){alert('照片存檔失敗：'+e.message);}
         remaining--;
-        if(remaining===0){
-          var recs=(S.data.pmuRecords||[]).map(function(x){return x.id===recId?rec:x;});
-          S.data.pmuRecords=recs;
-          var ok=await saveMain({pmuRecords:recs});
-          if(ok){toast('✅ 照片已補上');render();}
-          else{alert('❌ 儲存失敗，可能空間不足。請先清理草稿釋放空間。');}
-        }
+        if(remaining===0){toast('✅ 照片已補上');render();}
       };
       img.src=ev.target.result;
     };
@@ -5619,7 +5634,6 @@ window.addPhotoToPmuRecord=function(recId,input){
   });
 };
 
-// 事後補照片到已完成的紋繡紀錄 END
 window.pmuDelPhoto=function(when,i){
   var photosKey=when==='before'?'photosBefore':'photosAfter';
   if(S.treatment[photosKey]){S.treatment[photosKey].splice(i,1);pmuAutoSave();var c=$('pg-content');if(c)c.innerHTML=renderPage();}
@@ -6308,7 +6322,6 @@ window.pmuSubmit=async()=>{
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,faceAnswers:t.faceAnswers,
     leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,anatomyMarkup:t.anatomyMarkup,
-    photosBefore:t.photosBefore||[],photosAfter:t.photosAfter||[],
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
     startTime:t.startTime,endTime:t.endTime,
@@ -6328,25 +6341,6 @@ window.pmuSubmit=async()=>{
     updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
   }
 
-  // 先檢查這筆紀錄的大小（照片+圖片可能太大）
-  let recSize=0;
-  try{recSize=JSON.stringify(record).length;}catch(e){}
-  // 若單筆超過 700KB，自動精簡照片（每種只留最多2張）
-  if(recSize>700000){
-    record.photosBefore=(record.photosBefore||[]).slice(0,2);
-    record.photosAfter=(record.photosAfter||[]).slice(0,2);
-    // 重算
-    try{recSize=JSON.stringify(record).length;}catch(e){}
-  }
-
-  // 檢查整體資料大小
-  let totalSize=0;
-  try{totalSize=JSON.stringify({pmuRecords}).length;}catch(e){}
-  if(totalSize>1000000){
-    alert('⚠️ 資料太大無法儲存（約 '+(totalSize/1048576).toFixed(2)+'MB，上限 1MB）。\\n\\n照片太多了。建議：\\n1. 先到「基本設定→資料修復→清理草稿」精簡舊照片\\n2. 或減少這次的照片張數\\n\\n這筆紀錄還沒存，請處理後再按完成。');
-    return;
-  }
-
   // 先更新本地
   S.data.pmuRecords=pmuRecords;
   if(updates.customers)S.data.customers=updates.customers;
@@ -6355,14 +6349,22 @@ window.pmuSubmit=async()=>{
     const drafts=(S.data.pmuDrafts||[]).filter(d=>d.id!==t.draftId);
     S.data.pmuDrafts=drafts;
     updates.pmuDrafts=drafts;
-    S.data.pmuDrafts=drafts;
   }
 
+  // 存主紀錄（不含照片，所以很小，不會超過限制）
   const ok=await saveMain(updates);
   if(!ok){
-    alert('❌ 儲存失敗！這筆紋繡紀錄沒有存進雲端。\\n\\n通常是照片太多、資料超過 1MB。\\n請到「基本設定→資料修復→清理草稿」釋放空間，或減少照片，再重新完成一次。');
+    alert('❌ 儲存失敗！請到「基本設定→資料修復→清理草稿」釋放空間後再試。');
     return;
   }
+
+  // 照片各自存成 pmuPhotos 子集合一筆（每張獨立，不擠在主文件）
+  try{
+    const allPhotos=[];
+    (t.photosBefore||[]).forEach(p=>allPhotos.push({recordId:record.id,customer:t.customer,type:'before',img:p}));
+    (t.photosAfter||[]).forEach(p=>allPhotos.push({recordId:record.id,customer:t.customer,type:'after',img:p}));
+    for(const ph of allPhotos){await addSub('pmuPhotos',ph);}
+  }catch(e){console.warn('照片存檔部分失敗',e);}
 
   S.lastPmuRecord=record;
   t.pmuSubmitted=true;
