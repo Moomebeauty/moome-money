@@ -877,6 +877,15 @@ function render(){
   if(S.page==='treatment'&&S.treatment&&S.treatment.mode==='guestIntake'&&!S.treatment.guestSubmitted){
     setTimeout(initSignatureCanvasInline,150);
   }
+  // 紋繡流程：consent 階段初始化簽名板、design 階段初始化面診畫布
+  if(S.page==='treatment'&&S.treatment&&S.treatment.mode==='pmu'&&!S.treatment.pmuSubmitted){
+    if(S.treatment.pmuStage==='consent'){
+      setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},150);
+    }
+    if(S.treatment.pmuStage==='design'){
+      setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},150);
+    }
+  }
   // 進入銷售開單頁時，自動初始化購物車顯示
   if(S.auth&&S.page==='order'&&typeof renderCart==='function'){
     setTimeout(renderCart,0);
@@ -12589,6 +12598,40 @@ window.delTreatment=async(id)=>{
 // ─── 簽名功能（Canvas）───────────────────
 let _sigCanvas=null,_sigCtx=null,_sigDrawing=false,_sigHasContent=false;
 
+function initSignatureCanvasInline(canvasId){
+  const canvas=$(canvasId||'t_sign_canvas')||$('t_guest_sign_canvas');
+  if(!canvas)return;
+  const rect=canvas.getBoundingClientRect();
+  if(rect.width===0){setTimeout(function(){initSignatureCanvasInline(canvasId);},120);return;}
+  _sigCanvas=canvas;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=rect.width*dpr;
+  canvas.height=rect.height*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.lineWidth=2.5;
+  ctx.lineCap='round';
+  ctx.strokeStyle='#000';
+  _sigCtx=ctx;
+  _sigHasContent=false;
+  const existing=S.treatment&&(S.treatment.signature||S.treatment.consentSignature);
+  if(existing){
+    const img=new Image();
+    img.onload=function(){ctx.drawImage(img,0,0,rect.width,rect.height);_sigHasContent=true;};
+    img.src=existing;
+  }
+  function getPos(e){
+    const r=canvas.getBoundingClientRect();
+    if(e.touches&&e.touches[0])return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};
+    return{x:e.clientX-r.left,y:e.clientY-r.top};
+  }
+  function start(e){e.preventDefault();_sigDrawing=true;const p=getPos(e);_sigCtx.beginPath();_sigCtx.moveTo(p.x,p.y);}
+  function move(e){if(!_sigDrawing)return;e.preventDefault();const p=getPos(e);_sigCtx.lineTo(p.x,p.y);_sigCtx.stroke();_sigHasContent=true;}
+  function end(e){if(e&&e.preventDefault)e.preventDefault();_sigDrawing=false;}
+  canvas.onmousedown=start;canvas.onmousemove=move;canvas.onmouseup=end;canvas.onmouseleave=end;
+  canvas.ontouchstart=start;canvas.ontouchmove=move;canvas.ontouchend=end;
+}
+
 window.initSignatureCanvas=(canvasId)=>{
   const canvas=$(canvasId||'m_sign_canvas');
   if(!canvas)return;
@@ -13263,42 +13306,7 @@ window.showServiceHealth=(id)=>{
 };
 
 // 重新渲染後重新初始化簽名 canvas
-function initSignatureCanvasInline(canvasId){
-  const canvas=$(canvasId||'t_sign_canvas')||$('t_guest_sign_canvas');
-  if(!canvas)return;
-  _sigCanvas=canvas;
-  const dpr=window.devicePixelRatio||1;
-  const rect=canvas.getBoundingClientRect();
-  canvas.width=rect.width*dpr;
-  canvas.height=rect.height*dpr;
-  const ctx=canvas.getContext('2d');
-  ctx.scale(dpr,dpr);
-  ctx.lineWidth=2.5;
-  ctx.lineCap='round';
-  ctx.strokeStyle='#000';
-  _sigCtx=ctx;
-  _sigHasContent=false;
-  if(S.treatment&&S.treatment.signature){
-    const img=new Image();
-    img.onload=()=>{ctx.drawImage(img,0,0,rect.width,rect.height);_sigHasContent=true;};
-    img.src=S.treatment.signature;
-  }
-  function getPos(e){
-    const r=canvas.getBoundingClientRect();
-    if(e.touches&&e.touches[0])return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};
-    return{x:e.clientX-r.left,y:e.clientY-r.top};
-  }
-  function start(e){e.preventDefault();_sigDrawing=true;const p=getPos(e);_sigCtx.beginPath();_sigCtx.moveTo(p.x,p.y);}
-  function move(e){if(!_sigDrawing)return;e.preventDefault();const p=getPos(e);_sigCtx.lineTo(p.x,p.y);_sigCtx.stroke();_sigHasContent=true;}
-  function end(e){e.preventDefault();_sigDrawing=false;}
-  canvas.addEventListener('mousedown',start);
-  canvas.addEventListener('mousemove',move);
-  canvas.addEventListener('mouseup',end);
-  canvas.addEventListener('mouseleave',end);
-  canvas.addEventListener('touchstart',start,{passive:false});
-  canvas.addEventListener('touchmove',move,{passive:false});
-  canvas.addEventListener('touchend',end,{passive:false});
-}
+
 
 window.resetTreatment=()=>{
   if(!confirm('確認清空目前所有資料，重新開始？'))return;
