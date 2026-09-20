@@ -3285,6 +3285,7 @@ function pgCustomerDetail(c){
             </div>
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
               <button class="btn btn-s btn-sm" onclick="viewPmuRecord('${r.id}')">📋 看完整</button>
+              <label class="btn btn-sm" style="background:#0891b2;color:#fff;cursor:pointer;">📷 補照片<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotoToPmuRecord('${r.id}',this)"></label>
               ${r.consentSignature?`<button class="btn btn-s btn-sm" onclick="viewPmuSignature('${r.id}')">✍️ 看簽名</button><button class="btn btn-s btn-sm" onclick="downloadPmuRecordConsent('${r.id}')">🖼️ 下載同意書</button>`:''}
               <button class="btn btn-sm" style="background:var(--gold);color:#fff;" onclick="openM('editPmu','${r.id}')">✏️ 編輯</button>
               <button class="bdel" onclick="delPmuRecord('${r.id}')">×</button>
@@ -5527,7 +5528,10 @@ function pmuPhotoStage(t,when){
 
   var html='<div class="card"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">'+title+'</span></div><div class="card-bd">'
     +'<div class="tm" style="font-size:13px;margin-bottom:12px;">'+hint+' 可拍多張。</div>'
-    +'<label class="btn btn-p" style="background:#9333ea;cursor:pointer;display:inline-block;">📷 拍照 / 選照片<input type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>';
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<label class="btn btn-p" style="background:#9333ea;cursor:pointer;">📷 開相機拍<input type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>'
+    +'<label class="btn btn-s" style="cursor:pointer;">🖼️ 從相簿選<input type="file" accept="image/*" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>'
+    +'</div>';
 
   if(photos.length>0){
     html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:14px;">';
@@ -5543,24 +5547,29 @@ function pmuPhotoStage(t,when){
   return html;
 }
 
+
+
 window.pmuUploadPhoto=function(when,input){
   var files=input.files;
   if(!files||files.length===0)return;
   var photosKey=when==='before'?'photosBefore':'photosAfter';
   if(!S.treatment[photosKey])S.treatment[photosKey]=[];
-  var remaining=files.length;
+  if(S.treatment[photosKey].length>=3){alert('每種照片最多 3 張，已達上限。');return;}
+  var canAdd=3-S.treatment[photosKey].length;
+  var toProcess=Array.prototype.slice.call(files,0,canAdd);
+  var remaining=toProcess.length;
   toast('處理照片中...');
-  Array.from(files).forEach(function(file){
+  toProcess.forEach(function(file){
     var reader=new FileReader();
     reader.onload=function(ev){
       var img=new Image();
       img.onload=function(){
-        var maxSide=700;var w=img.width,h=img.height;
+        var maxSide=500;var w=img.width,h=img.height;
         if(w>maxSide||h>maxSide){var r=Math.min(maxSide/w,maxSide/h);w=Math.round(w*r);h=Math.round(h*r);}
         var canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
         var ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
-        var compressed=canvas.toDataURL('image/jpeg',0.6);
-        if(Math.round(compressed.length/1024)>350)compressed=canvas.toDataURL('image/jpeg',0.45);
+        var compressed=canvas.toDataURL('image/jpeg',0.55);
+        if(Math.round(compressed.length/1024)>200)compressed=canvas.toDataURL('image/jpeg',0.4);
         S.treatment[photosKey].push(compressed);
         remaining--;
         if(remaining===0){pmuAutoSave();var c=$('pg-content');if(c)c.innerHTML=renderPage();toast('✅ 照片已加入');}
@@ -5571,6 +5580,46 @@ window.pmuUploadPhoto=function(when,input){
   });
 };
 
+// 事後補照片到已完成的紋繡紀錄
+window.addPhotoToPmuRecord=function(recId,input){
+  var files=input.files;
+  if(!files||files.length===0)return;
+  var rec=(S.data.pmuRecords||[]).find(function(x){return x.id===recId;});
+  if(!rec){alert('找不到紀錄');return;}
+  if(!rec.photosAfter)rec.photosAfter=[];
+  var canAdd=Math.max(0,3-rec.photosAfter.length);
+  if(canAdd===0){alert('這筆紀錄照片已達上限（3張）');return;}
+  var toProcess=Array.prototype.slice.call(files,0,canAdd);
+  var remaining=toProcess.length;
+  toast('處理照片中...');
+  toProcess.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var img=new Image();
+      img.onload=async function(){
+        var maxSide=500;var w=img.width,h=img.height;
+        if(w>maxSide||h>maxSide){var r2=Math.min(maxSide/w,maxSide/h);w=Math.round(w*r2);h=Math.round(h*r2);}
+        var canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+        var ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
+        var compressed=canvas.toDataURL('image/jpeg',0.55);
+        if(Math.round(compressed.length/1024)>200)compressed=canvas.toDataURL('image/jpeg',0.4);
+        rec.photosAfter.push(compressed);
+        remaining--;
+        if(remaining===0){
+          var recs=(S.data.pmuRecords||[]).map(function(x){return x.id===recId?rec:x;});
+          S.data.pmuRecords=recs;
+          var ok=await saveMain({pmuRecords:recs});
+          if(ok){toast('✅ 照片已補上');render();}
+          else{alert('❌ 儲存失敗，可能空間不足。請先清理草稿釋放空間。');}
+        }
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+// 事後補照片到已完成的紋繡紀錄 END
 window.pmuDelPhoto=function(when,i){
   var photosKey=when==='before'?'photosBefore':'photosAfter';
   if(S.treatment[photosKey]){S.treatment[photosKey].splice(i,1);pmuAutoSave();var c=$('pg-content');if(c)c.innerHTML=renderPage();}
