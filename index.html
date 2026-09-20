@@ -3624,6 +3624,36 @@ window.savePmuTouchupDays=async(val)=>{
 };
 
 // ═══ 🎨 紋繡設定操作 END ═══
+window.cleanPmuDrafts=async function(){
+  var drafts=S.data.pmuDrafts||[];
+  var totalSize=0;
+  try{totalSize=JSON.stringify(S.data).length;}catch(e){}
+  var sizeMB=(totalSize/1048576).toFixed(2);
+  var msg='目前資料約 '+sizeMB+' MB（上限 1 MB）。\\n\\n';
+  if(drafts.length===0){
+    msg+='沒有未完成的草稿。\\n';
+    if(totalSize>900000){
+      msg+='\\n⚠️ 但資料仍偏大，可能是紋繡紀錄裡的照片太多。\\n是否要「精簡舊紋繡紀錄的照片」（每筆只保留第一張術前、第一張術後）？';
+      if(confirm(msg)){
+        var recs=(S.data.pmuRecords||[]).map(function(r){
+          return Object.assign({},r,{photosBefore:(r.photosBefore||[]).slice(0,1),photosAfter:(r.photosAfter||[]).slice(0,1)});
+        });
+        S.data.pmuRecords=recs;
+        try{await saveMain({pmuRecords:recs});alert('✅ 已精簡照片，釋放了空間');render();}
+        catch(e){alert('處理失敗：'+e.message);}
+      }
+      return;
+    }
+    alert(msg+'資料大小正常，不需清理。');
+    return;
+  }
+  msg+='發現 '+drafts.length+' 筆未完成的草稿。\\n清掉它們可以釋放空間（不影響已完成的紋繡紀錄）。\\n\\n確定清理嗎？';
+  if(!confirm(msg))return;
+  S.data.pmuDrafts=[];
+  try{await saveMain({pmuDrafts:[]});alert('✅ 已清理 '+drafts.length+' 筆草稿，釋放空間');render();}
+  catch(e){alert('清理失敗：'+e.message);}
+};
+
 window.diagnosePmu=()=>{
   const recs=S.data.pmuRecords||[];
   const custs=(S.data.customers||[]).map(c=>c.name);
@@ -3749,8 +3779,8 @@ window.viewPmuRecord=(id)=>{
         })()}
         ${r.leftBrow?`左眉：${r.leftBrow}<br>`:''}
         ${r.rightBrow?`右眉：${r.rightBrow}<br>`:''}
-        ${r.faceMarkup||r.faceBg?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 素顏五官圈記：</div><div style="position:relative;display:inline-block;max-width:100%;">${r.faceBg?`<img src="${r.faceBg}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;display:block;">`:''}${r.faceMarkup?`<img src="${r.faceMarkup}" style="position:absolute;top:0;left:0;max-width:100%;width:100%;height:100%;">`:''}</div></div>`:''}
-        ${r.anatomyMarkup||r.anatomyBg?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 骨骼肌肉圈記：</div><div style="position:relative;display:inline-block;max-width:100%;">${r.anatomyBg?`<img src="${r.anatomyBg}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;display:block;">`:''}${r.anatomyMarkup?`<img src="${r.anatomyMarkup}" style="position:absolute;top:0;left:0;max-width:100%;width:100%;height:100%;">`:''}</div></div>`:''}
+        ${r.faceMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 素顏五官圈記：</div><img src="${r.faceMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
+        ${r.anatomyMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 骨骼肌肉圈記：</div><img src="${r.anatomyMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
       </div>
       <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
         <b>身體狀況</b><br>
@@ -5452,10 +5482,26 @@ window.pmuAutoSave=async function(){
   if(!t||t.mode!=='pmu')return;
   if(!t.draftId)t.draftId=uid();
   pmuSaveInputs();
-  var draft=JSON.parse(JSON.stringify(t));
-  draft.id=t.draftId;
-  draft.isDraft=true;
-  draft.updatedAt=nowLocal();
+  // 只存文字類資料，排除照片與大圖（避免超過 Firebase 1MB 限制）
+  var draft={
+    id:t.draftId,isDraft:true,updatedAt:nowLocal(),
+    mode:'pmu',pmuStage:t.pmuStage,draftId:t.draftId,
+    customer:t.customer,phone:t.phone,lineId:t.lineId,birthday:t.birthday,
+    date:t.date,staff:t.staff,serviceType:t.serviceType,
+    isMinor:t.isMinor,guardianName:t.guardianName,
+    designNote:t.designNote,designStyle:t.designStyle,expectation:t.expectation,
+    conditions:t.conditions,conditionNote:t.conditionNote,allergies:t.allergies,allergyNote:t.allergyNote,
+    baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,
+    faceAnswers:t.faceAnswers,leftBrow:t.leftBrow,rightBrow:t.rightBrow,source:t.source,referrer:t.referrer,
+    consentAgreed:t.consentAgreed,consentSignedAt:t.consentSignedAt,
+    startTime:t.startTime,endTime:t.endTime,numbCream:t.numbCream,numbTime:t.numbTime,
+    tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
+    cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,aftercareGiven:t.aftercareGiven,
+    // 記錄照片張數（不存照片本體）
+    photosBeforeCount:(t.photosBefore||[]).length,
+    photosAfterCount:(t.photosAfter||[]).length,
+    hasConsentSign:!!t.consentSignature,hasFaceMarkup:!!t.faceMarkup
+  };
   var drafts=(S.data.pmuDrafts||[]).filter(function(d){return d.id!==t.draftId;});
   drafts.push(draft);
   S.data.pmuDrafts=drafts;
@@ -5500,12 +5546,12 @@ window.pmuUploadPhoto=function(when,input){
     reader.onload=function(ev){
       var img=new Image();
       img.onload=function(){
-        var maxSide=900;var w=img.width,h=img.height;
+        var maxSide=700;var w=img.width,h=img.height;
         if(w>maxSide||h>maxSide){var r=Math.min(maxSide/w,maxSide/h);w=Math.round(w*r);h=Math.round(h*r);}
         var canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
         var ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
-        var compressed=canvas.toDataURL('image/jpeg',0.7);
-        if(Math.round(compressed.length/1024)>500)compressed=canvas.toDataURL('image/jpeg',0.5);
+        var compressed=canvas.toDataURL('image/jpeg',0.6);
+        if(Math.round(compressed.length/1024)>350)compressed=canvas.toDataURL('image/jpeg',0.45);
         S.treatment[photosKey].push(compressed);
         remaining--;
         if(remaining===0){pmuAutoSave();var c=$('pg-content');if(c)c.innerHTML=renderPage();toast('✅ 照片已加入');}
@@ -6045,7 +6091,7 @@ function initOneFaceCanvas(key,canvasId,useTemplate){
     st.drawing=true;var p=getPos(e);ctx.strokeStyle='#dc2626';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.x,p.y);
   }
   function move(e){if(!st.drawing)return;e.preventDefault();var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();}
-  function end(){if(st.drawing){st.drawing=false;if(S.treatment)S.treatment[markupKey]=canvas.toDataURL('image/png');}}
+  function end(){if(st.drawing){st.drawing=false;if(S.treatment)S.treatment[markupKey]=canvas.toDataURL('image/jpeg',0.7);}}
   canvas.onmousedown=start;canvas.onmousemove=move;canvas.onmouseup=end;canvas.onmouseleave=end;
   canvas.ontouchstart=start;canvas.ontouchmove=move;canvas.ontouchend=end;
 }
@@ -6061,7 +6107,7 @@ window.undoFaceCanvas=function(key){
   img.onload=function(){
     st.ctx.clearRect(0,0,st.canvas.width,st.canvas.height);
     st.ctx.drawImage(img,0,0,st.canvas.width,st.canvas.height);
-    if(S.treatment)S.treatment[markupKey]=st.canvas.toDataURL('image/png');
+    if(S.treatment)S.treatment[markupKey]=st.canvas.toDataURL('image/jpeg',0.7);
   };
   img.src=prev;
 };
@@ -6203,7 +6249,7 @@ window.pmuSubmit=async()=>{
     date:t.date,staff:t.staff,serviceType:t.serviceType,
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,faceAnswers:t.faceAnswers,
-    leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,faceBg:t.faceBg,anatomyMarkup:t.anatomyMarkup,anatomyBg:t.anatomyBg,
+    leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,anatomyMarkup:t.anatomyMarkup,
     photosBefore:t.photosBefore||[],photosAfter:t.photosAfter||[],
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
@@ -6223,18 +6269,44 @@ window.pmuSubmit=async()=>{
   if(t.customer&&!(S.data.customers||[]).find(c=>c.name===t.customer)){
     updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
   }
-  // 先更新本地，確保存完立刻看得到（不等 onSnapshot）
+
+  // 先檢查這筆紀錄的大小（照片+圖片可能太大）
+  let recSize=0;
+  try{recSize=JSON.stringify(record).length;}catch(e){}
+  // 若單筆超過 700KB，自動精簡照片（每種只留最多2張）
+  if(recSize>700000){
+    record.photosBefore=(record.photosBefore||[]).slice(0,2);
+    record.photosAfter=(record.photosAfter||[]).slice(0,2);
+    // 重算
+    try{recSize=JSON.stringify(record).length;}catch(e){}
+  }
+
+  // 檢查整體資料大小
+  let totalSize=0;
+  try{totalSize=JSON.stringify({pmuRecords}).length;}catch(e){}
+  if(totalSize>1000000){
+    alert('⚠️ 資料太大無法儲存（約 '+(totalSize/1048576).toFixed(2)+'MB，上限 1MB）。\\n\\n照片太多了。建議：\\n1. 先到「基本設定→資料修復→清理草稿」精簡舊照片\\n2. 或減少這次的照片張數\\n\\n這筆紀錄還沒存，請處理後再按完成。');
+    return;
+  }
+
+  // 先更新本地
   S.data.pmuRecords=pmuRecords;
   if(updates.customers)S.data.customers=updates.customers;
-  await saveMain(updates);
-
-  S.lastPmuRecord=record;
-  // 清掉這筆草稿
+  // 清草稿
   if(t.draftId){
     const drafts=(S.data.pmuDrafts||[]).filter(d=>d.id!==t.draftId);
     S.data.pmuDrafts=drafts;
     updates.pmuDrafts=drafts;
+    S.data.pmuDrafts=drafts;
   }
+
+  const ok=await saveMain(updates);
+  if(!ok){
+    alert('❌ 儲存失敗！這筆紋繡紀錄沒有存進雲端。\\n\\n通常是照片太多、資料超過 1MB。\\n請到「基本設定→資料修復→清理草稿」釋放空間，或減少照片，再重新完成一次。');
+    return;
+  }
+
+  S.lastPmuRecord=record;
   t.pmuSubmitted=true;
   render();
 };
@@ -8413,6 +8485,11 @@ function pgSettings(){
         </div>
         <div>
           <button class="btn" style="background:#9333ea;color:#fff;" onclick="diagnosePmu()">🔍 紋繡紀錄診斷</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">看系統裡存了幾筆紋繡紀錄</div>
+        </div>
+        <div>
+          <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanPmuDrafts()">🧹 清理紋繡草稿（釋放空間）</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">如果出現「size exceeds」存檔失敗，代表資料太大。點這個清掉未完成的草稿，釋放空間</div>
           <div class="tm" style="font-size:11px;margin-top:4px;">如果客戶頁看不到紋繡紀錄，點這個看系統裡到底存了幾筆、存的客戶名字是什麼</div>
         </div>
         <div>
