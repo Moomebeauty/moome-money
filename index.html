@@ -5497,13 +5497,43 @@ window.pmuPrevStage=function(){
 };
 window.pmuNextStage=function(){
   var idx=pmuStageIndex(S.treatment.pmuStage);
-  // 諮詢階段要先簽名才能往下
+  // 諮詢階段：若畫布有簽名但還沒按確認，自動確認
   if(S.treatment.pmuStage==='consent'&&!S.treatment.consentSignature){
-    alert('請先讓客人簽署同意書，再進行下一步');
-    return;
+    // 嘗試自動抓取簽名
+    if(_sigCanvas&&pmuCanvasHasInk(_sigCanvas)){
+      var nm=document.getElementById('pmu_customer');
+      if(nm&&nm.value.trim())S.treatment.customer=nm.value.trim();
+      var agree=document.getElementById('pmu_consent_agree');
+      if(agree&&agree.checked)S.treatment.consentAgreed=true;
+      if(!S.treatment.customer){alert('請填客戶姓名');return;}
+      if(!S.treatment.consentAgreed){alert('請勾選「我已詳閱並同意」');return;}
+      S.treatment.consentSignature=_sigCanvas.toDataURL('image/jpeg',0.7);
+      S.treatment.consentSignedAt=nowLocal();
+    }else{
+      alert('請先讓客人簽名，再進行下一步');
+      return;
+    }
   }
   if(idx<PMU_STAGES.length-1){pmuSaveInputs();pmuAutoSave();pmuGoStage(PMU_STAGES[idx+1].id);}
 };
+
+// 檢查畫布上是否有筆跡（讀像素，比 _sigHasContent 可靠）
+function pmuCanvasHasInk(canvas){
+  try{
+    var ctx=canvas.getContext('2d');
+    var data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    // 掃描：只要有非透明、非全白的像素就算有簽
+    for(var i=0;i<data.length;i+=40){ // 每隔幾個像素抽查，加快速度
+      var alpha=data[i+3];
+      if(alpha>10){
+        var r=data[i],g=data[i+1],b=data[i+2];
+        // 非接近白色
+        if(r<240||g<240||b<240)return true;
+      }
+    }
+    return false;
+  }catch(e){return _sigHasContent;}
+}
 
 // 自動存檔到雲端（存成「進行中」的紋繡紀錄，避免跳出頁面遺失）
 window.pmuAutoSave=async function(){
@@ -5857,8 +5887,8 @@ window.pmuConfirmConsent=function(){
   }
   if(!t.customer){alert('請填客戶姓名');return;}
   if(!t.consentAgreed&&!(document.getElementById('pmu_consent_agree')&&document.getElementById('pmu_consent_agree').checked)){alert('請勾選同意');return;}
-  if(!_sigCanvas||!_sigHasContent){alert('請簽名');return;}
-  t.consentSignature=_sigCanvas.toDataURL('image/png');
+  if(!_sigCanvas||(!_sigHasContent&&!pmuCanvasHasInk(_sigCanvas))){alert('請簽名');return;}
+  t.consentSignature=_sigCanvas.toDataURL('image/jpeg',0.7);
   t.consentSignedAt=nowLocal();
   t.consentAgreed=true;
   pmuAutoSave();
