@@ -3280,7 +3280,14 @@ function pgCustomerDetail(c){
               ${r.numbCream?`麻膏：${r.numbCream}　`:''}${r.numbTime?`敷麻：${r.numbTime}<br>`:''}
               ${r.operationNote?`備註：${r.operationNote}<br>`:''}
               ${r.touchupDate?`📅 補色日：<b style="color:${touchupOver?'var(--red)':'#9333ea'};">${r.touchupDate}</b>${r.touchupDone?'（已補色✓）':touchupOver?'（已過期）':'（未補色）'}<br>`:''}
-              ${(()=>{const tp=getTouchupPrice(r);if(!tp)return'';return`💰 現在補色：${tp.isFree?'<b style="color:#16a34a;">🎁 免費</b>':`<b style="color:#9333ea;">${tp.label} $${fmt(tp.price)}</b> <span class="tm">${tp.note}</span>`}<br>`;})()}
+              ${(()=>{
+                const typeLabels={new:'新客首次',free:'3個月免費補色',m4to12:'回娘家(4-12月)',y1to2:'回娘家(1-2年)',over2:'回娘家(2年以上)'};
+                if(r.pmuServiceType){
+                  const price=toN(r.pmuServicePrice);
+                  return `💰 這次服務：<b style="color:#9333ea;">${typeLabels[r.pmuServiceType]||''}</b> ${price===0?'<b style="color:#16a34a;">🎁 免費</b>':'$'+fmt(price)}<br>`;
+                }
+                return'';
+              })()}
               ${r.oneYearDate?`🗓️ 滿一年：${r.oneYearDate}`:''}
             </div>
             ${(()=>{
@@ -6303,15 +6310,15 @@ window.pmuNext=(stage)=>{
 // ── 階段④ 完成提醒 ──
 function pmuFinishStage(t){
   const S2=S.data.settings||{};
-  // 補色天數（預設3個月）
   const touchupDays=toN(S2.pmuTouchupDays)||90;
   const touchupDate=addMonthsToDate(t.date,Math.round(touchupDays/30));
+  const isNewClient=t.pmuServiceType==='new'||t.pmuServiceType==='free'||!t.pmuServiceType;
   return`
     <div class="notice" style="background:#f3e8ff;border-left-color:#9333ea;color:#9333ea;font-size:14px;margin-bottom:16px;">
       🎉 操作完成！在結帳前，確認以下事項都做到了：
     </div>
 
-    <div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
+    ${isNewClient?`<div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
       <div class="card-bd">
         <div style="font-weight:700;color:var(--goldDk);font-size:16px;margin-bottom:10px;">📅 預約免費補色</div>
         <div style="background:var(--goldL);padding:14px;border-radius:10px;text-align:center;">
@@ -6320,7 +6327,12 @@ function pmuFinishStage(t){
           <div class="tm" style="font-size:12px;margin-top:4px;">系統自動算好，直接跟客人約這個日期前 ✓</div>
         </div>
       </div>
-    </div>
+    </div>`:`<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;">
+      <div class="card-bd">
+        <div style="font-weight:700;color:#9333ea;font-size:16px;margin-bottom:8px;">🔄 這次是回娘家補色</div>
+        <div class="tm" style="font-size:13px;line-height:1.7;">這位是回娘家的老客人，不需要提醒 3 個月免費補色。<br>下次想補色時，再依當時的時間收費即可（1-2年6折、2年以上8折）。</div>
+      </div>
+    </div>`}
 
     <div class="card" style="margin-bottom:14px;">
       <div class="card-bd">
@@ -6424,7 +6436,9 @@ window.pmuSubmit=async()=>{
 
   const S2=S.data.settings||{};
   const touchupDays=toN(S2.pmuTouchupDays)||90;
-  const touchupDate=addMonthsToDate(t.date,Math.round(touchupDays/30));
+  // 只有新客/免費補色才設「3個月免費補色提醒」；回娘家類不設
+  const isNewClient=t.pmuServiceType==='new'||t.pmuServiceType==='free'||!t.pmuServiceType;
+  const touchupDate=isNewClient?addMonthsToDate(t.date,Math.round(touchupDays/30)):'';
   const oneYearDate=addMonthsToDate(t.date,12);
 
   // 紋繡紀錄
