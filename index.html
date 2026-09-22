@@ -5433,14 +5433,12 @@ function pgTreatmentCustomerView(t){
   `;
 }
 
-// ───── 🎨 紋繡服務主畫面（六階段）─────
-// 階段順序：consent(諮詢簽同意書) → photoBefore(操作前拍照) → design(眉型設計) → operation(操作紀錄) → photoAfter(操作後拍照) → finish(完成提醒)
+// ───── 🎨 紋繡服務主畫面（四階段）─────
+// 階段順序：consent(諮詢簽同意書) → design(眉型設計) → operation(操作紀錄) → finish(完成提醒)
 const PMU_STAGES=[
   {id:'consent',label:'諮詢簽約',icon:'📜'},
-  {id:'photoBefore',label:'術前拍照',icon:'📷'},
   {id:'design',label:'眉型設計',icon:'✏️'},
   {id:'operation',label:'操作紀錄',icon:'🎨'},
-  {id:'photoAfter',label:'術後拍照',icon:'📸'},
   {id:'finish',label:'完成',icon:'✅'}
 ];
 
@@ -5466,10 +5464,8 @@ function pgPmuView(t){
   // 內容
   var body='';
   if(stage==='consent')body=pmuConsentStage(t);
-  else if(stage==='photoBefore')body=pmuPhotoStage(t,'before');
   else if(stage==='design')body=pmuDesignStage(t);
   else if(stage==='operation')body=pmuOperationStage(t);
-  else if(stage==='photoAfter')body=pmuPhotoStage(t,'after');
   else if(stage==='finish')body=pmuFinishStage(t);
 
   // 底部上一步/下一步
@@ -5833,6 +5829,46 @@ window.pmuToggle=(field,val)=>{
 };
 
 // ── 階段② 簽同意書（客人畫面）──
+// 服務類型選擇器（新客/免費補色/回娘家補色...）+ 自動算價
+function pmuServiceTypeSelector(t){
+  var svc=(t.serviceType||'').includes('唇')?'霧唇':'霧眉';
+  var pricing=(S.data.settings&&S.data.settings.pmuPricing)||DEFAULT_PMU_PRICING;
+  var p=pricing[svc]||{};
+  var types=[
+    {key:'new',label:'新客首次',price:toN(p.firstDiscount)||toN(p.firstPrice),note:'優惠價'},
+    {key:'free',label:'3個月免費補色',price:0,note:'🎁 免費'},
+    {key:'m4to12',label:'回娘家(4-12月)',price:toN(p.m4to12),note:''},
+    {key:'y1to2',label:'回娘家(1-2年)',price:Math.round((toN(p.firstDiscount)||toN(p.firstPrice))*(toN(p.y1to2Discount)||0.6)),note:'6折'},
+    {key:'over2',label:'回娘家(2年以上)',price:Math.round((toN(p.firstDiscount)||toN(p.firstPrice))*(toN(p.over2Discount)||0.8)),note:'8折'}
+  ];
+  var cur=t.pmuServiceType||'';
+  var html='<div class="fgrp" style="margin-top:12px;background:#faf5ff;padding:12px;border-radius:10px;border:1px solid #e5d5f5;">'
+    +'<label style="color:#9333ea;font-weight:700;">💰 這次服務類型（決定收費）</label>'
+    +'<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">';
+  types.forEach(function(ty){
+    var sel=cur===ty.key;
+    html+='<button type="button" onclick="pmuSetServiceType(&quot;'+ty.key+'&quot;,'+ty.price+')" style="text-align:left;padding:10px 12px;border-radius:8px;border:2px solid '+(sel?'#9333ea':'var(--bdr)')+';background:'+(sel?'#9333ea':'#fff')+';color:'+(sel?'#fff':'var(--txt)')+';cursor:pointer;font-size:14px;display:flex;justify-content:space-between;align-items:center;">'
+      +'<span>'+(sel?'✓ ':'')+ty.label+'</span>'
+      +'<span style="font-weight:700;">'+(ty.price===0?'🎁 免費':'$'+fmt(ty.price))+'</span></button>';
+  });
+  html+='</div>';
+  if(cur){
+    var chosen=types.find(function(x){return x.key===cur;});
+    html+='<div style="margin-top:8px;font-size:13px;color:#16a34a;">✓ 已選：'+(chosen?chosen.label+'　收費 '+(chosen.price===0?'免費':'$'+fmt(chosen.price)):'')+'（完成時可帶進開單）</div>';
+  }
+  html+='</div>';
+  return html;
+}
+
+window.pmuSetServiceType=function(key,price){
+  if(!S.treatment)return;
+  pmuSaveInputs();
+  S.treatment.pmuServiceType=key;
+  S.treatment.pmuServicePrice=price;
+  var c=$('pg-content');if(c)c.innerHTML=renderPage();
+  setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},100);
+};
+
 function pmuConsentStage(t){
   var S2=S.data.settings||{};
   var terms=S2.pmuTerms||DEFAULT_PMU_TERMS;
@@ -5853,7 +5889,9 @@ function pmuConsentStage(t){
     +'</div>'
     +'<div class="fgrp" style="margin-top:10px;"><label>服務項目</label><div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +['霧眉','霧唇','霧眉+霧唇'].map(function(s){return '<button type="button" style="padding:8px 16px;background:'+(t.serviceType===s?'#9333ea':'var(--bg2)')+';color:'+(t.serviceType===s?'#fff':'var(--txt)')+';border:none;border-radius:16px;cursor:pointer;font-size:14px;" onclick="pmuSet(&quot;serviceType&quot;,&quot;'+s+'&quot;)">'+s+'</button>';}).join('')
-    +'</div></div></div></div>';
+    +'</div></div>'
+    +pmuServiceTypeSelector(t)
+    +'</div></div>';
 
   // 同意書內容（可捲動）
   var sections=[['📋 紋繡須知',notice],['🔐 個人資料告知',terms.privacy],['📖 服務說明書',terms.serviceDesc],['📜 服務同意書',terms.consent],['📸 多媒體使用同意',terms.media]];
@@ -6302,12 +6340,59 @@ function pmuFinishStage(t){
     </div>
 
     <div style="text-align:center;">
+      ${(()=>{
+        const typeLabels={new:'新客首次',free:'3個月免費補色',m4to12:'回娘家(4-12月)',y1to2:'回娘家(1-2年)',over2:'回娘家(2年以上)'};
+        if(!t.pmuServiceType)return `<div class="notice" style="background:var(--goldL);border-left-color:var(--gold);color:var(--goldDk);font-size:13px;margin-bottom:12px;">⚠️ 還沒選「這次服務類型」。回「諮詢簽約」那步選一下，才知道該收多少、才能帶進開單。</div>`;
+        const price=toN(t.pmuServicePrice);
+        return `<div style="background:#faf5ff;border:2px solid #9333ea;border-radius:12px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:14px;color:var(--mut);">${t.serviceType}　${typeLabels[t.pmuServiceType]||''}</div>
+          <div style="font-size:28px;font-weight:900;color:#9333ea;margin:4px 0;">${price===0?'🎁 免費':'$'+fmt(price)}</div>
+          <button type="button" class="btn btn-p" style="background:#16a34a;margin-top:8px;" onclick="pmuToOrder()">💰 存檔並帶進開單</button>
+          <div class="tm" style="font-size:11px;margin-top:6px;">${price===0?'免費不需開單，直接存檔即可':'按這個會存檔＋跳到開單，金額自動帶好'}</div>
+        </div>`;
+      })()}
       <button class="btn btn-p" style="background:linear-gradient(135deg,#9333ea,#c026d3);font-size:17px;font-weight:700;padding:16px 40px;border-radius:30px;" onclick="pmuSubmit()">
         ✓ 完成並存檔 ✨
       </button>
       <div class="tm" style="font-size:12px;margin-top:8px;">存檔後可下載同意書給客人，並記入客戶檔案</div>
     </div>`;
 }
+
+// 紋繡完成 → 存檔並帶進開單
+window.pmuToOrder=async function(){
+  var t=S.treatment;
+  if(!t)return;
+  var price=toN(t.pmuServicePrice);
+  var typeLabels={new:'新客首次',free:'3個月免費補色',m4to12:'回娘家補色(4-12月)',y1to2:'回娘家補色(1-2年)',over2:'回娘家補色(2年以上)'};
+  // 先存紋繡紀錄
+  var custName=t.customer;
+  // 準備帶進開單的資料
+  S.pmuOrderPrefill={
+    customer:custName,
+    item:t.serviceType+'　'+(typeLabels[t.pmuServiceType]||''),
+    amount:price,
+    staff:t.staff||'于蜜'
+  };
+  // 呼叫存檔（pmuSubmit 會存紀錄）
+  await pmuSubmit();
+  // 跳到開單頁
+  setTimeout(function(){
+    S.page='order';
+    S.treatment=null;
+    render();
+    // 預填開單
+    setTimeout(function(){
+      if(S.pmuOrderPrefill){
+        var pf=S.pmuOrderPrefill;
+        var custEl=document.getElementById('m_od4');if(custEl)custEl.value=pf.customer;
+        var itemEl=document.getElementById('m_od1');if(itemEl)itemEl.value=pf.item;
+        var amtEl=document.getElementById('m_od2');if(amtEl)amtEl.value=pf.amount;
+        if(typeof updateBalanceHint==='function')updateBalanceHint('od');
+        toast('✅ 已帶入開單：'+pf.item+' $'+fmt(pf.amount));
+      }
+    },300);
+  },200);
+};
 
 // ── 完成畫面 ──
 function pmuDoneView(t){
@@ -6349,6 +6434,7 @@ window.pmuSubmit=async()=>{
     birthday:t.birthday,address:t.address,email:t.email,
     isMinor:t.isMinor,guardianName:t.guardianName,
     date:t.date,staff:t.staff,serviceType:t.serviceType,
+    pmuServiceType:t.pmuServiceType,pmuServicePrice:t.pmuServicePrice,
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,faceAnswers:t.faceAnswers,
     leftBrow:t.leftBrow,rightBrow:t.rightBrow,faceMarkup:t.faceMarkup,anatomyMarkup:t.anatomyMarkup,
