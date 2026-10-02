@@ -1202,6 +1202,7 @@ function appHTML(){
     {id:'pricelist',ico:'🏷️',lbl:'產品價目表'},
     {id:'customers',ico:'👤',lbl:'客戶管理'},
     {id:'customerAsset',ico:'💎',lbl:'客戶資產名單'},
+    {id:'assetCheck',ico:'🏥',lbl:'資產健檢'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
     {id:'treatment',ico:'📱',lbl:'服務確認與簽名'},
@@ -1255,6 +1256,7 @@ function renderPage(){
     case'pricelist': return pgPriceList();
     case'customers': return pgCustomers();
     case'customerAsset': return pgCustomerAsset();
+    case'assetCheck': return pgAssetCheck();
     case'sales':     return pgSales();
     case'order':     return pgOrder();
     case'treatment': return pgTreatment();
@@ -2978,6 +2980,144 @@ window.togglePriceListScope=(showAll)=>{
   const c=$('pg-content');
   if(c)c.innerHTML=pgPriceList();
   else render();
+};
+
+// ═══════════ 🏥 資產健檢（判斷真資產 vs 偽裝的負債）═══════════
+function pgAssetCheck(){
+  const equipment=S.data.equipment||[];
+  const products=S.data.products||[];
+  const decor=(S.data.settings&&S.data.settings.decorAssets)||[];
+
+  let html='<div class="pg-ttl">🏥 資產健檢</div>';
+  html+='<div class="pg-sub">資產不是看多貴，是看能不能生錢。揪出偽裝成資產的負債</div>';
+  html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;margin-bottom:16px;">💡 <b>真資產</b>=高稼動率、能快速變現的生財器具。<b>偽裝的負債</b>=閒置的高階儀器、囤太多的材料、不能提高客單價的奢華裝潢。</div>';
+
+  // ── 設備健檢 ──
+  html+='<div class="card" style="margin-bottom:16px;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">🛋️ 設備健檢</span></div><div class="card-bd">';
+  if(equipment.length===0){
+    html+='<div class="tm" style="font-size:13px;">還沒有設備資料。到「🛋️ 設備折舊」頁新增設備，這裡就能幫你診斷。</div>';
+  }else{
+    html+='<div class="tm" style="font-size:12px;margin-bottom:10px;">幫每個設備填「一週用幾次」，系統判斷它是真資產還是閒置負債。</div>';
+    equipment.forEach(function(e){
+      const monthlyDep=toN(e.cost)/((toN(e.years)||5)*12);
+      const useFreq=toN(e.usesPerWeek);
+      // 診斷
+      let verdict,vColor,vBg,advice;
+      if(useFreq===0&&e.usesPerWeek===undefined){
+        verdict='待評估';vColor='#9ca3af';vBg='#f9fafb';advice='請填「一週用幾次」才能診斷';
+      }else if(useFreq>=5){
+        verdict='✅ 真資產';vColor='#16a34a';vBg='#f0fdf4';advice='高稼動率，每天都在生錢，很好';
+      }else if(useFreq>=2){
+        verdict='🟡 普通';vColor='#d97706';vBg='#fffbeb';advice='稼動率中等，想辦法多用它（推相關服務）';
+      }else{
+        verdict='⚠️ 偽裝的負債';vColor='#dc2626';vBg='#fef2f2';advice='閒置！每月還在折舊 $'+fmt(Math.round(monthlyDep))+'卻很少用。考慮：多推相關服務、出租、或出售止血';
+      }
+      html+='<div style="background:'+vBg+';border-left:4px solid '+vColor+';border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
+      html+='<b style="font-size:15px;">'+(e.name||'未命名')+'</b>';
+      html+='<span style="font-size:12px;font-weight:700;color:'+vColor+';">'+verdict+'</span></div>';
+      html+='<div class="tm" style="font-size:12px;margin-top:4px;">原值 $'+fmt(toN(e.cost))+'　每月折舊 $'+fmt(Math.round(monthlyDep))+'</div>';
+      html+='<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">';
+      html+='<span style="font-size:13px;">一週用：</span>';
+      [0,1,2,3,5,7].forEach(function(n){
+        const label=n===0?'幾乎沒用':n===7?'每天':n+'次';
+        const sel=e.usesPerWeek===n;
+        html+='<button type="button" onclick="setEquipUse(\''+e.id+'\','+n+')" style="padding:4px 10px;background:'+(sel?vColor:'var(--bg2)')+';color:'+(sel?'#fff':'var(--txt)')+';border:none;border-radius:12px;cursor:pointer;font-size:12px;">'+label+'</button>';
+      });
+      html+='</div>';
+      html+='<div style="font-size:12px;color:'+vColor+';margin-top:6px;">👉 '+advice+'</div>';
+      html+='</div>';
+    });
+  }
+  html+='</div></div>';
+
+  // ── 庫存健檢 ──
+  const todayStr=today();
+  const invItems=products.map(function(p){
+    const inv=getInv(p.id);
+    const qty=toN(inv.qty);
+    const value=qty*toN(getAvgCost(p.id));
+    // 最後一次出貨/使用（從 stockOuts 或 sales）
+    const outs=(S.data.stockOuts||[]).filter(function(s){return s.productId===p.id;});
+    const lastOut=outs.length>0?outs.map(function(s){return s.date;}).sort().pop():'';
+    const daysSinceOut=lastOut?Math.floor((new Date(todayStr)-new Date(lastOut))/(1000*60*60*24)):999;
+    return{name:p.name,qty:qty,value:value,lastOut:lastOut,daysSinceOut:daysSinceOut};
+  }).filter(function(x){return x.value>0;}).sort(function(a,b){return b.value-a.value;});
+
+  const totalInvValue=invItems.reduce(function(s,x){return s+x.value;},0);
+  const deadStock=invItems.filter(function(x){return x.daysSinceOut>90;});
+  const deadValue=deadStock.reduce(function(s,x){return s+x.value;},0);
+
+  html+='<div class="card" style="margin-bottom:16px;"><div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">📦 庫存健檢</span></div><div class="card-bd">';
+  html+='<div class="sg sg2" style="margin-bottom:12px;">';
+  html+='<div class="sc"><div class="sl">庫存總價值</div><div class="sv sm" style="color:var(--blu);">$'+fmt(Math.round(totalInvValue))+'</div><div class="ss">壓在貨架上的現金</div></div>';
+  html+='<div class="sc" style="border:2px solid '+(deadValue>0?'#dc2626':'#9ca3af')+';"><div class="sl">⚠️ 呆料(90天沒動)</div><div class="sv sm" style="color:'+(deadValue>0?'#dc2626':'#9ca3af')+';">$'+fmt(Math.round(deadValue))+'</div><div class="ss">'+deadStock.length+' 項死資產</div></div>';
+  html+='</div>';
+  if(deadStock.length>0){
+    html+='<div style="background:#fef2f2;border-radius:8px;padding:10px;"><div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:6px;">這些囤著沒在動，是壓死現金的負債：</div>';
+    deadStock.slice(0,10).forEach(function(x){
+      html+='<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>'+x.name+'（'+x.qty+'件）</span><span style="color:#dc2626;">$'+fmt(Math.round(x.value))+(x.lastOut?'・'+x.daysSinceOut+'天沒動':'・從未出貨')+'</span></div>';
+    });
+    html+='<div class="tm" style="font-size:11px;margin-top:6px;">💡 這些錢本來可以當轉型紋繡的預備金。別再為了折扣囤貨，用完再進。</div></div>';
+  }else{
+    html+='<div class="tm" style="font-size:13px;color:#16a34a;">✅ 沒有呆料，庫存週轉健康。</div>';
+  }
+  html+='</div></div>';
+
+  // ── 裝潢/其他資產（自己填）──
+  html+='<div class="card" style="margin-bottom:16px;"><div class="card-hd" style="background:var(--goldL);"><span class="card-ttl" style="color:var(--goldDk);">🏠 裝潢/其他投入（自己評估）</span><button class="btn btn-sm" style="background:var(--gold);color:#fff;" onclick="addDecorAsset()">＋ 新增</button></div><div class="card-bd">';
+  if(decor.length===0){
+    html+='<div class="tm" style="font-size:13px;">點「＋新增」填入裝潢、網美牆等大筆投入。自問：它有提高客單價或帶客人嗎？沒有的話，它就是負債。</div>';
+  }else{
+    decor.forEach(function(d,i){
+      const vColor=d.raisesValue==='yes'?'#16a34a':d.raisesValue==='no'?'#dc2626':'#9ca3af';
+      const verdict=d.raisesValue==='yes'?'✅ 真資產':d.raisesValue==='no'?'⚠️ 偽裝的負債':'待評估';
+      html+='<div style="background:'+(d.raisesValue==='no'?'#fef2f2':'#f9fafb')+';border-left:4px solid '+vColor+';border-radius:8px;padding:10px;margin-bottom:8px;">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;"><b>'+(d.name||'未命名')+'</b><div style="display:flex;gap:6px;align-items:center;"><span style="font-size:12px;color:'+vColor+';font-weight:700;">'+verdict+'</span><button class="bdel" onclick="delDecorAsset('+i+')">×</button></div></div>';
+      html+='<div class="tm" style="font-size:12px;margin-top:4px;">投入 $'+fmt(toN(d.cost))+'</div>';
+      html+='<div style="margin-top:6px;font-size:13px;">這有提高客單價或帶客人嗎？ ';
+      html+='<button type="button" onclick="setDecorValue('+i+',\'yes\')" style="padding:3px 10px;background:'+(d.raisesValue==='yes'?'#16a34a':'var(--bg2)')+';color:'+(d.raisesValue==='yes'?'#fff':'var(--txt)')+';border:none;border-radius:10px;cursor:pointer;font-size:12px;">有</button> ';
+      html+='<button type="button" onclick="setDecorValue('+i+',\'no\')" style="padding:3px 10px;background:'+(d.raisesValue==='no'?'#dc2626':'var(--bg2)')+';color:'+(d.raisesValue==='no'?'#fff':'var(--txt)')+';border:none;border-radius:10px;cursor:pointer;font-size:12px;">沒有</button>';
+      html+='</div></div>';
+    });
+  }
+  html+='</div></div>';
+
+  return html;
+}
+
+window.setEquipUse=async function(id,n){
+  const eq=(S.data.equipment||[]).map(function(e){return e.id===id?Object.assign({},e,{usesPerWeek:n}):e;});
+  S.data.equipment=eq;
+  await saveMain({equipment:eq});
+  render();
+};
+window.addDecorAsset=async function(){
+  const name=prompt('裝潢/投入名稱（如：網美打卡牆）');
+  if(!name)return;
+  const cost=prompt('花了多少錢？');
+  const decor=((S.data.settings&&S.data.settings.decorAssets)||[]).slice();
+  decor.push({name:name,cost:toN(cost),raisesValue:''});
+  const settings=Object.assign({},S.data.settings||{},{decorAssets:decor});
+  S.data.settings=settings;
+  await saveMain({settings});
+  render();
+};
+window.setDecorValue=async function(i,val){
+  const decor=((S.data.settings&&S.data.settings.decorAssets)||[]).slice();
+  if(decor[i]){decor[i].raisesValue=val;}
+  const settings=Object.assign({},S.data.settings||{},{decorAssets:decor});
+  S.data.settings=settings;
+  await saveMain({settings});
+  render();
+};
+window.delDecorAsset=async function(i){
+  const decor=((S.data.settings&&S.data.settings.decorAssets)||[]).slice();
+  decor.splice(i,1);
+  const settings=Object.assign({},S.data.settings||{},{decorAssets:decor});
+  S.data.settings=settings;
+  await saveMain({settings});
+  render();
 };
 
 // ═══════════ 💎 客戶資產名單（把熟客量化成資產）═══════════
