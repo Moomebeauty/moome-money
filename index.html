@@ -1201,6 +1201,7 @@ function appHTML(){
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
     {id:'pricelist',ico:'🏷️',lbl:'產品價目表'},
     {id:'customers',ico:'👤',lbl:'客戶管理'},
+    {id:'customerAsset',ico:'💎',lbl:'客戶資產名單'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
     {id:'treatment',ico:'📱',lbl:'服務確認與簽名'},
@@ -1253,6 +1254,7 @@ function renderPage(){
     case'appointments': return pgOverview();
     case'pricelist': return pgPriceList();
     case'customers': return pgCustomers();
+    case'customerAsset': return pgCustomerAsset();
     case'sales':     return pgSales();
     case'order':     return pgOrder();
     case'treatment': return pgTreatment();
@@ -2977,6 +2979,110 @@ window.togglePriceListScope=(showAll)=>{
   if(c)c.innerHTML=pgPriceList();
   else render();
 };
+
+// ═══════════ 💎 客戶資產名單（把熟客量化成資產）═══════════
+function calcCustomerAssets(){
+  const sales=(S.data.sales||[]).filter(s=>s.customer&&s.type!=='deposit');
+  const todayD=new Date();
+  const byCust={};
+  sales.forEach(s=>{
+    const n=s.customer;
+    if(!byCust[n])byCust[n]={name:n,total:0,count:0,dates:[]};
+    byCust[n].total+=toN(s.amount);
+    byCust[n].count++;
+    if(s.date)byCust[n].dates.push(s.date);
+  });
+  const list=Object.values(byCust).map(c=>{
+    c.dates.sort();
+    const first=c.dates[0]||'';
+    const last=c.dates[c.dates.length-1]||'';
+    // 多久沒來（天）
+    const daysSinceLast=last?Math.floor((todayD-new Date(last))/(1000*60*60*24)):999;
+    // 平均回訪間隔（天）
+    let avgGap=0;
+    if(c.dates.length>=2){
+      const span=(new Date(last)-new Date(first))/(1000*60*60*24);
+      avgGap=Math.round(span/(c.dates.length-1));
+    }
+    // 儲值餘額
+    const balance=getCustomerBalance(c.name);
+    const hasDeposit=balance>0||(S.data.sales||[]).some(s=>s.customer===c.name&&s.payMethod==='儲值扣款');
+    // 流失風險：超過「平均間隔×2」或 90 天沒來
+    let risk='safe';
+    const riskThreshold=avgGap>0?avgGap*2:90;
+    if(daysSinceLast>riskThreshold&&daysSinceLast>60)risk='high';
+    else if(daysSinceLast>riskThreshold*0.7&&daysSinceLast>45)risk='medium';
+    // 資產分級：綜合消費總額、次數、信任
+    let tier='一般',tierColor='#9ca3af',tierScore=0;
+    tierScore=c.total/1000+c.count*2+(hasDeposit?10:0);
+    if(c.total>=30000||(c.count>=8&&hasDeposit))tier='核心資產',tierColor='#9333ea';
+    else if(c.total>=12000||c.count>=5)tier='主力客',tierColor='#16a34a';
+    else if(c.count>=2)tier='回頭客',tierColor='#0891b2';
+    else tier='新客/單次',tierColor='#9ca3af';
+    return{...c,first,last,daysSinceLast,avgGap,balance,hasDeposit,risk,tier,tierColor,tierScore};
+  });
+  list.sort((a,b)=>b.total-a.total);
+  return list;
+}
+
+function pgCustomerAsset(){
+  const list=calcCustomerAssets();
+  const totalRev=list.reduce((s,c)=>s+c.total,0);
+  const core=list.filter(c=>c.tier==='核心資產');
+  const coreRev=core.reduce((s,c)=>s+c.total,0);
+  const corePct=totalRev>0?Math.round(coreRev/totalRev*100):0;
+  const atRisk=list.filter(c=>c.risk==='high');
+  const atRiskValue=atRisk.reduce((s,c)=>s+c.total,0);
+  const withDeposit=list.filter(c=>c.hasDeposit);
+
+  let html='<div class="pg-ttl">💎 客戶資產名單</div>';
+  html+='<div class="pg-sub">你最無價的資產——熟客名單。看誰是核心、誰帶現金流、誰快流失</div>';
+
+  // 觀念提示
+  html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;margin-bottom:14px;">💡 美業最無價的資產是「高信任、會回訪的熟客名單」——這是持續帶來現金流的蓄水池。把資源集中在核心資產，比一直找新客更有效。</div>';
+
+  // 總覽指標
+  html+='<div class="sg sg3" style="margin-bottom:16px;">';
+  html+='<div class="sc" style="border:2px solid #9333ea;"><div class="sl">💎 核心資產客戶</div><div class="sv sm" style="color:#9333ea;">'+core.length+' 位</div><div class="ss">貢獻 '+corePct+'% 營收</div></div>';
+  html+='<div class="sc" style="border:2px solid #16a34a;"><div class="sl">⭐ 有儲值(高信任)</div><div class="sv sm" style="color:#16a34a;">'+withDeposit.length+' 位</div><div class="ss">現金流蓄水池</div></div>';
+  html+='<div class="sc" style="border:2px solid '+(atRisk.length>0?'#dc2626':'#9ca3af')+';"><div class="sl">⚠️ 流失風險</div><div class="sv sm" style="color:'+(atRisk.length>0?'#dc2626':'#9ca3af')+';">'+atRisk.length+' 位</div><div class="ss">$'+fmt(atRiskValue)+' 恐流失</div></div>';
+  html+='</div>';
+
+  // 流失警示
+  if(atRisk.length>0){
+    html+='<div class="card" style="margin-bottom:16px;border:2px solid #dc2626;background:#fef2f2;"><div class="card-bd">';
+    html+='<div style="font-weight:800;color:#dc2626;font-size:15px;margin-bottom:8px;">🚨 這些客人快流失了，趕快聯絡！</div>';
+    html+='<div style="display:flex;flex-direction:column;gap:6px;">';
+    atRisk.slice(0,8).forEach(c=>{
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#fff;border-radius:8px;flex-wrap:wrap;gap:6px;">';
+      html+='<div><b>'+c.name+'</b> <span style="font-size:11px;background:'+c.tierColor+';color:#fff;padding:1px 6px;border-radius:8px;">'+c.tier+'</span></div>';
+      html+='<div class="tm" style="font-size:12px;">累計 $'+fmt(c.total)+'　已 <b style="color:#dc2626;">'+c.daysSinceLast+' 天</b>沒來'+(c.balance>0?'　餘額$'+fmt(c.balance):'')+'</div>';
+      html+='</div>';
+    });
+    html+='</div></div></div>';
+  }
+
+  // 完整名單（依資產分級）
+  html+='<div class="card"><div class="card-hd"><span class="card-ttl">📋 完整客戶資產排行</span></div><div class="card-bd" style="padding:0;">';
+  html+='<div class="tw"><table style="width:100%;font-size:13px;"><thead><tr style="border-bottom:2px solid var(--bdr);">';
+  html+='<th style="padding:8px;text-align:left;">客戶</th><th style="padding:8px;">分級</th><th style="padding:8px;text-align:right;">累計貢獻</th><th style="padding:8px;">次數</th><th style="padding:8px;">回訪</th><th style="padding:8px;">狀態</th></tr></thead><tbody>';
+  list.forEach(c=>{
+    const riskBadge=c.risk==='high'?'<span style="color:#dc2626;font-weight:700;">⚠️'+c.daysSinceLast+'天</span>':c.risk==='medium'?'<span style="color:#d97706;">'+c.daysSinceLast+'天</span>':'<span style="color:#16a34a;">'+c.daysSinceLast+'天</span>';
+    html+='<tr style="border-bottom:1px solid var(--bdr);cursor:pointer;" onclick="setP(\'customers\');setTimeout(function(){S.selectedCustomer=\''+c.name.replace(/'/g,'')+'\';render();},100);">';
+    html+='<td style="padding:8px;"><b>'+c.name+'</b>'+(c.hasDeposit?' ⭐':'')+'</td>';
+    html+='<td style="padding:8px;text-align:center;"><span style="font-size:11px;background:'+c.tierColor+';color:#fff;padding:2px 8px;border-radius:10px;">'+c.tier+'</span></td>';
+    html+='<td style="padding:8px;text-align:right;font-weight:700;color:#9333ea;">$'+fmt(c.total)+'</td>';
+    html+='<td style="padding:8px;text-align:center;">'+c.count+'</td>';
+    html+='<td style="padding:8px;text-align:center;font-size:12px;">'+(c.avgGap>0?'約'+c.avgGap+'天':'—')+'</td>';
+    html+='<td style="padding:8px;text-align:center;font-size:12px;">'+riskBadge+'</td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div></div></div>';
+
+  html+='<div class="notice" style="background:var(--bg2);color:var(--mut);font-size:12px;margin-top:12px;">💡 點任一客戶可跳到他的詳細檔案。⭐ = 有儲值的高信任客。「回訪」是平均多久來一次，用來判斷「幾天沒來算異常」。</div>';
+
+  return html;
+}
 
 function pgCustomers(){
   const customers=S.data.customers||[];
