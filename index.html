@@ -4494,15 +4494,15 @@ function pgOrder(){
           <div id="m_pd_cart" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
             <!-- 購物車項目會顯示在這裡 -->
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <select id="m_pd_pick" style="flex:1;min-width:200px;padding:8px 10px;border:1.5px solid var(--bdr);border-radius:8px;">
-              <option value="">+ 從保養品清單加入...</option>
-              ${products.filter(p=>p.category==='保養品販售').map(p=>{const inv=getInv(p.id);return`<option value="${p.id}" data-price="${p.price}" data-name="${p.name}" data-qty="${inv.qty}">${p.name}（庫存 ${inv.qty}）$${fmt(p.price)}</option>`;}).join('')}
-            </select>
-            <button class="btn btn-s btn-sm" onclick="addProductToCart()">＋ 加入購物車</button>
-            <button class="btn btn-y btn-sm" onclick="addCustomProductRow()">✏️ 新增自訂產品</button>
+          <div style="position:relative;">
+            <input type="text" id="m_pd_search" placeholder="🔍 打字搜尋產品名稱，點一下加入購物車..." autocomplete="off" oninput="pdSearchFilter(this.value)" onfocus="pdSearchFilter(this.value)" style="width:100%;padding:10px 12px;border:1.5px solid var(--gold);border-radius:8px;">
+            <div id="m_pd_results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--bdr);border-radius:8px;max-height:260px;overflow-y:auto;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,0.1);margin-top:2px;">
+            </div>
           </div>
-          <div class="tm" style="font-size:11px;margin-top:8px;">💡 下拉只顯示「保養品販售」類別的商品。臨時/特殊商品用「新增自訂產品」直接輸入名稱與價格</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <button class="btn btn-y btn-sm" onclick="addCustomProductRow()">✏️ 新增自訂產品（找不到時）</button>
+          </div>
+          <div class="tm" style="font-size:11px;margin-top:8px;">💡 打字搜尋保養品，點一下直接加入。臨時/特殊商品用「新增自訂產品」</div>
         </div>
 
         <div class="fg">
@@ -12490,6 +12490,42 @@ window.delSale=async id=>{
 // ── Order ──（連續輸入版）
 // ── 購物車（多項產品） ──
 S.cart=S.cart||[];
+
+// 開單購物車：搜尋產品
+window.pdSearchFilter=function(kw){
+  const box=document.getElementById('m_pd_results');
+  if(!box)return;
+  kw=(kw||'').trim().toLowerCase();
+  const products=(S.data.products||[]).filter(function(p){return p.category==='保養品販售';});
+  let matched=products;
+  if(kw)matched=products.filter(function(p){return (p.name||'').toLowerCase().indexOf(kw)>=0;});
+  if(matched.length===0){
+    box.innerHTML='<div style="padding:12px;color:#999;font-size:13px;">找不到符合的產品，可用「新增自訂產品」</div>';
+    box.style.display='block';
+    return;
+  }
+  box.innerHTML=matched.slice(0,20).map(function(p){
+    const inv=getInv(p.id);
+    return '<div onclick="pdPickProduct(&quot;'+p.id+'&quot;)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--bg2);" onmouseover="this.style.background=&quot;#faf5ff&quot;" onmouseout="this.style.background=&quot;#fff&quot;">'
+      +'<div><b style="font-size:14px;">'+p.name+'</b><div style="font-size:11px;color:#999;">庫存 '+(inv.qty||0)+'</div></div>'
+      +'<div style="font-weight:700;color:var(--gold);">$'+fmt(p.price||0)+'</div></div>';
+  }).join('');
+  box.style.display='block';
+};
+// 點選產品 → 加入購物車（用現有 S.cart 格式）
+window.pdPickProduct=function(pid){
+  const p=(S.data.products||[]).find(function(x){return x.id===pid;});
+  if(!p)return;
+  if(!S.cart)S.cart=[];
+  const existed=S.cart.find(function(it){return it.id===pid&&!it.custom;});
+  if(existed){existed.qty++;}
+  else{S.cart.push({id:pid,name:p.name,price:toN(p.price),qty:1,custom:false,type:'product'});}
+  // 清空搜尋、收起清單
+  const si=document.getElementById('m_pd_search');if(si)si.value='';
+  const box=document.getElementById('m_pd_results');if(box)box.style.display='none';
+  if(typeof renderCart==='function')renderCart();
+  toast('✅ 已加入：'+p.name);
+};
 
 window.addProductToCart=()=>{
   const sel=$('m_pd_pick');
