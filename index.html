@@ -1199,7 +1199,7 @@ function appHTML(){
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
     {id:'profit',ico:'💎',lbl:'季度年度分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
-    {id:'pricelist',ico:'🏷️',lbl:'產品價目表'},
+
     {id:'customers',ico:'👤',lbl:'客戶管理'},
     {id:'customerAsset',ico:'💎',lbl:'客戶資產名單'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
@@ -9081,14 +9081,13 @@ function pgSettings(){
           </div>`).join('')}
       </div>
     </div>
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">🧴 產品清單</span><button class="btn btn-p btn-sm" onclick="openM('addProduct')">＋ 新增</button></div>
-      <div class="card-bd" style="padding:0;">
-        ${prods.length===0?'<div class="empty" style="padding:24px;"><p>尚未建立產品<br><span class="tm">產品由「進貨管理」自動建立</span></p></div>':
-          prods.map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--bdr);">
-            <div><b>${p.name}</b><span class="bdg gold" style="margin-left:6px;">${p.category||''}</span></div>
-            <div class="fb g8 tm">售$${fmt(p.price)} / 成$${fmt(p.cost||0)}<button class="bdel" onclick="delProduct('${p.id}')">×</button></div>
-          </div>`).join('')}
+    <div class="card" style="background:var(--bluL);border:1px solid var(--blu);">
+      <div class="card-hd" style="background:transparent;border:none;"><span class="card-ttl" style="color:var(--blu);">🧴 產品管理</span></div>
+      <div class="card-bd">
+        <div class="tm" style="font-size:13px;line-height:1.7;margin-bottom:10px;">
+          產品管理已整合到「🗂️ 庫存盤點」——在那裡可以新增/編輯產品、看成本售價毛利、查進出貨流向、看用在哪些服務。目前有 <b>${prods.length}</b> 項產品。
+        </div>
+        <button class="btn btn-p" style="background:var(--blu);" onclick="setP('inventory')">🗂️ 去庫存盤點管理產品 →</button>
       </div>
     </div>
     <div class="card">
@@ -10138,19 +10137,28 @@ function renderModal(){
     S.modal.lg=true;
   }
 
-  // ─── 療程：加產品到購物車 modal ───
+  // ─── 療程：加產品到購物車 modal（可搜尋）───
   if(m.t==='addTreatmentProduct'){
     const allProds=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
+    // 預設顯示販售類，但全部都能搜
     c=`<div class="mttl">🛍️ 加入產品</div>
-    <div class="fg">
-      <div class="fgrp"><label>選擇產品 *</label>
-        <select id="m_tap_pid" onchange="onTreatmentProductPick(this)">
-          <option value="">-- 選擇 --</option>
-          ${allProds.filter(p=>p.category==='保養品販售').map(p=>`<option value="${p.id}" data-price="${p.price||0}" data-name="${p.name}">${p.name}　$${fmt(p.price||0)}（庫存 ${getInv(p.id).qty||0}）</option>`).join('')}
-        </select>
+    <div class="fgrp"><input type="text" id="tap_search" placeholder="🔍 打字搜尋產品名稱..." oninput="tapFilter(this.value)" autofocus></div>
+    <div id="tap_list" style="max-height:50vh;overflow-y:auto;margin-top:8px;">
+      ${allProds.map(p=>{
+        const isSale=p.category==='保養品販售';
+        return`<div class="tap-row" data-name="${(p.name||'').toLowerCase()}" data-sale="${isSale?'1':'0'}" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg2);border-radius:8px;margin-bottom:6px;cursor:pointer;${isSale?'':'opacity:0.6;'}" onclick="tapPick('${p.id}','${(p.name||'').replace(/'/g,"&#39;")}',${toN(p.price)})">
+          <div><b style="font-size:14px;">${p.name}</b>${isSale?'':' <span class="tm" style="font-size:10px;">(非販售品)</span>'}<div class="tm" style="font-size:11px;">庫存 ${getInv(p.id).qty||0}</div></div>
+          <div style="font-weight:700;color:var(--rose);">$${fmt(p.price||0)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="border-top:1px solid var(--bdr);margin-top:10px;padding-top:10px;">
+      <div class="tm" style="font-size:12px;margin-bottom:6px;">或自訂（找不到產品時）：</div>
+      <div class="fg fg2">
+        <div class="fgrp"><label>名稱</label><input type="text" id="m_tap_name" placeholder="自訂名稱"></div>
+        <div class="fgrp"><label>售價</label><input type="number" id="m_tap_price" placeholder="0"></div>
       </div>
-      <div class="fgrp"><label>產品名稱</label><input type="text" id="m_tap_name" placeholder="自訂名稱"></div>
-      <div class="fgrp"><label>售價</label><input type="number" id="m_tap_price" placeholder="0"></div>
+      <input type="hidden" id="m_tap_pid" value="">
       <div class="fgrp"><label>數量</label><input type="number" id="m_tap_qty" value="1" min="1"></div>
     </div>
     <div class="mbtns">
@@ -14407,6 +14415,23 @@ window.editTreatmentServiceProducts=(idx)=>{
 };
 
 // ── 產品管理 ──
+// 購物車加產品：搜尋篩選
+window.tapFilter=function(kw){
+  kw=(kw||'').toLowerCase();
+  document.querySelectorAll('.tap-row').forEach(function(row){
+    const name=row.getAttribute('data-name')||'';
+    row.style.display=(!kw||name.indexOf(kw)>=0)?'flex':'none';
+  });
+};
+// 點選產品：自動填名稱售價，直接加入
+window.tapPick=function(pid,name,price){
+  const nameEl=document.getElementById('m_tap_name');if(nameEl)nameEl.value=name;
+  const priceEl=document.getElementById('m_tap_price');if(priceEl)priceEl.value=price;
+  const pidEl=document.getElementById('m_tap_pid');if(pidEl)pidEl.value=pid;
+  // 直接加入（不用再按按鈕）
+  addTreatmentProduct();
+};
+
 window.addTreatmentProductOpen=()=>{
   if(!S.treatment)return;
   openM('addTreatmentProduct');
