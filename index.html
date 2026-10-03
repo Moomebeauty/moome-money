@@ -3886,6 +3886,68 @@ window.savePmuTouchupDays=async(val)=>{
 };
 
 // ═══ 🎨 紋繡設定操作 END ═══
+// 主文件瘦身：診斷各部分大小、搬走或清掉大的
+window.slimMainDoc=async function(){
+  const sizeOf=function(obj){try{return JSON.stringify(obj||'').length;}catch(e){return 0;}};
+  const parts=[
+    {key:'pmuRecords',label:'紋繡紀錄',size:sizeOf(S.data.pmuRecords)},
+    {key:'pmuDrafts',label:'紋繡草稿',size:sizeOf(S.data.pmuDrafts)},
+    {key:'faceBg',label:'面診底圖(設定)',size:sizeOf(S.data.settings&&S.data.settings.pmuFaceBg)+sizeOf(S.data.settings&&S.data.settings.pmuAnatomyBg)},
+    {key:'customers',label:'客戶',size:sizeOf(S.data.customers)},
+    {key:'products',label:'產品',size:sizeOf(S.data.products)},
+    {key:'inventory',label:'庫存',size:sizeOf(S.data.inventory)},
+    {key:'studyNotes',label:'備課筆記',size:sizeOf(S.data.studyNotes)},
+    {key:'mindNotes',label:'聯想筆記',size:sizeOf(S.data.mindNotes)},
+    {key:'serviceCosts',label:'成本卡',size:sizeOf(S.data.serviceCosts)},
+    {key:'passContracts',label:'除毛合約',size:sizeOf(S.data.passContracts)},
+    {key:'trialPacks',label:'試用包',size:sizeOf(S.data.trialPacks)}
+  ];
+  const total=sizeOf(S.data);
+  parts.sort(function(a,b){return b.size-a.size;});
+  let msg='【主文件體檢】目前約 '+(total/1048576).toFixed(2)+' MB（上限 1 MB）\\n\\n各部分大小：\\n';
+  parts.forEach(function(p){
+    if(p.size>1000)msg+='・'+p.label+'：'+(p.size/1024).toFixed(0)+' KB\\n';
+  });
+  // 找出最大的建議處理
+  const biggest=parts[0];
+  msg+='\\n最大的是「'+biggest.label+'」。\\n\\n';
+
+  if(biggest.key==='faceBg'){
+    msg+='面診底圖太大！要移除面診底圖嗎？（移除後紋繡面診會用內建線稿，你的圈記紀錄不受影響）';
+    if(confirm(msg)){
+      const settings=Object.assign({},S.data.settings||{});
+      delete settings.pmuFaceBg;delete settings.pmuAnatomyBg;
+      S.data.settings=settings;
+      await saveMain({settings});
+      alert('✅ 已移除面診底圖，釋放了 '+(biggest.size/1024).toFixed(0)+' KB');
+      render();
+    }
+    return;
+  }
+  if(biggest.key==='pmuRecords'){
+    msg+='紋繡紀錄太大（通常是面診圈記圖）。要「精簡圈記圖」嗎？（移除舊紀錄的面診圈記圖，文字紀錄保留）';
+    if(confirm(msg)){
+      const recs=(S.data.pmuRecords||[]).map(function(r){return Object.assign({},r,{faceMarkup:'',anatomyMarkup:''});});
+      S.data.pmuRecords=recs;
+      await saveMain({pmuRecords:recs});
+      alert('✅ 已精簡圈記圖，釋放空間');
+      render();
+    }
+    return;
+  }
+  if(biggest.key==='pmuDrafts'){
+    msg+='要清掉所有紋繡草稿嗎？（不影響已完成的紀錄）';
+    if(confirm(msg)){
+      S.data.pmuDrafts=[];
+      await saveMain({pmuDrafts:[]});
+      alert('✅ 已清掉草稿');
+      render();
+    }
+    return;
+  }
+  alert(msg+'這部分是正常營運資料，建議不要刪。如果真的太大再找我。');
+};
+
 window.cleanPmuDrafts=async function(){
   var drafts=S.data.pmuDrafts||[];
   var totalSize=0;
@@ -9041,6 +9103,10 @@ function pgSettings(){
         <div>
           <button class="btn" style="background:#9333ea;color:#fff;" onclick="diagnosePmu()">🔍 紋繡紀錄診斷</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">看系統裡存了幾筆紋繡紀錄</div>
+        </div>
+        <div>
+          <button class="btn" style="background:#dc2626;color:#fff;font-weight:700;" onclick="slimMainDoc()">🩺 主文件體檢瘦身（存檔失敗必點）</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">出現「儲存失敗」就點這個！會告訴你是什麼佔空間，並幫你清掉最大的（通常是面診底圖或圈記圖）</div>
         </div>
         <div>
           <button class="btn" style="background:var(--red);color:#fff;" onclick="cleanPmuDrafts()">🧹 清理紋繡草稿（釋放空間）</button>
