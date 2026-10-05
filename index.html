@@ -3855,7 +3855,7 @@ window.uploadPmuDefaultBg=function(key,input){
           sizeKB=Math.round(compressed.length/1024);
         }
         if(sizeKB>950){
-          alert('圖片太大（'+sizeKB+'KB），壓縮後仍超過限制。\\n請用小一點的圖，或先用手機/電腦把圖片縮小再上傳。');
+          alert('圖片太大（'+sizeKB+'KB），壓縮後仍超過限制。\n請用小一點的圖，或先用手機/電腦把圖片縮小再上傳。');
           return;
         }
         var settingKey=key==='face'?'pmuFaceBg':'pmuAnatomyBg';
@@ -3867,10 +3867,10 @@ window.uploadPmuDefaultBg=function(key,input){
           toast('✅ 底圖已儲存（'+sizeKB+'KB），以後做紋繡會自動帶入');
           openM('pmuSettings');
         }else{
-          alert('雲端儲存失敗，圖片可能還是太大。\\n請換一張更小的圖再試。');
+          alert('雲端儲存失敗，圖片可能還是太大。\n請換一張更小的圖再試。');
         }
       }catch(err){
-        alert('儲存失敗：'+(err.message||err)+'\\n可能是圖片太大，請換小一點的圖。');
+        alert('儲存失敗：'+(err.message||err)+'\n可能是圖片太大，請換小一點的圖。');
       }
     };
     img.onerror=function(){alert('圖片讀取失敗，請換一張圖試試');};
@@ -3906,13 +3906,13 @@ window.slimMainDoc=async function(){
   ];
   const total=sizeOf(S.data);
   parts.sort(function(a,b){return b.size-a.size;});
-  let msg='【主文件體檢】目前約 '+(total/1048576).toFixed(2)+' MB（上限 1 MB）\\n\\n各部分大小：\\n';
+  let msg='【主文件體檢】目前約 '+(total/1048576).toFixed(2)+' MB（上限 1 MB）\n\n各部分大小：\n';
   parts.forEach(function(p){
-    if(p.size>1000)msg+='・'+p.label+'：'+(p.size/1024).toFixed(0)+' KB\\n';
+    if(p.size>1000)msg+='・'+p.label+'：'+(p.size/1024).toFixed(0)+' KB\n';
   });
   // 找出最大的建議處理
   const biggest=parts[0];
-  msg+='\\n最大的是「'+biggest.label+'」。\\n\\n';
+  msg+='\n最大的是「'+biggest.label+'」。\n\n';
 
   if(biggest.key==='faceBg'){
     msg+='面診底圖太大！要移除面診底圖嗎？（移除後紋繡面診會用內建線稿，你的圈記紀錄不受影響）';
@@ -3955,11 +3955,11 @@ window.cleanPmuDrafts=async function(){
   var totalSize=0;
   try{totalSize=JSON.stringify(S.data).length;}catch(e){}
   var sizeMB=(totalSize/1048576).toFixed(2);
-  var msg='目前資料約 '+sizeMB+' MB（上限 1 MB）。\\n\\n';
+  var msg='目前資料約 '+sizeMB+' MB（上限 1 MB）。\n\n';
   if(drafts.length===0){
-    msg+='沒有未完成的草稿。\\n';
+    msg+='沒有未完成的草稿。\n';
     if(totalSize>900000){
-      msg+='\\n⚠️ 但資料仍偏大，可能是紋繡紀錄裡的照片太多。\\n是否要「精簡舊紋繡紀錄的照片」（每筆只保留第一張術前、第一張術後）？';
+      msg+='\n⚠️ 但資料仍偏大，可能是紋繡紀錄裡的照片太多。\n是否要「精簡舊紋繡紀錄的照片」（每筆只保留第一張術前、第一張術後）？';
       if(confirm(msg)){
         var recs=(S.data.pmuRecords||[]).map(function(r){
           return Object.assign({},r,{photosBefore:(r.photosBefore||[]).slice(0,1),photosAfter:(r.photosAfter||[]).slice(0,1)});
@@ -3973,7 +3973,7 @@ window.cleanPmuDrafts=async function(){
     alert(msg+'資料大小正常，不需清理。');
     return;
   }
-  msg+='發現 '+drafts.length+' 筆未完成的草稿。\\n清掉它們可以釋放空間（不影響已完成的紋繡紀錄）。\\n\\n確定清理嗎？';
+  msg+='發現 '+drafts.length+' 筆未完成的草稿。\n清掉它們可以釋放空間（不影響已完成的紋繡紀錄）。\n\n確定清理嗎？';
   if(!confirm(msg))return;
   S.data.pmuDrafts=[];
   try{await saveMain({pmuDrafts:[]});alert('✅ 已清理 '+drafts.length+' 筆草稿，釋放空間');render();}
@@ -4410,7 +4410,7 @@ function pgTreatmentRecords(c){
               <div style="text-align:right;">
                 <div class="tm" style="font-size:11px;">簽名時間</div>
                 <div style="font-size:12px;">${r.signedAt||r.date}</div>
-                ${r.termsSnapshot?`<button class="btn btn-s btn-sm" style="font-size:11px;margin-top:4px;" onclick="alert(\`【簽名當下的同意條款】\\n\\n${(r.termsSnapshot||'').replace(/`/g,'').replace(/'/g,'').replace(/\n/g,'\\n').replace(/"/g,'\\"').slice(0,500)}\`)">📜 看條款內容</button>`:''}
+                ${r.termsSnapshot?`<button class="btn btn-s btn-sm" style="font-size:11px;margin-top:4px;" onclick="alert(\`【簽名當下的同意條款】\n\n${(r.termsSnapshot||'').replace(/`/g,'').replace(/'/g,'').replace(/\n/g,'\n').replace(/"/g,'\\"').slice(0,500)}\`)">📜 看條款內容</button>`:''}
               </div>
             </div>
           </div>`:`<div style="margin-top:10px;padding:8px;background:var(--goldL);border-radius:6px;text-align:center;">
@@ -14141,7 +14141,7 @@ window.startPmuFlow=()=>{
   let dataSize=0;
   try{dataSize=JSON.stringify(S.data).length;}catch(e){}
   if(dataSize>950000){
-    if(confirm('⚠️ 系統資料已接近上限（'+(dataSize/1048576).toFixed(2)+'MB / 1MB），現在開始紋繡流程可能會一直存檔失敗。\\n\\n建議先去「基本設定→資料修復→🩺主文件體檢瘦身」清理空間。\\n\\n要先去清理嗎？（取消=仍要開始流程）')){
+    if(confirm('⚠️ 系統資料已接近上限（'+(dataSize/1048576).toFixed(2)+'MB / 1MB），現在開始可能會一直存檔失敗。\n\n建議先去「基本設定 → 資料修復 → 主文件體檢瘦身」清理空間。\n\n要先去清理嗎？（取消＝仍要開始）')){
       setP('settings');
       setTimeout(function(){toast('請點「🔧 資料修復工具 → 🩺主文件體檢瘦身」');},300);
       return;
