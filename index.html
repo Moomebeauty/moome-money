@@ -813,6 +813,8 @@ async function initDefaults(){
 }
 
 async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');return true;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗：'+(e.message||e));return false;}}
+// 靜默版：自動存檔用，失敗不跳訊息（避免每次下一步都打擾使用者）
+async function saveMainSilent(data){try{await setDoc(doc(db,'studios',FID),data,{merge:true});return true;}catch(e){return false;}}
 async function addSub(col,data){
   // 不在這裡 push 本地，因為 onSnapshot 的 pendingWrites 已經會更新 S.data[col]
   setSyncing('syncing');
@@ -5994,7 +5996,8 @@ window.pmuAutoSave=async function(){
   var drafts=(S.data.pmuDrafts||[]).filter(function(d){return d.id!==t.draftId;});
   drafts.push(draft);
   S.data.pmuDrafts=drafts;
-  try{await saveMain({pmuDrafts:drafts});}catch(e){console.warn('自動存檔失敗',e);}
+  // 自動存檔：用靜默版，失敗不跳訊息（不影響流程，下一步不依賴它）
+  try{await saveMainSilent({pmuDrafts:drafts});}catch(e){}
 };
 
 // ── 拍照階段（術前 before / 術後 after）──
@@ -14134,6 +14137,16 @@ window.copyPassContractText=()=>{
 // ─── 🎫 除毛吃到飽包期簽約流程 ───
 // ═══ 🎨 紋繡服務流程 ═══
 window.startPmuFlow=()=>{
+  // 開始前檢查主文件大小，太大先提醒清理（避免流程中一直存檔失敗）
+  let dataSize=0;
+  try{dataSize=JSON.stringify(S.data).length;}catch(e){}
+  if(dataSize>950000){
+    if(confirm('⚠️ 系統資料已接近上限（'+(dataSize/1048576).toFixed(2)+'MB / 1MB），現在開始紋繡流程可能會一直存檔失敗。\\n\\n建議先去「基本設定→資料修復→🩺主文件體檢瘦身」清理空間。\\n\\n要先去清理嗎？（取消=仍要開始流程）')){
+      setP('settings');
+      setTimeout(function(){toast('請點「🔧 資料修復工具 → 🩺主文件體檢瘦身」');},300);
+      return;
+    }
+  }
   S.treatment={
     mode:'pmu',
     pmuStage:'consent',
