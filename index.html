@@ -3967,6 +3967,24 @@ window.savePmuTouchupDays=async(val)=>{
 
 // ═══ 🎨 紋繡設定操作 END ═══
 // 主文件瘦身：診斷各部分大小、搬走或清掉大的
+// 紋繡紀錄管理：列出所有紀錄（含幽靈紀錄），逐筆選擇刪除
+window.managePmuRecords=function(){openM('pmuRecordMgr');};
+
+window.delPmuRecordDirect=async function(id){
+  const r=(S.data.pmuRecords||[]).find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm('確定刪除這筆？\n'+(r.customer||'無名')+'　'+(r.serviceType||'')+'　'+(r.date||'')))return;
+  const pmuRecords=(S.data.pmuRecords||[]).filter(x=>x.id!==id);
+  S.data.pmuRecords=pmuRecords;
+  const ok=await saveMain({pmuRecords});
+  if(ok){
+    toast('✅ 已刪除，戰情已更新');
+    openM('pmuRecordMgr'); // 重開列表
+  }else{
+    alert('❌ 刪除沒存進雲端（主文件可能太大）。\n請先點「🩺主文件體檢瘦身」清空間，再回來刪。');
+  }
+};
+
 window.slimMainDoc=async function(){
   const sizeOf=function(obj){try{return JSON.stringify(obj||'').length;}catch(e){return 0;}};
   const parts=[
@@ -9171,6 +9189,10 @@ function pgSettings(){
           <div class="tm" style="font-size:11px;margin-top:4px;">用所有進貨紀錄重新計算每個產品的平均成本（總成本÷總數量）。手動改錯成本、或進貨資料修正後，用這個同步回正確數字</div>
         </div>
         <div>
+          <button class="btn" style="background:#9333ea;color:#fff;" onclick="managePmuRecords()">🎨 紋繡紀錄管理（刪幽靈紀錄）</button>
+          <div class="tm" style="font-size:11px;margin-top:4px;">戰情數字不對、刪了紀錄卻還在算？點這個看系統裡「全部」紋繡紀錄，揪出幽靈紀錄刪掉</div>
+        </div>
+        <div>
           <button class="btn" style="background:#dc2626;color:#fff;font-weight:700;" onclick="slimMainDoc()">🩺 主文件體檢瘦身（存檔失敗必點）</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">出現「儲存失敗」就點這個！會告訴你是什麼佔空間，並幫你清掉最大的（通常是面診底圖或圈記圖）</div>
         </div>
@@ -9828,6 +9850,33 @@ function renderModal(){
   }
 
   // ─── ⚡ 快速記消耗 ───
+  // ─── 🎨 紋繡紀錄管理（含幽靈紀錄）───
+  if(m.t==='pmuRecordMgr'){
+    const recs=(S.data.pmuRecords||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const custNames=(S.data.customers||[]).map(x=>x.name);
+    c=`<div class="mttl">🎨 所有紋繡紀錄（${recs.length} 筆）</div>
+    <div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:12px;">
+      這裡列出系統裡「全部」紋繡紀錄，包括客戶管理可能看不到的幽靈紀錄。戰情的成交件數就是算這些。找出測試/幽靈紀錄，點 🗑️ 刪掉。
+    </div>
+    ${recs.length===0?'<div class="empty" style="padding:30px;"><p>系統裡沒有任何紋繡紀錄</p></div>':`
+    <div style="max-height:60vh;overflow-y:auto;margin-top:12px;">
+      ${recs.map(r=>{
+        const d=new Date(r.date);
+        const thisMonth=(d.getMonth()+1===S.month&&d.getFullYear()===yr());
+        const ghost=r.customer&&!custNames.includes(r.customer);
+        return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:${ghost?'#fef2f2':'var(--bg2)'};border-radius:8px;margin-bottom:6px;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <b>${r.customer||'無名'}</b> <span class="bdg" style="background:#9333ea;color:#fff;">${r.serviceType||'?'}</span>
+            <div class="tm" style="font-size:11px;">${r.date||'無日期'}${thisMonth?'　<span style="color:#9333ea;">本月（算進戰情）</span>':''}${ghost?'　<span style="color:#dc2626;font-weight:700;">⚠️ 幽靈紀錄（客戶檔案已無此人）</span>':''}</div>
+          </div>
+          <button class="bdel" style="font-size:18px;" onclick="delPmuRecordDirect('${r.id}')" title="刪除這筆">🗑️</button>
+        </div>`;
+      }).join('')}
+    </div>`}
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+    S.modal.lg=true;
+  }
+
   if(m.t==='quickConsume'){
     const prods=(S.data.products||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant'));
     if(!S.modal.qc)S.modal.qc={};
