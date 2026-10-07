@@ -1578,6 +1578,79 @@ function getCustomerHistory(custName){
 }
 
 // ─── OVERVIEW ──────────────────────────────────────────────
+// ═══════════ 🧭 Cardone 財務羅盤（底層經營哲學引導）═══════════
+function cardoneCompass(rev,exp,profit){
+  const monthSales=getSales();
+  const curM=S.month,curY=yr();
+  // 1. 不要虧錢：本月淨利正負
+  const isProfit=profit>=0;
+  // 2. 金錢是人際遊戲：VVIP 貢獻
+  var byCust={};
+  monthSales.forEach(function(s){if(s.customer){byCust[s.customer]=(byCust[s.customer]||0)+toN(s.amount);}});
+  const custArr=Object.values(byCust).sort(function(a,b){return b-a;});
+  const top20Count=Math.max(1,Math.ceil(custArr.length*0.2));
+  const top20Rev=custArr.slice(0,top20Count).reduce(function(a,b){return a+b;},0);
+  const top20Pct=rev>0?Math.round(top20Rev/rev*100):0;
+  // 3. 把錢移到生錢的資產：紋繡佔比（高毛利技術財）
+  var pmuRev=0;
+  monthSales.forEach(function(s){var it=(s.item||'')+(s.subNote||'');if(it.includes('霧眉')||it.includes('霧唇')||it.includes('紋繡')||it.includes('補色'))pmuRev+=toN(s.amount);});
+  const pmuPct=rev>0?Math.round(pmuRev/rev*100):0;
+  // 4. 儲值負債（預收現金流=子彈）
+  const liability=typeof getTotalDepositLiability==='function'?getTotalDepositLiability():0;
+
+  // 今日第一行動（依最嚴重的問題）
+  var todayAction='',actionColor='';
+  if(!isProfit){
+    todayAction='🚨 本月在虧錢（淨利 $'+fmt(profit)+'）。Cardone 說「不要虧錢，虧了很難回本」。今天最該做：砍掉不必要的支出，別再進貨，推高毛利的紋繡。';
+    actionColor='#dc2626';
+  }else if(pmuPct<40){
+    todayAction='🎯 紋繡只佔 '+pmuPct+'%（目標40%+）。Cardone 說「把錢移到會生錢的資產」。紋繡是你的高毛利技術財，今天主動約一個客人做紋繡。';
+    actionColor='#9333ea';
+  }else if(top20Pct<60){
+    todayAction='👑 你的前20%客人只貢獻 '+top20Pct+'%。Cardone 說「金錢是人際遊戲」。今天關心一個 VVIP，熟客比新客值錢得多。';
+    actionColor='#d97706';
+  }else{
+    todayAction='✅ 本月體質健康！淨利正、紋繡佔比夠、VVIP 穩。Cardone 說「賺來的錢別花掉，投資生錢的資產」。把利潤分流：抽成入袋、留週轉金。';
+    actionColor='#16a34a';
+  }
+
+  var html='<div style="background:linear-gradient(135deg,#1a1a2e,#2d2d44);border-radius:16px;padding:18px;margin-bottom:18px;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);">';
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:20px;">🧭</span><span style="font-weight:800;font-size:16px;letter-spacing:0.05em;">財務羅盤</span><span style="font-size:11px;opacity:0.6;margin-left:auto;">Grant Cardone 經營哲學</span></div>';
+
+  // 今日行動
+  html+='<div style="background:rgba(255,255,255,0.1);border-left:3px solid '+actionColor+';border-radius:8px;padding:12px;margin-bottom:14px;">';
+  html+='<div style="font-size:11px;opacity:0.7;margin-bottom:4px;">今日第一行動</div>';
+  html+='<div style="font-size:14px;line-height:1.7;">'+todayAction+'</div></div>';
+
+  // 四大原則儀表
+  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">';
+  // 原則1：不要虧錢
+  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
+  html+='<div style="font-size:11px;opacity:0.7;">① 不要虧錢</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:'+(isProfit?'#4ade80':'#f87171')+';">$'+fmt(profit)+'</div>';
+  html+='<div style="font-size:10px;opacity:0.6;">'+(isProfit?'✓ 守住正數':'✗ 吃老本，危險')+'</div></div>';
+  // 原則2：人際遊戲
+  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
+  html+='<div style="font-size:11px;opacity:0.7;">② 金錢是人際遊戲</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:'+(top20Pct>=60?'#4ade80':'#fbbf24')+';">'+top20Pct+'%</div>';
+  html+='<div style="font-size:10px;opacity:0.6;">前20%客人貢獻</div></div>';
+  // 原則3：生錢資產
+  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
+  html+='<div style="font-size:11px;opacity:0.7;">③ 錢移到生錢資產</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:'+(pmuPct>=40?'#4ade80':'#c084fc')+';">'+pmuPct+'%</div>';
+  html+='<div style="font-size:10px;opacity:0.6;">紋繡（高毛利技術財）</div></div>';
+  // 原則4：預收現金流子彈
+  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
+  html+='<div style="font-size:11px;opacity:0.7;">④ 預收現金流子彈</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:#60a5fa;">$'+fmt(liability)+'</div>';
+  html+='<div style="font-size:10px;opacity:0.6;">儲值餘額（別亂花）</div></div>';
+  html+='</div>';
+
+  html+='<div style="font-size:10px;opacity:0.5;margin-top:10px;line-height:1.5;">💡 Cardone：「賺來的錢別花掉，投資能生錢的資產。你的客戶名單就是最大的資產。」</div>';
+  html+='</div>';
+  return html;
+}
+
 function pgOverview(){
   const rev=getRevTotal();
   const exp=getExpTotal();
@@ -1633,6 +1706,7 @@ function pgOverview(){
   const thisQReviewed=reviews.find(r=>r.year===yr()&&r.quarter===curQ);
 
   return`
+  ${cardoneCompass(rev,exp,profit)}
   <div class="pg-ttl">📊 工作室總覽</div>
   <div class="pg-sub">${yr()}年 ${MOS[S.month-1]}　第 ${curQ} 季</div>
 
@@ -4166,7 +4240,15 @@ window.delPmuRecord=async(id)=>{
   if(!r)return;
   if(!confirm(`確定刪除 ${r.customer} 的紋繡紀錄（${r.date}）？\n⚠️ 含同意書簽名，刪除後無法復原。`))return;
   const pmuRecords=(S.data.pmuRecords||[]).filter(x=>x.id!==id);
+  // 立刻更新本地（戰情數字才會馬上連動）
+  S.data.pmuRecords=pmuRecords;
+  // 順便清掉這筆的照片（pmuPhotos 子集合裡）
+  const relatedPhotos=(S.data.pmuPhotos||[]).filter(p=>p.recordId===id);
   await saveMain({pmuRecords});
+  // 刪照片子集合
+  for(const ph of relatedPhotos){
+    if(ph.id){try{await delSub('pmuPhotos',ph.id);}catch(e){}}
+  }
   toast('已刪除');
   render();
 };
@@ -9018,18 +9100,6 @@ function pgSettings(){
     </div>
   </div>
 
-  <div class="card" style="background:var(--purL);border:1px solid var(--pur);margin-bottom:14px;">
-    <div class="card-hd" style="background:transparent;border:none;">
-      <span class="card-ttl" style="color:var(--pur);">🎁 試用包管理</span>
-    </div>
-    <div class="card-bd">
-      <div class="tm" style="margin-bottom:10px;line-height:1.7;">
-        建立要送給客人的試用包（內容物、使用方式、預期功效）。開單時可勾選記錄給了誰，並一鍵產生「給 GPT 生圖的指令」，生成說明圖卡傳給客人。
-      </div>
-      <button class="btn" style="background:var(--pur);color:#fff;" onclick="openM('trialPackMgr')">🎁 管理試用包（${(S.data.trialPacks||[]).length} 個）</button>
-    </div>
-  </div>
-
   <div class="card" style="background:#faf5ff;border:1px solid #9333ea;margin-bottom:14px;">
     <div class="card-hd" style="background:transparent;border:none;">
       <span class="card-ttl" style="color:#9333ea;">🎨 紋繡設定</span>
@@ -9087,10 +9157,6 @@ function pgSettings(){
         <div>
           <button class="btn" style="background:var(--gold);color:#fff;" onclick="recalcAvgCost()">💰 重算加權平均成本</button>
           <div class="tm" style="font-size:11px;margin-top:4px;">用所有進貨紀錄重新計算每個產品的平均成本（總成本÷總數量）。手動改錯成本、或進貨資料修正後，用這個同步回正確數字</div>
-        </div>
-        <div>
-          <button class="btn" style="background:#9333ea;color:#fff;" onclick="diagnosePmu()">🔍 紋繡紀錄診斷</button>
-          <div class="tm" style="font-size:11px;margin-top:4px;">看系統裡存了幾筆紋繡紀錄</div>
         </div>
         <div>
           <button class="btn" style="background:#dc2626;color:#fff;font-weight:700;" onclick="slimMainDoc()">🩺 主文件體檢瘦身（存檔失敗必點）</button>
