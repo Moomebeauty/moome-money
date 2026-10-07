@@ -1618,39 +1618,42 @@ function cardoneCompass(rev,exp,profit){
     actionColor='#16a34a';
   }
 
-  var html='<div style="background:linear-gradient(135deg,#1a1a2e,#2d2d44);border-radius:16px;padding:18px;margin-bottom:18px;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.15);">';
-  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:20px;">🧭</span><span style="font-weight:800;font-size:16px;letter-spacing:0.05em;">財務羅盤</span><span style="font-size:11px;opacity:0.6;margin-left:auto;">Grant Cardone 經營哲學</span></div>';
+  var html='<div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:1px solid #e9d5f5;border-radius:16px;padding:18px;margin-bottom:18px;box-shadow:0 2px 12px rgba(147,51,234,0.08);">';
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span style="font-size:20px;">🧭</span><span style="font-weight:800;font-size:16px;letter-spacing:0.05em;color:#9333ea;">財務羅盤</span><span style="font-size:11px;color:#a78bca;margin-left:auto;">Grant Cardone 經營哲學</span></div>';
 
   // 今日行動
-  html+='<div style="background:rgba(255,255,255,0.1);border-left:3px solid '+actionColor+';border-radius:8px;padding:12px;margin-bottom:14px;">';
-  html+='<div style="font-size:11px;opacity:0.7;margin-bottom:4px;">今日第一行動</div>';
-  html+='<div style="font-size:14px;line-height:1.7;">'+todayAction+'</div></div>';
+  html+='<div style="background:#fff;border-left:4px solid '+actionColor+';border-radius:10px;padding:12px 14px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">';
+  html+='<div style="font-size:12px;color:'+actionColor+';font-weight:700;margin-bottom:4px;">今日第一行動</div>';
+  html+='<div style="font-size:14px;line-height:1.7;color:#4a4a4a;">'+todayAction+'</div></div>';
 
   // 四大原則儀表
-  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">';
+  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">';
   // 原則1：不要虧錢
-  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
-  html+='<div style="font-size:11px;opacity:0.7;">① 不要虧錢</div>';
-  html+='<div style="font-size:18px;font-weight:800;color:'+(isProfit?'#4ade80':'#f87171')+';">$'+fmt(profit)+'</div>';
-  html+='<div style="font-size:10px;opacity:0.6;">'+(isProfit?'✓ 守住正數':'✗ 吃老本，危險')+'</div></div>';
+  var c1=isProfit?'#16a34a':'#dc2626';
+  html+='<div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">';
+  html+='<div style="font-size:11px;color:#999;margin-bottom:2px;">① 不要虧錢</div>';
+  html+='<div style="font-size:19px;font-weight:800;color:'+c1+';">$'+fmt(profit)+'</div>';
+  html+='<div style="font-size:10px;color:'+c1+';">'+(isProfit?'✓ 守住正數':'✗ 吃老本，危險')+'</div></div>';
   // 原則2：人際遊戲
-  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
-  html+='<div style="font-size:11px;opacity:0.7;">② 金錢是人際遊戲</div>';
-  html+='<div style="font-size:18px;font-weight:800;color:'+(top20Pct>=60?'#4ade80':'#fbbf24')+';">'+top20Pct+'%</div>';
-  html+='<div style="font-size:10px;opacity:0.6;">前20%客人貢獻</div></div>';
+  var c2=top20Pct>=60?'#16a34a':'#d97706';
+  html+='<div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">';
+  html+='<div style="font-size:11px;color:#999;margin-bottom:2px;">② 金錢是人際遊戲</div>';
+  html+='<div style="font-size:19px;font-weight:800;color:'+c2+';">'+top20Pct+'%</div>';
+  html+='<div style="font-size:10px;color:#999;">前20%客人貢獻</div></div>';
   // 原則3：生錢資產
-  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
-  html+='<div style="font-size:11px;opacity:0.7;">③ 錢移到生錢資產</div>';
-  html+='<div style="font-size:18px;font-weight:800;color:'+(pmuPct>=40?'#4ade80':'#c084fc')+';">'+pmuPct+'%</div>';
-  html+='<div style="font-size:10px;opacity:0.6;">紋繡（高毛利技術財）</div></div>';
+  var c3=pmuPct>=40?'#16a34a':'#9333ea';
+  html+='<div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">';
+  html+='<div style="font-size:11px;color:#999;margin-bottom:2px;">③ 錢移到生錢資產</div>';
+  html+='<div style="font-size:19px;font-weight:800;color:'+c3+';">'+pmuPct+'%</div>';
+  html+='<div style="font-size:10px;color:#999;">紋繡（高毛利技術財）</div></div>';
   // 原則4：預收現金流子彈
-  html+='<div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:10px;">';
-  html+='<div style="font-size:11px;opacity:0.7;">④ 預收現金流子彈</div>';
-  html+='<div style="font-size:18px;font-weight:800;color:#60a5fa;">$'+fmt(liability)+'</div>';
-  html+='<div style="font-size:10px;opacity:0.6;">儲值餘額（別亂花）</div></div>';
+  html+='<div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">';
+  html+='<div style="font-size:11px;color:#999;margin-bottom:2px;">④ 預收現金流子彈</div>';
+  html+='<div style="font-size:19px;font-weight:800;color:#2563eb;">$'+fmt(liability)+'</div>';
+  html+='<div style="font-size:10px;color:#999;">儲值餘額（別亂花）</div></div>';
   html+='</div>';
 
-  html+='<div style="font-size:10px;opacity:0.5;margin-top:10px;line-height:1.5;">💡 Cardone：「賺來的錢別花掉，投資能生錢的資產。你的客戶名單就是最大的資產。」</div>';
+  html+='<div style="font-size:11px;color:#a78bca;margin-top:12px;line-height:1.6;">💡 Cardone：「賺來的錢別花掉，投資能生錢的資產。你的客戶名單就是最大的資產。」</div>';
   html+='</div>';
   return html;
 }
