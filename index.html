@@ -15178,6 +15178,27 @@ window.calcSoloPricing=()=>{
     ${grossMargin>=90?
       `<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✅ 毛利率 ${grossMargin}%，達到你的 90% 目標，體質健康</div>`:
       `<div class="notice" style="background:#fef3c7;border-left-color:#d97706;color:#92400e;font-size:13px;">⚠️ 毛利率 ${grossMargin}% 未達 90%。想拉高：把「目標材料佔比」調低，或換更省成本的產品</div>`}
+
+    ${(()=>{
+      // 🚀 Cardone 10X 定價判讀：看「利潤額」不只看「利潤率」
+      const gp=Math.round(grossProfit);
+      let verdict,vColor,vBg,vIcon,advice;
+      if(suggested>=5000&&gp>=4000){
+        verdict='10X 技術財';vIcon='🚀';vColor='#9333ea';vBg='#faf5ff';
+        advice='高單價、高利潤額！這一單賺 $'+fmt(gp)+'，等於 '+Math.round(gp/300)+' 單低價做臉。Cardone：「賣高價的難度沒有比低價高10倍，但利潤是100倍。」這就是你該主推的。';
+      }else if(gp>=2000){
+        verdict='健康利潤額';vIcon='✅';vColor='#16a34a';vBg='#f0fdf4';
+        advice='這一單賺 $'+fmt(gp)+'，還不錯。但想想：能不能提高定價、提供10倍價值，讓它變成 $5000+ 的高單價服務？';
+      }else{
+        verdict='勞力財警告';vIcon='⚠️';vColor='#dc2626';vBg='#fef2f2';
+        advice='這一單只賺 $'+fmt(gp)+'（利潤額太低）。Cardone：「毛利率再高，一單只賺幾百塊，你會做到死。」你一天要做 '+Math.ceil(30000/Math.max(gp,1))+' 單才賺3萬。考慮：大幅提高定價，或把這類客人轉化成紋繡高單價客。';
+      }
+      return'<div style="background:'+vBg+';border:2px solid '+vColor+';border-radius:10px;padding:14px;margin:12px 0;">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:18px;">'+vIcon+'</span><span style="font-weight:800;color:'+vColor+';font-size:15px;">Cardone 10X 判讀：'+verdict+'</span></div>'
+        +'<div style="font-size:14px;line-height:1.7;color:var(--txt);">'+advice+'</div>'
+        +'<div style="margin-top:8px;padding-top:8px;border-top:1px solid '+vColor+'33;font-size:12px;color:var(--mut);">💰 這一單的<b>利潤額</b>（絕對金額）：<b style="color:'+vColor+';font-size:16px;">$'+fmt(gp)+'</b>　← Cardone 說這個比「毛利率%」重要</div>'
+        +'</div>';
+    })()}
     ${fixed>0?`<div class="tm" style="font-size:12px;margin:8px 0;padding:8px;background:var(--bg2);border-radius:6px;">
       扣掉每堂固定成本 $${fmt(fixed)} 後 → 淨利 <b style="color:var(--grn);">$${fmt(Math.round(netProfit))}</b>（淨利率 ${netMargin}%）
     </div>`:''}
