@@ -410,10 +410,14 @@ const DEFAULT_PMU_PRICING={
 };
 
 const DEFAULT_PMU_FACE_QUESTIONS=[
-  {key:'baseColor',label:'是否有底色？',options:['有，略有深度','有，偏淺淡','無，已施作淡色','無']},
-  {key:'hairFlow',label:'原生毛流狀態',options:['完整毛流','前濃，後段缺','整體偏淡','左右分布不均']},
-  {key:'boneState',label:'面部骨骼狀態',options:['整體明顯','後段眉骨高','眉骨不明顯','左右落差大']},
-  {key:'muscleState',label:'眉部肌肉狀態',options:['施力平均','眉頭發達','眉中發達','眉峰發達']}
+  {key:'baseColor',type:'choice',label:'是否有底色？',options:['有，略有深度','有，偏淺淡','無，已施作淡色','無']},
+  {key:'hairFlow',type:'choice',label:'原生毛流狀態',options:['完整毛流','前濃，後段缺','整體偏淡','左右分布不均']},
+  {key:'boneDesc',type:'text',label:'🦴 骨骼狀況（眉骨、額骨、顴骨）',placeholder:'例如：右眉骨偏高、左右眉骨落差約0.3cm...'},
+  {key:'muscleDesc',type:'text',label:'💪 肌肉狀況（眉頭、眉中、眉峰施力）',placeholder:'例如：眉頭肌肉發達、皺眉習慣明顯...'},
+  {key:'skinDesc',type:'text',label:'🧴 皮膚狀況（膚質、出油、毛孔）',placeholder:'例如：T字易出油、眉部毛孔較粗...'},
+  {key:'leftBrow',type:'text',label:'左眉型狀況',placeholder:'詳細記錄左眉'},
+  {key:'rightBrow',type:'text',label:'右眉型狀況',placeholder:'詳細記錄右眉'},
+  {key:'faceOther',type:'text',label:'📌 其他面診觀察',placeholder:'任何其他重要觀察...'}
 ];
 const DEFAULT_PMU_TOOLS_D=['圓針','排針','霧針','手工排','機器','1針','3針','5針'];
 const DEFAULT_PMU_PIGMENTS_D=['棕色','咖啡色','灰棕色','紅棕色','橘調','奶茶色','深棕'];
@@ -6239,8 +6243,15 @@ function pmuDesignStage(t){
           const questions=S.data.settings?.pmuFaceQuestions||DEFAULT_PMU_FACE_QUESTIONS;
           const colors=['#9333ea','#0891b2','#16a34a','#d97706','#dc2626','#7e22ce'];
           return questions.map((q,qi)=>{
-            const val=(t.faceAnswers&&t.faceAnswers[q.key])||'';
+            const val=(t.faceAnswers&&t.faceAnswers[q.key])||t[q.key]||'';
             const col=colors[qi%colors.length];
+            if(q.type==='text'){
+              // 文字題
+              return`<div class="fgrp" style="${qi>0?'margin-top:12px;':''}"><label>${q.label}</label>
+                <textarea rows="2" placeholder="${(q.placeholder||'').replace(/"/g,'&quot;')}" oninput="pmuSetFaceAnswer('${q.key}',this.value)">${(val||'').replace(/</g,'&lt;')}</textarea>
+              </div>`;
+            }
+            // 單選題
             return`<div class="fgrp" style="${qi>0?'margin-top:12px;':''}"><label>${q.label}</label>
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
                 ${(q.options||[]).map(o=>`<button type="button" style="padding:6px 12px;background:${val===o?col:'var(--bg2)'};color:${val===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSetFaceAnswer('${q.key}','${o.replace(/'/g,"&#39;")}')">${val===o?'✓ ':''}${o}</button>`).join('')}
@@ -6248,32 +6259,6 @@ function pmuDesignStage(t){
             </div>`;
           }).join('');
         })()}
-        <div class="fg fg2" style="margin-top:12px;">
-          <div class="fgrp"><label>左眉型狀況</label>
-            <input type="text" id="pmu_leftBrow" value="${(t.leftBrow||'').replace(/"/g,'&quot;')}" placeholder="詳細記錄左眉" oninput="S.treatment.leftBrow=this.value">
-          </div>
-          <div class="fgrp"><label>右眉型狀況</label>
-            <input type="text" id="pmu_rightBrow" value="${(t.rightBrow||'').replace(/"/g,'&quot;')}" placeholder="詳細記錄右眉" oninput="S.treatment.rightBrow=this.value">
-          </div>
-        </div>
-
-        <!-- 面診文字詳細記錄 -->
-        <div style="margin-top:16px;">
-          <div style="font-weight:700;color:#9333ea;margin-bottom:8px;">📝 面診詳細描述（文字記錄）</div>
-          <div class="tm" style="font-size:11px;margin-bottom:10px;">用文字詳細記錄骨骼、肌肉、皮膚等狀況，之後客戶檔案隨時查得到、也搜尋得到。</div>
-          <div class="fgrp"><label>🦴 骨骼狀況（眉骨、額骨、顴骨）</label>
-            <textarea id="pmu_boneDesc" rows="3" placeholder="例如：右眉骨偏高、左右眉骨落差約0.3cm、額骨平整..." oninput="S.treatment.boneDesc=this.value">${t.boneDesc||''}</textarea>
-          </div>
-          <div class="fgrp" style="margin-top:10px;"><label>💪 肌肉狀況（眉頭、眉中、眉峰施力）</label>
-            <textarea id="pmu_muscleDesc" rows="3" placeholder="例如：眉頭肌肉發達、皺眉習慣明顯、眉尾較鬆..." oninput="S.treatment.muscleDesc=this.value">${t.muscleDesc||''}</textarea>
-          </div>
-          <div class="fgrp" style="margin-top:10px;"><label>🧴 皮膚狀況（膚質、出油、毛孔）</label>
-            <textarea id="pmu_skinDesc" rows="2" placeholder="例如：T字易出油、眉部毛孔較粗、偏乾..." oninput="S.treatment.skinDesc=this.value">${t.skinDesc||''}</textarea>
-          </div>
-          <div class="fgrp" style="margin-top:10px;"><label>📌 其他面診觀察</label>
-            <textarea id="pmu_faceOther" rows="2" placeholder="任何其他重要觀察、需注意的地方..." oninput="S.treatment.faceOther=this.value">${t.faceOther||''}</textarea>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -6518,38 +6503,65 @@ window.pmuSet=(field,val)=>{
 
 window.pmuSetFaceAnswer=(key,val)=>{
   if(!S.treatment)return;
-  pmuSaveInputs();
   if(!S.treatment.faceAnswers)S.treatment.faceAnswers={};
+  // 判斷是文字題還是單選題
+  const questions=S.data.settings?.pmuFaceQuestions||DEFAULT_PMU_FACE_QUESTIONS;
+  const q=questions.find(x=>x.key===key);
+  if(q&&q.type==='text'){
+    // 文字題：只存，不重繪（避免失焦）
+    S.treatment.faceAnswers[key]=val;
+    return;
+  }
+  // 單選題：存+重繪變色
   S.treatment.faceAnswers[key]=val;
   const c=$('pg-content');if(c)c.innerHTML=renderPage();
-  setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},60);
 };
 
 // ═══ 🔍 面診題目編輯 ═══
 function renderFaceQEditor(q,qi){
-  var opts=(q.options||[]).map(function(o,oi){
-    return '<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">'
-      +'<input type="text" value="'+(o||'').replace(/"/g,'&quot;')+'" onchange="fqEditOption('+qi+','+oi+',this.value)" style="flex:1;font-size:13px;">'
-      +'<button class="bdel" onclick="fqDelOption('+qi+','+oi+')">×</button></div>';
-  }).join('');
+  var type=q.type||'choice';
+  // 類型切換
+  var typeBtns='<div style="display:flex;gap:4px;margin-bottom:8px;">'
+    +'<button type="button" onclick="fqSetType('+qi+',&quot;choice&quot;)" style="padding:4px 12px;border-radius:12px;border:none;cursor:pointer;font-size:12px;background:'+(type==='choice'?'#9333ea':'#fff')+';color:'+(type==='choice'?'#fff':'#666')+';">◉ 單選按鈕</button>'
+    +'<button type="button" onclick="fqSetType('+qi+',&quot;text&quot;)" style="padding:4px 12px;border-radius:12px;border:none;cursor:pointer;font-size:12px;background:'+(type==='text'?'#9333ea':'#fff')+';color:'+(type==='text'?'#fff':'#666')+';">✎ 文字框</button></div>';
+
+  var body='';
+  if(type==='text'){
+    body='<div style="padding-left:8px;"><input type="text" value="'+(q.placeholder||'').replace(/"/g,'&quot;')+'" placeholder="提示文字（例如：請描述...）" onchange="fqEditPlaceholder('+qi+',this.value)" style="width:100%;font-size:13px;"></div>';
+  }else{
+    var opts=(q.options||[]).map(function(o,oi){
+      return '<div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">'
+        +'<input type="text" value="'+(o||'').replace(/"/g,'&quot;')+'" onchange="fqEditOption('+qi+','+oi+',this.value)" style="flex:1;font-size:13px;">'
+        +'<button class="bdel" onclick="fqDelOption('+qi+','+oi+')">×</button></div>';
+    }).join('');
+    body='<div style="padding-left:8px;">'+opts
+      +'<button class="btn btn-s btn-sm" style="margin-top:4px;" onclick="fqAddOption('+qi+')">＋ 加選項</button></div>';
+  }
   return '<div style="background:var(--bg2);padding:12px;border-radius:8px;margin-bottom:10px;">'
     +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">'
-    +'<input type="text" value="'+(q.label||'').replace(/"/g,'&quot;')+'" placeholder="題目名稱" onchange="fqEditLabel('+qi+',this.value)" style="flex:1;font-weight:700;font-size:14px;">'
+    +'<input type="text" value="'+(q.label||'').replace(/"/g,'&quot;')+'" placeholder="標題（例如：骨骼狀況）" onchange="fqEditLabel('+qi+',this.value)" style="flex:1;font-weight:700;font-size:14px;">'
+    +'<button type="button" onclick="fqMoveUp('+qi+')" style="border:none;background:none;cursor:pointer;font-size:14px;opacity:0.5;" title="上移">▲</button>'
     +'<button class="bdel" onclick="fqDelQuestion('+qi+')" title="刪除整個題目">🗑️</button></div>'
-    +'<div style="padding-left:8px;">'+opts
-    +'<button class="btn btn-s btn-sm" style="margin-top:4px;" onclick="fqAddOption('+qi+')">＋ 加選項</button></div></div>';
+    +typeBtns+body+'</div>';
 }
+window.fqSetType=function(qi,type){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]){S.modal.fqDraft[qi].type=type;if(type==='choice'&&!S.modal.fqDraft[qi].options)S.modal.fqDraft[qi].options=[''];fqRerender();}};
+window.fqEditPlaceholder=function(qi,val){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi])S.modal.fqDraft[qi].placeholder=val;};
+window.fqMoveUp=function(qi){if(S.modal&&S.modal.fqDraft&&qi>0){var arr=S.modal.fqDraft;var tmp=arr[qi-1];arr[qi-1]=arr[qi];arr[qi]=tmp;fqRerender();}};
 function fqRerender(){var el=document.getElementById('fq_list');if(el&&S.modal&&S.modal.fqDraft)el.innerHTML=S.modal.fqDraft.map(function(q,qi){return renderFaceQEditor(q,qi);}).join('');}
 window.fqEditLabel=function(qi,val){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi])S.modal.fqDraft[qi].label=val;};
 window.fqEditOption=function(qi,oi,val){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]&&S.modal.fqDraft[qi].options)S.modal.fqDraft[qi].options[oi]=val;};
 window.fqDelOption=function(qi,oi){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]){S.modal.fqDraft[qi].options.splice(oi,1);fqRerender();}};
 window.fqAddOption=function(qi){if(S.modal&&S.modal.fqDraft&&S.modal.fqDraft[qi]){if(!S.modal.fqDraft[qi].options)S.modal.fqDraft[qi].options=[];S.modal.fqDraft[qi].options.push('');fqRerender();}};
 window.fqDelQuestion=function(qi){if(S.modal&&S.modal.fqDraft){if(!confirm('刪除整個題目「'+(S.modal.fqDraft[qi].label||'')+'」？'))return;S.modal.fqDraft.splice(qi,1);fqRerender();}};
-window.fqAddQuestion=function(){if(!S.modal)return;if(!S.modal.fqDraft)S.modal.fqDraft=[];S.modal.fqDraft.push({key:'q_'+uid(),label:'',options:['']});fqRerender();};
+window.fqAddQuestion=function(type){if(!S.modal)return;if(!S.modal.fqDraft)S.modal.fqDraft=[];if(type==='text'){S.modal.fqDraft.push({key:'q_'+uid(),type:'text',label:'',placeholder:''});}else{S.modal.fqDraft.push({key:'q_'+uid(),type:'choice',label:'',options:['']});}fqRerender();};
 window.fqReset=function(){if(!confirm('還原成預設題目？'))return;S.modal.fqDraft=JSON.parse(JSON.stringify(DEFAULT_PMU_FACE_QUESTIONS));fqRerender();};
 window.saveFaceQuestions=async function(){
   var qs=(S.modal.fqDraft||[]).filter(function(q){return (q.label||'').trim();}).map(function(q){
-    return {key:q.key||('q_'+uid()),label:q.label.trim(),options:(q.options||[]).map(function(o){return (o||'').trim();}).filter(function(o){return o;})};
+    var type=q.type||'choice';
+    if(type==='text'){
+      return {key:q.key||('q_'+uid()),type:'text',label:q.label.trim(),placeholder:q.placeholder||''};
+    }
+    return {key:q.key||('q_'+uid()),type:'choice',label:q.label.trim(),options:(q.options||[]).map(function(o){return (o||'').trim();}).filter(function(o){return o;})};
   });
   var settings=Object.assign({},S.data.settings||{},{pmuFaceQuestions:qs});
   S.data.settings=settings;
@@ -10816,12 +10828,15 @@ function renderModal(){
     const qs=S.modal.fqDraft;
     c=`<div class="mttl">🔍 編輯面診評估題目</div>
     <div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:12px;">
-      改題目名稱、增刪選項、新增或刪除整個題目。做紋繡時就會用你設定的題目。
+      完全自由編輯：改標題、切換「單選按鈕 / 文字框」、增刪選項、新增或刪除整個題目、上移排序。做紋繡時就用你設定的。
     </div>
     <div id="fq_list" style="max-height:55vh;overflow-y:auto;margin-top:12px;">
       ${qs.map((q,qi)=>renderFaceQEditor(q,qi)).join('')}
     </div>
-    <button class="btn btn-s btn-sm" style="margin-top:10px;" onclick="fqAddQuestion()">＋ 新增一個題目</button>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn btn-s btn-sm" style="flex:1;" onclick="fqAddQuestion('choice')">＋ 新增單選題</button>
+      <button class="btn btn-s btn-sm" style="flex:1;" onclick="fqAddQuestion('text')">＋ 新增文字題</button>
+    </div>
     <div class="mbtns">
       <button class="btn btn-s" onclick="S.modal.fqDraft=null;openM('pmuSettings')">取消</button>
       <button class="btn btn-y" onclick="fqReset()">↺ 還原預設</button>
