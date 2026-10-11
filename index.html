@@ -1596,10 +1596,10 @@ function getTotalDepositDiscount(){
 
 function getCustomerHistory(custName){
   if(!custName)return{services:[],deposits:[],totalSpent:0,visitCount:0};
-  const target=(custName||'').trim();
-  const services=(S.data.sales||[]).filter(s=>(s.customer||'').trim()===target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const deposits=(S.data.deposits||[]).filter(d=>(d.customer||'').trim()===target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const usedByOthers=(S.data.sales||[]).filter(s=>s.payMethod==='儲值扣款'&&(s.depositOwner||'').trim()===target&&(s.customer||'').trim()!==target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const target=normalizeName(custName); // 忽略空格/全半形差異，撈回同一人所有拼法的紀錄
+  const services=(S.data.sales||[]).filter(s=>normalizeName(s.customer)===target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const deposits=(S.data.deposits||[]).filter(d=>normalizeName(d.customer)===target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const usedByOthers=(S.data.sales||[]).filter(s=>s.payMethod==='儲值扣款'&&normalizeName(s.depositOwner)===target&&normalizeName(s.customer)!==target).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const totalSpent=services.reduce((s,r)=>s+toN(r.amount),0);
   const dates=new Set(services.map(s=>s.date));
   return{services,deposits,usedByOthers,totalSpent,visitCount:dates.size};
