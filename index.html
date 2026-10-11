@@ -391,7 +391,31 @@ const DEFAULT_PMU_YEARLY_MSG=`親愛的 {客戶} 您好 🌸
 想預約或有任何問題，都可以直接回覆我唷～
 好久不見，很想念您 🌷`;
 
-// 補色價目表（可在基本設定編輯）
+// 💌 服務關懷提醒規則（基本設定可增減）
+// keyword=比對開單項目名稱(包含即符合)；days=開單後幾天提醒；title=提醒類型；msg=可複製訊息範本
+// 訊息可用佔位符：{客戶} {服務} {天數}
+const DEFAULT_CARE_RULES=[
+  {id:'care_face3',keyword:'做臉',days:3,title:'做臉術後關懷',enabled:true,msg:`親愛的 {客戶} 您好 🌸
+
+上次做完臉後肌膚狀況還好嗎？💛
+術後這幾天記得多補水、加強防曬，避免用太刺激的保養品喔～
+如果有任何泛紅、乾癢或不舒服，隨時回覆我幫您看看 ♡
+
+期待下次再為您服務 🌷`},
+  {id:'care_new7',keyword:'',days:7,title:'新客首週關懷',enabled:false,msg:`親愛的 {客戶} 您好 🌸
+
+這週使用上還習慣嗎？有沒有需要我協助的地方呢？
+很高興這次能為您服務，您的感受對我很重要 💛
+任何問題都歡迎直接回覆我唷～ 🌷`},
+  {id:'care_brow30',keyword:'霧眉',days:30,title:'霧眉一個月追蹤',enabled:true,msg:`親愛的 {客戶} 您好 🌸
+
+您的 {服務} 到現在滿一個月了，顏色代謝得還滿意嗎？
+這階段是觀察定色的好時機，如果覺得某些地方偏淡，可以約時間讓我幫您檢視是否需要補色 ♡
+
+想預約或有疑問都可以直接回覆我 🌷`}
+];
+
+// 補色價目表（基本設定可編輯）
 const DEFAULT_PMU_PRICING={
   '霧眉':{
     firstPrice:8800, firstDiscount:6800,
@@ -1786,6 +1810,27 @@ function pgOverview(){
       </div>`;
     }
     return html;
+  })()}
+
+  ${(()=>{
+    // 💌 服務關懷提醒：開單後第 N 天該關心客人
+    const due=(typeof getCareDue==='function')?getCareDue():[];
+    if(due.length===0)return'';
+    return`<div class="notice" style="background:#fff0f6;border-left-color:var(--rose);color:var(--roseDk);">
+      💌 <b>該關懷客人囉（${due.length} 筆）</b>
+      <div class="tm" style="font-size:11px;margin:4px 0 8px;color:var(--mut);">開單後到了你設定的關懷日。按「複製訊息」直接貼到 LINE 傳給客人，處理完按「已關懷」就不再提醒。</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${due.map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;background:#fff;border-radius:8px;flex-wrap:wrap;">
+          <b style="color:var(--rose);">${d.customer}</b>
+          <span class="tm" style="font-size:12px;">${d.title}${d.service?('・'+d.service):''}</span>
+          <span class="tm" style="font-size:11px;color:var(--mut);">開單 ${d.sinceOrder} 天${d.overdueDays>0?`　<span style="color:#dc2626;">逾 ${d.overdueDays} 天</span>`:'　<span style="color:var(--grn);">今天到期</span>'}</span>
+          <span style="margin-left:auto;display:flex;gap:6px;">
+            <button class="btn btn-sm" style="background:var(--rose);color:#fff;" onclick="careCopyMsg('${d.saleId}','${d.ruleId}')">💬 複製訊息</button>
+            <button class="btn btn-sm" style="background:var(--grn);color:#fff;" onclick="careMarkDone('${d.saleId}','${d.ruleId}')">✓ 已關懷</button>
+          </span>
+        </div>`).join('')}
+      </div>
+    </div>`;
   })()}
 
   ${!thisQReviewed?`<div class="notice" style="background:var(--purL);border-left-color:var(--pur);color:var(--pur);">
@@ -3895,6 +3940,114 @@ window.pmuTextReset=(key)=>{
   if(!confirm('還原成預設內容？'))return;
   const ta=$('pmu_text_edit');if(ta)ta.value=defMap[key]||'';
   toast('已還原，記得按儲存');
+};
+
+// ─── 💌 服務關懷提醒規則 ────────────────────────────────
+function careReadDraftFromDOM(){
+  if(!S.modal||!S.modal.careDraft)return;
+  S.modal.careDraft.forEach((r,i)=>{
+    const t=$('cr_title_'+i); if(t)r.title=t.value;
+    const k=$('cr_kw_'+i); if(k)r.keyword=k.value;
+    const d=$('cr_days_'+i); if(d)r.days=d.value;
+    const e=$('cr_en_'+i); if(e)r.enabled=e.checked;
+    const m=$('cr_msg_'+i); if(m)r.msg=m.value;
+  });
+}
+window.openCareRules=()=>{
+  const src=S.data.settings?.careRules||DEFAULT_CARE_RULES;
+  S.modal={t:'careRules',lg:true,careDraft:JSON.parse(JSON.stringify(src))};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=renderModal();bg.className='modal-bg open';inn.className='modal lg';}
+};
+window.careRuleAdd=()=>{
+  careReadDraftFromDOM();
+  if(!S.modal.careDraft)S.modal.careDraft=[];
+  S.modal.careDraft.push({id:'care_'+uid(),keyword:'',days:3,title:'新關懷提醒',enabled:true,msg:'親愛的 {客戶} 您好 🌸\n\n'});
+  const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();
+};
+window.careRuleDel=(i)=>{
+  careReadDraftFromDOM();
+  if(!confirm('刪除這條提醒規則？'))return;
+  S.modal.careDraft.splice(i,1);
+  const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();
+};
+window.careRuleSave=async()=>{
+  careReadDraftFromDOM();
+  const rules=(S.modal.careDraft||[]).map(r=>({
+    id:r.id||('care_'+uid()),
+    title:(r.title||'').trim()||'未命名提醒',
+    keyword:(r.keyword||'').trim(),
+    days:Math.max(0,toN(r.days)),
+    enabled:r.enabled!==false,
+    msg:r.msg||''
+  }));
+  const settings={...(S.data.settings||{}),careRules:rules};
+  S.data.settings=settings;
+  const ok=await saveMain({settings});
+  if(ok){toast('✅ 關懷提醒規則已儲存');closeMod();render();}
+};
+window.careRuleReset=()=>{
+  if(!confirm('還原成預設範例規則？（會覆蓋目前編輯中的內容）'))return;
+  S.modal.careDraft=JSON.parse(JSON.stringify(DEFAULT_CARE_RULES));
+  const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();
+};
+// 把範本佔位符換成實際內容
+function careFillMsg(tmpl,customer,service,days){
+  return String(tmpl||'')
+    .replace(/\{客戶\}/g,customer||'')
+    .replace(/\{服務\}/g,service||'')
+    .replace(/\{天數\}/g,String(days==null?'':days));
+}
+// 算出目前所有「到期待關懷」的提醒（掃 sales × careRules）
+function getCareDue(){
+  const rules=(S.data.settings?.careRules||DEFAULT_CARE_RULES).filter(r=>r.enabled!==false);
+  if(rules.length===0)return[];
+  const done=S.data.settings?.careDone||{};
+  const todayStr=today();
+  const now=new Date(todayStr+'T00:00:00');
+  const WINDOW=45; // 回看窗：到期後 45 天內仍提醒，避免首次設定時舊單灌爆
+  const out=[];
+  (S.data.sales||[]).forEach(s=>{
+    if(!s.customer||!s.date)return;
+    const item=((s.item||'')+(s.subNote||''));
+    rules.forEach(r=>{
+      if(r.keyword&&!item.includes(r.keyword))return;
+      const base=new Date(s.date+'T00:00:00');
+      if(isNaN(base.getTime()))return;
+      const due=new Date(base.getTime());due.setDate(due.getDate()+(toN(r.days)||0));
+      const diffDue=Math.round((now-due)/86400000); // >=0 代表已到期
+      if(diffDue<0)return;              // 還沒到提醒日
+      if(diffDue>WINDOW)return;         // 太舊，不再提醒
+      const key=s.id+'__'+r.id;
+      if(done[key])return;              // 已關懷過
+      const sinceOrder=Math.round((now-base)/86400000);
+      out.push({saleId:s.id,ruleId:r.id,customer:(s.customer||'').trim(),service:(s.item||'').trim(),
+        title:r.title||'關懷提醒',days:toN(r.days)||0,sinceOrder,overdueDays:diffDue,
+        msg:r.msg||'',orderDate:s.date});
+    });
+  });
+  // 越早開單（越久沒關懷）排越前面
+  out.sort((a,b)=>b.overdueDays-a.overdueDays);
+  return out;
+}
+window.careCopyMsg=(saleId,ruleId)=>{
+  const due=getCareDue().find(d=>d.saleId===saleId&&d.ruleId===ruleId);
+  if(!due){toast('找不到這筆提醒');return;}
+  const text=careFillMsg(due.msg,due.customer,due.service,due.sinceOrder);
+  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';
+  document.body.appendChild(ta);ta.select();
+  try{navigator.clipboard.writeText(text);toast('✅ 已複製，貼到 LINE 傳給 '+due.customer);}
+  catch(e){try{document.execCommand('copy');toast('✅ 已複製');}catch(e2){alert('複製失敗，請手動複製');}}
+  ta.remove();
+};
+window.careMarkDone=async(saleId,ruleId)=>{
+  const key=saleId+'__'+ruleId;
+  const done={...(S.data.settings?.careDone||{})};
+  done[key]=today();
+  const settings={...(S.data.settings||{}),careDone:done};
+  S.data.settings=settings;
+  const ok=await saveMain({settings});
+  if(ok){toast('✓ 已標記關懷完成');render();}
 };
 
 window.pmuTermsTab=(k)=>{if(!S.modal)return;S.modal.termsWhich=k;const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
@@ -9030,6 +9183,28 @@ function pgSettings(){
     </div>
   </div>
 
+  <!-- 服務關懷提醒設定 -->
+  <div class="card" style="background:linear-gradient(135deg,var(--roseL),var(--purL));border:1px solid var(--rose);">
+    <div class="card-hd" style="background:transparent;border:none;">
+      <span class="card-ttl" style="color:var(--rose);">💌 服務關懷提醒</span>
+      <button class="btn btn-sm" style="background:var(--rose);color:#fff;" onclick="openCareRules()">✏️ 編輯提醒規則</button>
+    </div>
+    <div class="card-bd">
+      <div class="tm" style="margin-bottom:10px;">設定「某服務開單後第幾天」要在<b>總覽</b>跳出關懷提醒，並附上<b>可一鍵複製</b>的訊息，直接貼到 LINE 傳給客人。留住舊客比找新客省力得多 🌷</div>
+      ${(()=>{
+        const rules=S.data.settings?.careRules||DEFAULT_CARE_RULES;
+        if(rules.length===0)return'<div class="tm" style="color:var(--mut);">尚未設定任何提醒規則</div>';
+        return`<div style="display:flex;flex-direction:column;gap:6px;">
+          ${rules.map(r=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border-radius:8px;${r.enabled===false?'opacity:0.5;':''}">
+            <span style="font-size:13px;font-weight:700;color:var(--rose);">${r.title||'未命名'}</span>
+            <span class="tm" style="font-size:12px;">${r.keyword?('項目含「'+r.keyword+'」'):'全部服務'}　開單後 <b>${toN(r.days)||0}</b> 天</span>
+            <span style="margin-left:auto;font-size:11px;${r.enabled===false?'color:var(--mut);':'color:var(--grn);'}">${r.enabled===false?'已停用':'✓ 啟用中'}</span>
+          </div>`).join('')}
+        </div>`;
+      })()}
+    </div>
+  </div>
+
   <!-- 員工話術範例管理 -->
   <div class="card" data-section="scriptHelp" style="background:linear-gradient(135deg,#fff5e6,#fff0f6);border:1px solid var(--gold);">
     <div class="card-hd" style="background:transparent;border:none;">
@@ -9300,6 +9475,53 @@ function renderModal(){
       ${results===null?`<div class="empty" style="padding:30px;"><div class="empty-ico">🔍</div><p>輸入關鍵字開始搜尋</p></div>`:renderSearchResults(results,q)}
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>`;
+  }
+
+  // 💌 服務關懷提醒規則編輯
+  if(m.t==='careRules'){
+    const draft=m.careDraft||[];
+    const ev=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    const et=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    c=`<div class="mttl">💌 服務關懷提醒規則</div>
+    <div class="notice" style="background:#fff0f6;border-left-color:var(--rose);color:var(--roseDk);font-size:12px;margin-bottom:14px;">
+      設定每條規則：哪種服務、開單後第幾天提醒。到期會自動在<b>總覽</b>跳出，並附可複製訊息。<br>
+      訊息可用佔位符：<b>{客戶}</b>＝客人名字、<b>{服務}</b>＝服務項目、<b>{天數}</b>＝距今天數。<br>
+      <b>比對關鍵字</b>留空＝符合所有服務；填「霧眉」＝只有項目含「霧眉」的開單才提醒。
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${draft.map((r,i)=>`
+        <div style="border:1px solid var(--rose);border-radius:12px;padding:14px;background:#fff;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+            <input type="text" id="cr_title_${i}" value="${ev(r.title)}" placeholder="提醒名稱（如：做臉術後關懷）"
+              style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-weight:700;color:var(--rose);">
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap;">
+              <input type="checkbox" id="cr_en_${i}" ${r.enabled!==false?'checked':''}> 啟用
+            </label>
+            <button class="btn btn-sm btn-d" onclick="careRuleDel(${i})">🗑️ 刪除</button>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:12px;color:var(--mut);">比對服務關鍵字（留空=全部）</label>
+              <input type="text" id="cr_kw_${i}" value="${ev(r.keyword)}" placeholder="例：做臉 / 霧眉 / 除毛"
+                style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
+            </div>
+            <div style="width:140px;">
+              <label style="font-size:12px;color:var(--mut);">開單後第幾天提醒</label>
+              <input type="number" id="cr_days_${i}" value="${ev(r.days)}" min="0" step="1"
+                style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;">
+            </div>
+          </div>
+          <label style="font-size:12px;color:var(--mut);">關懷訊息範本</label>
+          <textarea id="cr_msg_${i}" rows="6" placeholder="親愛的 {客戶} 您好 🌸..."
+            style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.7;resize:vertical;">${et(r.msg)}</textarea>
+        </div>`).join('')}
+    </div>
+    <div style="margin-top:12px;"><button class="btn btn-s" onclick="careRuleAdd()" style="width:100%;">＋ 新增一條提醒規則</button></div>
+    <div class="mbtns" style="margin-top:14px;">
+      <button class="btn btn-s" onclick="careRuleReset()">↺ 還原預設範例</button>
+      <button class="btn btn-s" onclick="closeMod()">取消</button>
+      <button class="btn btn-p" style="background:var(--rose);" onclick="careRuleSave()">✓ 儲存規則</button>
+    </div>`;
   }
 
   if(m.t==='addSale'){c=`<div class="mttl">💰 新增收入</div>
