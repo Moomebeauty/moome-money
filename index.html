@@ -3346,7 +3346,11 @@ function pgCustomers(){
   const customerStats=allCustomers.map(c=>{
     const h=getCustomerHistory(c.name);
     const balance=getCustomerBalance(c.name);
-    const lastVisit=h.services.length>0?h.services[0].date:null;
+    // 最後造訪：同時看「服務歷史(sales)」與「紋繡紀錄(pmuRecords)」，取較晚者
+    const nm=normalizeName(c.name);
+    const pmuDates=(S.data.pmuRecords||[]).filter(r=>normalizeName(r.customer)===nm).map(r=>r.date).filter(Boolean);
+    const lastSales=h.services.length>0?h.services[0].date:null;
+    const lastVisit=[lastSales,...pmuDates].filter(Boolean).sort().slice(-1)[0]||null;
     return{...c,...h,balance,lastVisit};
   }).sort((a,b)=>(b.lastVisit||'').localeCompare(a.lastVisit||''));
 
@@ -3612,8 +3616,8 @@ function pgCustomerDetail(c){
   })()}
 
   ${(() => {
-    // 🎨 紋繡紀錄
-    const recs=(S.data.pmuRecords||[]).filter(r=>r.customer===c.name).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    // 🎨 紋繡紀錄（客名比對忽略空格/全半形，撈回同一人所有拼法）
+    const recs=(S.data.pmuRecords||[]).filter(r=>normalizeName(r.customer)===normalizeName(c.name)).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     if(recs.length===0)return'';
     const todayStr=today();
     return`<div class="sec" style="margin-top:20px;">
