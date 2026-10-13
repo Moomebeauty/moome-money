@@ -9523,8 +9523,8 @@ function caseReadDOM(){
   });
 }
 window.caseDoSearch=function(v){S.caseSearch=v;const el=$('case-list');if(el)el.innerHTML=renderCaseList();};
-window.caseOpen=function(id){const cs=(S.data.pmuCases||[]).find(function(x){return x.id===id;});S.caseDraft=cs?JSON.parse(JSON.stringify(cs)):null;S.caseEditId=id;render();};
-window.caseNew=function(prefill){const id='case_'+uid();S.caseDraft=Object.assign({id:id,date:today(),serviceType:'霧眉',staff:'于蜜',status:'tracking',followups:[]},prefill||{});S.caseEditId=id;render();};
+window.caseOpen=function(id){const cs=(S.data.pmuCases||[]).find(function(x){return x.id===id;});S.caseDraft=cs?JSON.parse(JSON.stringify(cs)):null;S.caseEditId=id;S.page='cases';render();};
+window.caseNew=function(prefill){const id='case_'+uid();S.caseDraft=Object.assign({id:id,date:today(),serviceType:'霧眉',staff:'于蜜',status:'tracking',followups:[]},prefill||{});S.caseEditId=id;S.page='cases';render();};
 window.caseFromPmuRecord=function(recId){
   const r=(S.data.pmuRecords||[]).find(function(x){return x.id===recId;});
   if(!r){toast('找不到紋繡紀錄');return;}
