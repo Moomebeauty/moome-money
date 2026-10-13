@@ -1227,6 +1227,7 @@ function appHTML(){
   const PAGES=[
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
+    {id:'myfinance',ico:'👑',lbl:'我的理財'},
     {id:'profit',ico:'💎',lbl:'季度年度分析'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
 
@@ -1298,6 +1299,7 @@ function renderPage(){
     case'notes':     return pgNotes();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
+    case'myfinance': return pgMyFinance();
     case'reports':   return pgReports();
     case'refund':    return pgRefundCalculator();
     case'settings':  return pgSettings();
@@ -9346,6 +9348,206 @@ function pgReports(){
   </div>`;
 }
 
+// ═══════════ 👑 我的理財（個人抽成 20/40/40 卡爾登法則）═══════════
+// 花費帳戶（20%）：只能付「不付會死」的生存開銷
+const PF_ALLOWED=['房租','伙食','水電瓦斯','交通油錢/保養','保險費','手機費'];
+// 絕對不能用花費帳戶／薪水支付（會貶值的負債，要用被動現金流付）
+const PF_FORBIDDEN=['買車','衣服','旅遊','奢侈品','課程','設備'];
+const PF_SPLIT={spend:20,save:40,invest:40};
+
+function pfGet(){
+  return Object.assign({myName:'于蜜',goalLabel:'第一筆收租房頭期款',goalAmount:0,ammoActual:0,log:[]},(S.data.settings&&S.data.settings.personalFinance)||{});
+}
+// 本月個人薪水（于蜜的抽成總和）
+function myCommission(mo){
+  const nm=pfGet().myName;
+  return getSales(mo).filter(function(s){return(s.staff||'')===nm;}).reduce(function(t,s){return t+getSaleFinancials(s).commission;},0);
+}
+// 歷來累積個人抽成（跨所有月份年份）
+function myCommissionAllTime(){
+  const nm=pfGet().myName;
+  return (S.data.sales||[]).filter(function(s){return(s.staff||'')===nm;}).reduce(function(t,s){return t+getSaleFinancials(s).commission;},0);
+}
+// 本月歸類在花費帳戶的個人開銷
+function pfMonthSpent(){
+  const pf=pfGet();const m=S.month,y=yr();
+  return (pf.log||[]).filter(function(e){const d=new Date((e.date||'')+'T00:00:00');return d.getMonth()+1===m&&d.getFullYear()===y;}).reduce(function(t,e){return t+toN(e.amount);},0);
+}
+
+function pgMyFinance(){
+  const pf=pfGet();
+  const salary=myCommission(S.month);
+  const spend=Math.round(salary*PF_SPLIT.spend/100);
+  const save=Math.round(salary*PF_SPLIT.save/100);
+  const invest=Math.round(salary*PF_SPLIT.invest/100);
+  const myCount=getSales(S.month).filter(function(s){return(s.staff||'')===pf.myName;}).length;
+  // 未指定老師的本月服務筆數（提醒她補）
+  const unassigned=getSales(S.month).filter(function(s){return s.type==='service'&&!(s.staff||'').trim();}).length;
+  // 彈藥庫
+  const allTime=myCommissionAllTime();
+  const ammoShould=Math.round(allTime*(PF_SPLIT.save+PF_SPLIT.invest)/100);
+  const ammoActual=toN(pf.ammoActual);
+  const goal=toN(pf.goalAmount);
+  const goalPct=goal>0?Math.min(100,Math.round(ammoActual/goal*100)):0;
+  const monthSpent=pfMonthSpent();
+  const spendLeft=spend-monthSpent;
+  const spendPct=spend>0?Math.min(100,Math.round(monthSpent/spend*100)):0;
+
+  var html='<div class="pg-ttl">👑 我的理財</div>';
+  html+='<div class="pg-sub">于蜜的億萬富翁養成計畫 — 把每一筆抽成變成財務自由的彈藥</div>';
+
+  // 教練開場
+  html+='<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#1e293b,#334155);color:#fff;border:none;box-shadow:0 4px 20px rgba(30,41,59,0.25);"><div class="card-bd">';
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:20px;">🧑‍🏫</span><span style="font-weight:800;font-size:15px;">你的財務教練</span></div>';
+  html+='<div style="font-size:14px;line-height:1.8;opacity:0.95;">嗨于蜜，記住這句話：<b style="color:#fbbf24;">你不是花太多，你是賺太少。</b><br>我們不省咖啡錢，我們想辦法把收入翻倍。你每做一筆服務賺到的抽成，先別急著花——照紀律分成三份，把 80% 變成買「會下蛋的資產」的彈藥。等資產的被動現金流養得起你想要的生活，你才算真正自由。</div>';
+  html+='</div></div>';
+
+  html+=moSel();
+
+  // 本月個人薪水
+  html+='<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,var(--goldL),#fff);border:1px solid var(--gold);"><div class="card-bd" style="text-align:center;">';
+  html+='<div style="font-size:13px;color:var(--mut);">本月個人薪水（你的 60% 抽成）</div>';
+  html+='<div style="font-size:40px;font-weight:900;color:var(--goldDk);margin:4px 0;">$'+fmt(salary)+'</div>';
+  html+='<div class="tm" style="font-size:12px;">本月你做了 '+myCount+' 筆服務的抽成總和</div>';
+  if(unassigned>0){
+    html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin-top:10px;text-align:left;">⚠️ 本月有 '+unassigned+' 筆服務沒有指定老師，那些抽成沒被算進你的薪水。到「收入記帳」把老師補成「'+pf.myName+'」就會自動算進來。</div>';
+  }
+  html+='</div></div>';
+
+  if(salary<=0){
+    html+='<div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);">本月還沒有你的抽成收入。開單並把老師設為「'+pf.myName+'」後，這裡會自動算出薪水並分配三個帳戶。</div>';
+    return html;
+  }
+
+  // 三帳戶分配
+  html+='<div style="font-size:15px;font-weight:800;color:#333;margin:18px 0 10px;">💰 這筆薪水，照紀律分成三份</div>';
+  html+='<div class="sg sg3" style="margin-bottom:8px;">';
+  // 花費 20%
+  html+='<div class="sc" style="background:linear-gradient(135deg,#fef2f2,#fff);border:1px solid #fca5a5;"><div class="sl" style="color:#dc2626;">🏷️ 花費帳戶 20%</div><div class="sv" style="color:#dc2626;font-size:24px;">$'+fmt(spend)+'</div><div class="ss">只付「不付會死」的生存開銷</div></div>';
+  // 儲蓄 40%
+  html+='<div class="sc" style="background:linear-gradient(135deg,#eff6ff,#fff);border:1px solid #93c5fd;"><div class="sl" style="color:#2563eb;">🏷️ 儲蓄帳戶 40%</div><div class="sv" style="color:#2563eb;font-size:24px;">$'+fmt(save)+'</div><div class="ss">彈藥庫，存到夠才出手</div></div>';
+  // 投資 40%
+  html+='<div class="sc" style="background:linear-gradient(135deg,#f0fdf4,#fff);border:1px solid #86efac;"><div class="sl" style="color:#16a34a;">🏷️ 投資帳戶 40%</div><div class="sv" style="color:#16a34a;font-size:24px;">$'+fmt(invest)+'</div><div class="ss">買會生錢的資產</div></div>';
+  html+='</div>';
+  html+='<div class="tm" style="font-size:12px;color:var(--mut);margin-bottom:16px;">💡 儲蓄＋投資 ＝ <b style="color:#9333ea;">$'+fmt(save+invest)+'</b>（80%）＝ 你這個月該囤起來的「致富彈藥」，絕對不能花掉。</div>';
+
+  // 花費帳戶鐵律
+  html+='<div class="card" style="margin-bottom:14px;border-left:4px solid #dc2626;"><div class="card-hd" style="background:#fef2f2;"><span class="card-ttl" style="color:#dc2626;">🏷️ 花費帳戶 — 本月 $'+fmt(spend)+'</span></div><div class="card-bd">';
+  html+='<div style="background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:12px;">';
+  html+='<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span>本月已花 <b style="color:#dc2626;">$'+fmt(monthSpent)+'</b></span><span>預算 $'+fmt(spend)+'</span></div>';
+  html+='<div style="background:#e5e7eb;border-radius:8px;height:16px;overflow:hidden;"><div style="width:'+spendPct+'%;height:100%;background:'+(monthSpent>spend?'#dc2626':'#f59e0b')+';"></div></div>';
+  html+='<div style="font-size:12px;margin-top:6px;color:'+(spendLeft>=0?'#16a34a':'#dc2626')+';">'+(spendLeft>=0?('還可以花 $'+fmt(spendLeft)):('⚠️ 已超支 $'+fmt(-spendLeft)+'！這代表你遇到的是「收入問題」，去多做幾單紋繡把薪水做大，而不是動用儲蓄。'))+'</div>';
+  html+='</div>';
+  html+='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">';
+  html+='<div style="flex:1;min-width:150px;"><div style="font-weight:700;color:#16a34a;margin-bottom:4px;">✓ 只能付這些</div>'+PF_ALLOWED.map(function(x){return'<div style="color:#444;">・'+x+'</div>';}).join('')+'</div>';
+  html+='<div style="flex:1;min-width:150px;"><div style="font-weight:700;color:#dc2626;margin-bottom:4px;">🚫 絕對不能付</div>'+PF_FORBIDDEN.map(function(x){return'<div style="color:#999;">・'+x+'</div>';}).join('')+'</div>';
+  html+='</div>';
+  html+='<button class="btn btn-s btn-sm" style="margin-top:12px;" onclick="pfAddExpense()">＋ 記一筆花費</button>';
+  // 本月花費明細
+  const pfLog=(pf.log||[]).filter(function(e){const d=new Date((e.date||'')+'T00:00:00');return d.getMonth()+1===S.month&&d.getFullYear()===yr();}).sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  if(pfLog.length>0){
+    html+='<div style="margin-top:12px;">'+pfLog.map(function(e){return'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border-bottom:1px solid #f1f5f9;font-size:13px;"><span style="color:#999;width:72px;">'+(e.date||'')+'</span><span style="background:#fef2f2;color:#dc2626;padding:1px 8px;border-radius:10px;font-size:11px;">'+(e.cat||'')+'</span><span style="flex:1;">'+(e.item||'')+'</span><b style="color:#dc2626;">$'+fmt(e.amount)+'</b><button class="bdel" onclick="pfDelExpense(&quot;'+e.id+'&quot;)" title="刪除">×</button></div>';}).join('')+'</div>';
+  }
+  html+='</div></div>';
+
+  // 彈藥庫
+  html+='<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;"><div class="card-hd" style="background:#faf5ff;"><span class="card-ttl" style="color:#9333ea;">🔫 致富彈藥庫（儲蓄＋投資）</span><button class="btn btn-sm" style="background:#9333ea;color:#fff;" onclick="pfEditGoal()">✏️ 設定目標／更新餘額</button></div><div class="card-bd">';
+  html+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
+  html+='<div style="flex:1;min-width:140px;background:#faf5ff;border-radius:10px;padding:12px;"><div style="font-size:11px;color:#999;">彈藥庫目前餘額（你更新）</div><div style="font-size:24px;font-weight:900;color:#9333ea;">$'+fmt(ammoActual)+'</div></div>';
+  html+='<div style="flex:1;min-width:140px;background:#f8fafc;border-radius:10px;padding:12px;"><div style="font-size:11px;color:#999;">照紀律你「應該」已存</div><div style="font-size:24px;font-weight:900;color:#475569;">$'+fmt(ammoShould)+'</div><div style="font-size:11px;color:#999;">歷來抽成的 80%</div></div>';
+  html+='</div>';
+  // 紀律落差提醒
+  const gap=ammoShould-ammoActual;
+  if(ammoShould>0){
+    if(gap>ammoShould*0.2){
+      html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;">教練提醒：照紀律你該存下 $'+fmt(ammoShould)+'，但目前只有 $'+fmt(ammoActual)+'，少了 $'+fmt(gap)+'。那些錢花到哪去了？把漏洞補起來，彈藥才長得快。</div>';
+    }else{
+      html+='<div class="notice" style="background:#f0fdf4;border-left-color:#16a34a;color:#166534;font-size:13px;">✅ 做得好！你很接近紀律該有的進度，繼續把每一分抽成變彈藥。</div>';
+    }
+  }
+  // 目標進度
+  if(goal>0){
+    html+='<div style="margin-top:12px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span>🎯 '+(pf.goalLabel||'投資目標')+'</span><span><b style="color:#9333ea;">$'+fmt(ammoActual)+'</b> / $'+fmt(goal)+'（'+goalPct+'%）</span></div>';
+    html+='<div style="background:#e9d5f5;border-radius:8px;height:18px;overflow:hidden;"><div style="width:'+goalPct+'%;height:100%;background:linear-gradient(90deg,#9333ea,#c026d3);"></div></div>';
+    const need=goal-ammoActual;
+    html+='<div style="font-size:12px;margin-top:6px;color:#9333ea;">'+(need>0?('再存 $'+fmt(need)+' 就能出手買你的第一個生錢資產 🚀'):('🎉 達標了！去買進會下蛋的資產，讓它開始幫你賺錢。'))+'</div></div>';
+  }else{
+    html+='<div class="tm" style="font-size:12px;margin-top:10px;">💡 還沒設投資目標。按右上角設定一個（例如「收租房頭期款 $1,500,000」），我幫你追蹤進度、推你一把。</div>';
+  }
+  html+='</div></div>';
+
+  // 奢侈品決策器
+  html+='<div class="card" style="margin-bottom:14px;border-left:4px solid #d97706;"><div class="card-hd" style="background:#fffbeb;"><span class="card-ttl" style="color:#d97706;">🛑 想買車／旅遊／奢侈品？先過這關</span></div><div class="card-bd">';
+  html+='<div class="tm" style="font-size:13px;margin-bottom:10px;">卡爾登鐵律：會貶值的東西，<b>絕對不能用薪水買</b>，只能用「投資資產每月生出的被動現金流」來付。輸入金額，我幫你算清楚。</div>';
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input type="number" id="pf_lux" placeholder="想買的東西多少錢？" style="flex:1;min-width:160px;padding:10px;border:1px solid var(--bdr);border-radius:8px;"><button class="btn btn-y" onclick="pfLuxuryCheck()">試算</button></div>';
+  html+='<div id="pf_lux_result" style="margin-top:12px;"></div>';
+  html+='</div></div>';
+
+  // 卡爾登鐵律
+  html+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:#1e293b;"><span class="card-ttl" style="color:#fbbf24;">📜 卡爾登致富鐵律</span></div><div class="card-bd" style="font-size:13px;line-height:1.8;color:#444;">';
+  html+='<div style="margin-bottom:10px;">① <b>你不是花太多，是賺太少。</b>覺得 20% 不夠活？那是收入問題，不是支出問題——去把紋繡、銷售做大，把收入翻倍。</div>';
+  html+='<div style="margin-bottom:10px;">② <b>不准升級生活水準</b>，直到那 20% 自然變大。收入從 5 萬做到 50 萬，生活費自然從 1 萬變 10 萬，那時才換好房好車。</div>';
+  html+='<div style="margin-bottom:10px;">③ <b>薪水全塞進投資帳戶</b>，拿去買會生錢的資產（收租房、配息企業）。資產每月生出的被動現金流，才是你買車、旅遊、名錶的唯一來源。</div>';
+  html+='<div style="background:#faf5ff;border-radius:8px;padding:10px;color:#6b21a8;">🚗 <b>買車的正確流程：</b>努力存 150 萬 → 投入房產 → 每月配息 3 萬 → 用這 3 萬去付車貸。幾年後車折舊了，但你的 150 萬本金和房產還在，而且持續下蛋。</div>';
+  html+='</div></div>';
+
+  return html;
+}
+
+// ── 我的理財：互動函式 ──
+window.pfEditGoal=function(){openM('pfGoal');};
+window.pfSaveGoal=async function(){
+  const pf=pfGet();
+  const next=Object.assign({},pf,{
+    myName:($('pf_name')?.value||'').trim()||'于蜜',
+    goalLabel:($('pf_goalLabel')?.value||'').trim()||'投資目標',
+    goalAmount:toN($('pf_goalAmount')?.value),
+    ammoActual:toN($('pf_ammo')?.value)
+  });
+  const settings=Object.assign({},S.data.settings||{},{personalFinance:next});
+  S.data.settings=settings;
+  const ok=await saveMain({settings});
+  if(ok){toast('✅ 已儲存');closeMod();render();}
+};
+window.pfAddExpense=function(){openM('pfExpense');};
+window.pfSaveExpense=async function(){
+  const cat=$('pf_exp_cat')?.value||PF_ALLOWED[0];
+  const item=($('pf_exp_item')?.value||'').trim();
+  const amount=toN($('pf_exp_amount')?.value);
+  const date=$('pf_exp_date')?.value||today();
+  if(amount<=0){alert('請填金額');return;}
+  const pf=pfGet();
+  const log=(pf.log||[]).concat([{id:'pfe_'+uid(),date:date,cat:cat,item:item,amount:amount}]);
+  const next=Object.assign({},pf,{log:log});
+  const settings=Object.assign({},S.data.settings||{},{personalFinance:next});
+  S.data.settings=settings;
+  const ok=await saveMain({settings});
+  if(ok){toast('✅ 已記錄');closeMod();render();}
+};
+window.pfDelExpense=async function(id){
+  if(!confirm('刪除這筆花費紀錄？'))return;
+  const pf=pfGet();
+  const log=(pf.log||[]).filter(function(e){return e.id!==id;});
+  const next=Object.assign({},pf,{log:log});
+  const settings=Object.assign({},S.data.settings||{},{personalFinance:next});
+  S.data.settings=settings;
+  const ok=await saveMain({settings});
+  if(ok){toast('✓ 已刪除');render();}
+};
+window.pfLuxuryCheck=function(){
+  const price=toN($('pf_lux')?.value);
+  const box=$('pf_lux_result');if(!box)return;
+  if(price<=0){box.innerHTML='<div class="tm">請先輸入金額。</div>';return;}
+  // 以年化 5% 被動報酬估：要產生等同「這筆開銷」的年現金流，需投入 price/0.05=price*20（保守）
+  // 這裡把奢侈品視為「一次性開銷」，用「每月配息要能cover、年報酬5%」反推需投入本金
+  const needAsset=Math.round(price*20); // price 當作「每年可花的被動現金流」上限的保守反推
+  box.innerHTML='<div class="notice" style="background:#fef2f2;border-left-color:#dc2626;color:#991b1b;font-size:13px;">'
+    +'🚫 <b>現在別用薪水買它。</b>這 $'+fmt(price)+' 是會貶值的負債。<br><br>'
+    +'正確做法：先把錢投入投資帳戶買會生錢的資產。以年報酬 5% 估，你大約要先投入 <b>$'+fmt(needAsset)+'</b> 的資產，讓它每年穩定生出 $'+fmt(price)+' 的被動現金流，<b>再用那筆現金流</b>去買／去玩。<br><br>'
+    +'這樣東西到手了，本金和資產還在、還持續下蛋。💡 先問自己：這筆錢，我的投資帳戶養得起嗎？'
+    +'</div>';
+};
+
 // ─── SETTINGS（基本設定）────────────────────────────────────
 function pgSettings(){
   const svcs=S.data.services||[];
@@ -9732,6 +9934,27 @@ function renderModal(){
       <button class="btn btn-s" onclick="closeMod()">取消</button>
       <button class="btn btn-p" style="background:var(--rose);" onclick="careRuleSave()">✓ 儲存規則</button>
     </div>`;
+  }
+
+  if(m.t==='pfGoal'){
+    const pf=pfGet();
+    c=`<div class="mttl">🎯 我的理財設定</div>
+    <div class="fgrp"><label>我的名字（抽成算哪位老師）</label><input type="text" id="pf_name" value="${(pf.myName||'').replace(/"/g,'&quot;')}"></div>
+    <div class="fgrp"><label>投資目標名稱</label><input type="text" id="pf_goalLabel" value="${(pf.goalLabel||'').replace(/"/g,'&quot;')}" placeholder="例：第一筆收租房頭期款"></div>
+    <div class="fgrp"><label>投資目標金額</label><input type="number" id="pf_goalAmount" value="${toN(pf.goalAmount)||''}" placeholder="例：1500000"></div>
+    <div class="fgrp"><label>彈藥庫目前實際餘額（儲蓄＋投資帳戶合計）</label><input type="number" id="pf_ammo" value="${toN(pf.ammoActual)||''}" placeholder="你目前實際存到多少"></div>
+    <div class="tm" style="font-size:12px;color:var(--mut);">💡 每次存錢或把錢投入投資後，回來更新「彈藥庫餘額」，進度條就會動。</div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#9333ea;" onclick="pfSaveGoal()">✓ 儲存</button></div>`;
+  }
+
+  if(m.t==='pfExpense'){
+    c=`<div class="mttl">＋ 記一筆花費（花費帳戶）</div>
+    <div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin-bottom:12px;">只記生存必要開銷。買車／衣服／旅遊／奢侈品／課程／設備 👉 不能從這裡出，要用投資資產的被動現金流付。</div>
+    <div class="fgrp"><label>日期</label><input type="date" id="pf_exp_date" value="${today()}"></div>
+    <div class="fgrp"><label>類別（只有允許的生存開銷）</label><select id="pf_exp_cat">${PF_ALLOWED.map(function(x){return'<option value="'+x+'">'+x+'</option>';}).join('')}</select></div>
+    <div class="fgrp"><label>項目說明</label><input type="text" id="pf_exp_item" placeholder="例：10月房租"></div>
+    <div class="fgrp"><label>金額</label><input type="number" id="pf_exp_amount" placeholder="金額"></div>
+    <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="pfSaveExpense()">✓ 記錄</button></div>`;
   }
 
   if(m.t==='addSale'){c=`<div class="mttl">💰 新增收入</div>
