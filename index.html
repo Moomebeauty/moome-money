@@ -2105,10 +2105,69 @@ window.saveBalanceSheet=async function(){
   rerenderPage();
 };
 
+// ── 本季營運健檢總結（白話判斷：狀況／策略／營運）──
+function periodPmuRev(m){
+  var t=0;
+  getSales(m).forEach(function(s){var it=(s.item||'')+(s.subNote||'');if(it.includes('霧眉')||it.includes('霧唇')||it.includes('紋繡')||it.includes('補色'))t+=toN(s.amount);});
+  return t;
+}
+function renderQuarterSummary(){
+  const curQ=Math.ceil(S.month/3);
+  const months=[(curQ-1)*3+1,(curQ-1)*3+2,(curQ-1)*3+3];
+  var rev=0,exp=0,pmu=0;
+  months.forEach(function(m){rev+=getRevTotal(m);exp+=getExpTotal(m);pmu+=periodPmuRev(m);});
+  const net=rev-exp;
+  if(rev===0&&exp===0){
+    return'<div class="card" style="margin-bottom:14px;background:#faf5ff;border:1px solid #e9d5f5;"><div class="card-bd"><div style="font-weight:700;color:#9333ea;margin-bottom:4px;">🩺 第 '+curQ+' 季營運健檢</div><div class="tm">這一季還沒有資料。開始記帳與開單後，這裡會自動幫你用白話總結：有沒有賺、紋繡轉型對不對、跟上季比有沒有進步。</div></div></div>';
+  }
+  const netPct=rev>0?Math.round(net/rev*100):0;
+  const pmuPct=rev>0?Math.round(pmu/rev*100):0;
+  // 跟上一季比（同年度）
+  var trendTxt='',trendColor='#666';
+  if(curQ>1){
+    const pm=[(curQ-2)*3+1,(curQ-2)*3+2,(curQ-2)*3+3];
+    var prevRev=0,prevExp=0;pm.forEach(function(m){prevRev+=getRevTotal(m);prevExp+=getExpTotal(m);});
+    if(prevRev>0||prevExp>0){
+      const prevNet=prevRev-prevExp;const dNet=net-prevNet;
+      if(dNet>=0){trendTxt='比上一季多賺 $'+fmt(dNet)+' ↑ 有進步';trendColor='#16a34a';}
+      else{trendTxt='比上一季少賺 $'+fmt(Math.abs(dNet))+' ↓ 要注意';trendColor='#dc2626';}
+    }else{trendTxt='上一季沒有資料可比';}
+  }else{trendTxt='今年第一季，先把這季當基準';}
+  const liability=typeof getTotalDepositLiability==='function'?getTotalDepositLiability():0;
+  // 總判斷
+  var head,headColor,headBg,strategy;
+  if(net<0){
+    head='🚨 這一季在虧錢，要馬上止血';headColor='#dc2626';headBg='linear-gradient(135deg,#fef2f2,#fff5f5)';
+    strategy='先砍掉非必要支出、暫停囤貨，把時間集中在高毛利的紋繡。Cardone 說：不要虧錢，虧了很難回本。';
+  }else if(pmuPct<30){
+    head='⚠️ 有賺錢，但還在靠勞力硬撐';headColor='#d97706';headBg='linear-gradient(135deg,#fffbeb,#fffdf5)';
+    strategy='淨利是正的，很好！但紋繡佔比偏低，代表你還在用時間換錢。這季主動約 3-5 位做臉熟客升級做紋繡，把「勞力財」換成「技術財」。';
+  }else{
+    head='✅ 這一季很健康，方向對了';headColor='#16a34a';headBg='linear-gradient(135deg,#f0fdf4,#f7fef9)';
+    strategy='有賺錢、紋繡佔比也夠，這就是對的方向。繼續把資源放在紋繡與 VVIP 熟客，別被低毛利的雜項分心。';
+  }
+  const pmuNote=pmuPct>=40?'很健康':(pmuPct>=30?'及格，再往 40%+ 推':'偏低，目標 40%+');
+  var html='<div class="card" style="margin-bottom:16px;background:'+headBg+';border:1px solid '+headColor+'33;box-shadow:0 2px 10px '+headColor+'1a;">';
+  html+='<div class="card-bd">';
+  html+='<div style="font-size:12px;color:#999;margin-bottom:2px;">🩺 第 '+curQ+' 季營運健檢</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:'+headColor+';margin-bottom:12px;">'+head+'</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:8px;">';
+  // 狀況
+  html+='<div style="background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><span style="font-weight:700;color:#333;">💰 狀況</span>　本季淨利 <b style="color:'+(net>=0?'#16a34a':'#dc2626')+';">$'+fmt(net)+'</b>（淨利率 '+netPct+'%）<span style="color:'+trendColor+';font-size:13px;">・'+trendTxt+'</span></div>';
+  // 策略
+  html+='<div style="background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><span style="font-weight:700;color:#333;">🎯 策略</span>　紋繡佔 <b style="color:#9333ea;">'+pmuPct+'%</b>（'+pmuNote+'）— 紋繡是你高毛利的技術財，佔比越高越省力越賺</div>';
+  // 本錢
+  html+='<div style="background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><span style="font-weight:700;color:#333;">🔫 本錢</span>　儲值負債（預收現金）<b style="color:#2563eb;">$'+fmt(liability)+'</b> — 這是你的現金子彈，別當利潤花掉</div>';
+  // 一句話建議
+  html+='<div style="background:'+headColor+'14;border-left:3px solid '+headColor+';border-radius:8px;padding:10px 12px;"><span style="font-weight:700;color:'+headColor+';">👉 這季就做這件事：</span><span style="color:#444;">'+strategy+'</span></div>';
+  html+='</div></div></div>';
+  return html;
+}
+
 // ── 季度損益表 ──
 function renderQuarterPL(){
   const curY=yr();
-  var html='';
+  var html=renderQuarterSummary();
   // 四季各自的損益
   const quarters=[1,2,3,4];
   quarters.forEach(function(q){
@@ -2149,6 +2208,40 @@ function renderQuarterPL(){
   return html;
 }
 
+// ── 年度身家總結（白話：全年賺多少、紋繡佔比、方向對不對）──
+function renderYearSummary(){
+  var rev=0,exp=0,pmu=0;
+  for(var m=1;m<=12;m++){rev+=getRevTotal(m);exp+=getExpTotal(m);pmu+=periodPmuRev(m);}
+  const net=rev-exp;
+  if(rev===0&&exp===0){
+    return'<div class="card" style="margin-bottom:14px;background:#faf5ff;border:1px solid #e9d5f5;"><div class="card-bd"><div style="font-weight:700;color:#9333ea;margin-bottom:4px;">🏦 今年身家總結</div><div class="tm">今年還沒有資料。記帳後這裡會自動總結：全年賺了多少、紋繡佔比、方向對不對。</div></div></div>';
+  }
+  const netPct=rev>0?Math.round(net/rev*100):0;
+  const pmuPct=rev>0?Math.round(pmu/rev*100):0;
+  var head,headColor,headBg,note;
+  if(net<0){
+    head='🚨 今年到目前是虧損';headColor='#dc2626';headBg='linear-gradient(135deg,#fef2f2,#fff5f5)';
+    note='全年還在吃老本。剩下的月份要把重心全放在紋繡，並停止不必要的囤貨與支出。';
+  }else if(pmuPct<30){
+    head='⚠️ 今年有賺，但主要靠勞力';headColor='#d97706';headBg='linear-gradient(135deg,#fffbeb,#fffdf5)';
+    note='有累積到盈餘，但紋繡佔比還低。明年的身家要長大，關鍵是把做臉熟客一個個轉成紋繡客。';
+  }else{
+    head='✅ 今年走在對的路上';headColor='#16a34a';headBg='linear-gradient(135deg,#f0fdf4,#f7fef9)';
+    note='有賺錢、紋繡也成為主力，這就是能長久累積身家的體質。把盈餘留下來投資會生錢的資產（技術、VVIP 名單）。';
+  }
+  var html='<div class="card" style="margin-bottom:16px;background:'+headBg+';border:1px solid '+headColor+'33;box-shadow:0 2px 10px '+headColor+'1a;">';
+  html+='<div class="card-bd">';
+  html+='<div style="font-size:12px;color:#999;margin-bottom:2px;">🏦 '+yr()+' 年身家總結</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:'+headColor+';margin-bottom:12px;">'+head+'</div>';
+  html+='<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+  html+='<div style="flex:1;min-width:130px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="font-size:11px;color:#999;">全年累積淨利</div><div style="font-size:22px;font-weight:800;color:'+(net>=0?'#16a34a':'#dc2626')+';">$'+fmt(net)+'</div><div style="font-size:11px;color:#999;">淨利率 '+netPct+'%</div></div>';
+  html+='<div style="flex:1;min-width:130px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);"><div style="font-size:11px;color:#999;">紋繡佔全年營收</div><div style="font-size:22px;font-weight:800;color:#9333ea;">'+pmuPct+'%</div><div style="font-size:11px;color:#999;">'+(pmuPct>=40?'很健康':(pmuPct>=30?'及格':'目標 40%+'))+'</div></div>';
+  html+='</div>';
+  html+='<div style="margin-top:10px;background:'+headColor+'14;border-left:3px solid '+headColor+';border-radius:8px;padding:10px 12px;color:#444;">'+note+'</div>';
+  html+='</div></div>';
+  return html;
+}
+
 // ── 年度資產負債表 ──
 function renderBalanceSheet(){
   const curY=yr();
@@ -2183,7 +2276,8 @@ function renderBalanceSheet(){
   const balanced=Math.abs(totalAsset-totalLE)<1;
   const diff=totalAsset-totalLE;
 
-  var html='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;">🏛️ 每年 12/31 結算一次。<b>系統自動抓的</b>直接顯示，<b>你要填的</b>（現金、設備、學費、資本）點「填寫」輸入。會計黃金公式：<b>資產 ＝ 負債 ＋ 權益</b>，兩邊要一樣。</div>';
+  var html=renderYearSummary();
+  html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;">🏛️ 每年 12/31 結算一次。<b>系統自動抓的</b>直接顯示，<b>你要填的</b>（現金、設備、學費、資本）點「填寫」輸入。會計黃金公式：<b>資產 ＝ 負債 ＋ 權益</b>，兩邊要一樣。</div>';
   html+='<div style="text-align:right;margin:10px 0;"><button class="btn btn-p" style="background:#9333ea;" onclick="openM(\'editBalanceSheet\')">✏️ 填寫／修改我的數字</button></div>';
 
   // 資產區
@@ -7013,13 +7107,20 @@ function pmuFinishStage(t){
   const S2=S.data.settings||{};
   const touchupDays=toN(S2.pmuTouchupDays)||90;
   const touchupDate=addMonthsToDate(t.date,Math.round(touchupDays/30));
-  const isNewClient=t.pmuServiceType==='new'||t.pmuServiceType==='free'||!t.pmuServiceType;
-  return`
-    <div class="notice" style="background:#f3e8ff;border-left-color:#9333ea;color:#9333ea;font-size:14px;margin-bottom:16px;">
-      🎉 操作完成！在結帳前，確認以下事項都做到了：
-    </div>
-
-    ${isNewClient?`<div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
+  const svcType=t.pmuServiceType;
+  const touchupCard=(()=>{
+    // 本次就是「3個月免費補色」：贈送、無收入、不需開單
+    if(svcType==='free'){
+      return`<div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
+      <div class="card-bd">
+        <div style="font-weight:700;color:var(--goldDk);font-size:16px;margin-bottom:8px;">🎁 本次為贈送補色</div>
+        <div class="tm" style="font-size:13px;line-height:1.7;">這是新客專屬的 3 個月內一次免費補色，<b style="color:var(--grn);">沒有收入、不需開單</b>。<br>做完這次，之後再想補色就依回娘家價計算（4-12月定價、1-2年6折、2年以上8折）。</div>
+      </div>
+    </div>`;
+    }
+    // 新客首次（或還沒選類型）：提醒去約 3 個月內的免費補色
+    if(svcType==='new'||!svcType){
+      return`<div class="card" style="margin-bottom:14px;border-left:4px solid var(--gold);">
       <div class="card-bd">
         <div style="font-weight:700;color:var(--goldDk);font-size:16px;margin-bottom:10px;">📅 預約免費補色</div>
         <div style="background:var(--goldL);padding:14px;border-radius:10px;text-align:center;">
@@ -7028,12 +7129,22 @@ function pmuFinishStage(t){
           <div class="tm" style="font-size:12px;margin-top:4px;">系統自動算好，直接跟客人約這個日期前 ✓</div>
         </div>
       </div>
-    </div>`:`<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;">
+    </div>`;
+    }
+    // 回娘家補色（m4to12 / y1to2 / over2）
+    return`<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;">
       <div class="card-bd">
         <div style="font-weight:700;color:#9333ea;font-size:16px;margin-bottom:8px;">🔄 這次是回娘家補色</div>
         <div class="tm" style="font-size:13px;line-height:1.7;">這位是回娘家的老客人，不需要提醒 3 個月免費補色。<br>下次想補色時，再依當時的時間收費即可（1-2年6折、2年以上8折）。</div>
       </div>
-    </div>`}
+    </div>`;
+  })();
+  return`
+    <div class="notice" style="background:#f3e8ff;border-left-color:#9333ea;color:#9333ea;font-size:14px;margin-bottom:16px;">
+      🎉 操作完成！在結束前，確認以下事項都做到了：
+    </div>
+
+    ${touchupCard}
 
     <div class="card" style="margin-bottom:14px;">
       <div class="card-bd">
@@ -7059,9 +7170,11 @@ function pmuFinishStage(t){
         const price=toN(t.pmuServicePrice);
         return `<div style="background:#faf5ff;border:2px solid #9333ea;border-radius:12px;padding:16px;margin-bottom:16px;">
           <div style="font-size:14px;color:var(--mut);">${t.serviceType}　${typeLabels[t.pmuServiceType]||''}</div>
-          <div style="font-size:28px;font-weight:900;color:#9333ea;margin:4px 0;">${price===0?'🎁 免費':'$'+fmt(price)}</div>
-          <button type="button" class="btn btn-p" style="background:#16a34a;margin-top:8px;" onclick="pmuToOrder()">💰 存檔並帶進開單</button>
-          <div class="tm" style="font-size:11px;margin-top:6px;">${price===0?'免費不需開單，直接存檔即可':'按這個會存檔＋跳到開單，金額自動帶好'}</div>
+          <div style="font-size:28px;font-weight:900;color:#9333ea;margin:4px 0;">${price===0?'🎁 免費（無收入）':'$'+fmt(price)}</div>
+          ${price>0
+            ?`<button type="button" class="btn btn-p" style="background:#16a34a;margin-top:8px;" onclick="pmuToOrder()">💰 存檔並帶進開單</button>
+          <div class="tm" style="font-size:11px;margin-top:6px;">按這個會存檔＋跳到開單，金額自動帶好</div>`
+            :`<div class="tm" style="font-size:12px;margin-top:6px;color:var(--grn);">✓ 贈送服務不收費、不需開單，直接按下方「完成並存檔」即可（最後造訪會自動更新成今天）</div>`}
         </div>`;
       })()}
       <button class="btn btn-p" style="background:linear-gradient(135deg,#9333ea,#c026d3);font-size:17px;font-weight:700;padding:16px 40px;border-radius:30px;" onclick="pmuSubmit()">
