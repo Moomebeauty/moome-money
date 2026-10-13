@@ -9431,7 +9431,7 @@ function pgCaseEditor(){
   h+='<datalist id="dl_numb">'+numbs.map(function(x){return'<option value="'+ev(x)+'">';}).join('')+'</datalist>';
 
   // 基本資料
-  h+='<div class="card" style="margin-bottom:14px;"><div class="card-hd"><span class="card-ttl">🪪 基本資料</span></div><div class="card-bd"><div class="fg fg2">';
+  h+='<div class="card" style="margin-bottom:14px;"><div class="card-hd"><span class="card-ttl">🪪 基本資料</span>'+(d.pmuRecordId?'<button class="btn btn-sm" style="background:#9333ea;color:#fff;" onclick="caseImportRecord()">⬇️ 從紋繡紀錄帶入</button>':'')+'</div><div class="card-bd"><div class="fg fg2">';
   h+=inp('customer','客戶名稱','');
   h+='<div class="fgrp"><label>服務類型</label><select id="ce_serviceType">'+['霧眉','霧唇','霧眉+霧唇','其他'].map(function(s){return'<option '+(d.serviceType===s?'selected':'')+'>'+s+'</option>';}).join('')+'</select></div>';
   h+='<div class="fgrp"><label>施作日期</label><input type="date" id="ce_date" value="'+ev(d.date||today())+'"></div>';
@@ -9525,12 +9525,61 @@ function caseReadDOM(){
 window.caseDoSearch=function(v){S.caseSearch=v;const el=$('case-list');if(el)el.innerHTML=renderCaseList();};
 window.caseOpen=function(id){const cs=(S.data.pmuCases||[]).find(function(x){return x.id===id;});S.caseDraft=cs?JSON.parse(JSON.stringify(cs)):null;S.caseEditId=id;S.page='cases';render();};
 window.caseNew=function(prefill){const id='case_'+uid();S.caseDraft=Object.assign({id:id,date:today(),serviceType:'霧眉',staff:'于蜜',status:'tracking',followups:[]},prefill||{});S.caseEditId=id;S.page='cases';render();};
+// 把紋繡紀錄(同意書流程)的設計/面診/操作內容，對應到案例欄位
+function caseMapFromRecord(r){
+  function fa(k){return (r.faceAnswers&&r.faceAnswers[k])||r[k]||'';}
+  function asText(v){return Array.isArray(v)?v.join('、'):(v==null?'':String(v));}
+  const brow=[fa('leftBrow')?('左眉：'+asText(fa('leftBrow'))):'',fa('rightBrow')?('右眉：'+asText(fa('rightBrow'))):''].filter(Boolean).join('\n');
+  const design=[r.designStyle?('設計風格：'+asText(r.designStyle)):'',r.designNote?asText(r.designNote):''].filter(Boolean).join('\n');
+  const numb=[asText(r.numbCream),asText(r.numbTime)].filter(Boolean).join('　');
+  return{
+    preBaseColor:asText(fa('baseColor')),
+    preHairFlow:asText(fa('hairFlow')),
+    preSkin:asText(fa('skinDesc')),
+    preBone:asText(fa('boneDesc')),
+    preMuscle:asText(fa('muscleDesc')),
+    preBrowCond:brow,
+    preFaceAnalysis:asText(fa('faceOther')),
+    preCustomerWish:asText(r.expectation),
+    preDesignIdea:design,
+    opTool:asText(r.tools),
+    opPigment:asText(r.pigments),
+    opNumb:numb,
+    opNotes:asText(r.operationNote)
+  };
+}
 window.caseFromPmuRecord=function(recId){
   const r=(S.data.pmuRecords||[]).find(function(x){return x.id===recId;});
   if(!r){toast('找不到紋繡紀錄');return;}
+  const mapped=caseMapFromRecord(r);
   const existed=(S.data.pmuCases||[]).find(function(x){return x.pmuRecordId===recId;});
-  if(existed){caseOpen(existed.id);return;}
-  caseNew({customer:(r.customer||'').trim(),serviceType:r.serviceType||'霧眉',date:r.date||today(),staff:r.staff||'于蜜',pmuRecordId:recId});
+  if(existed){
+    // 已經建過案例：把紋繡紀錄的內容補進「空白」欄位（不覆蓋你已填的），再打開
+    const merged=Object.assign({},existed);
+    var filled=0;
+    Object.keys(mapped).forEach(function(k){if(!(String(merged[k]||'')).trim()&&(String(mapped[k]||'')).trim()){merged[k]=mapped[k];filled++;}});
+    merged.updatedAt=today();
+    S.caseDraft=JSON.parse(JSON.stringify(merged));
+    S.caseEditId=existed.id;S.page='cases';
+    setSub('pmuCases',existed.id,merged);
+    toast(filled>0?('已從紋繡紀錄補入 '+filled+' 個欄位'):'已開啟案例（紋繡紀錄內容都已在案例內）');
+    render();
+    return;
+  }
+  caseNew(Object.assign({customer:(r.customer||'').trim(),serviceType:r.serviceType||'霧眉',date:r.date||today(),staff:r.staff||'于蜜',pmuRecordId:recId},mapped));
+  toast('已帶入紋繡紀錄的設計與操作內容');
+};
+window.caseImportRecord=function(){
+  caseReadDOM();
+  const d=S.caseDraft;if(!d)return;
+  if(!d.pmuRecordId){alert('這個案例沒有連結到紋繡紀錄，無法帶入。');return;}
+  const r=(S.data.pmuRecords||[]).find(function(x){return x.id===d.pmuRecordId;});
+  if(!r){alert('找不到連結的紋繡紀錄。');return;}
+  const mapped=caseMapFromRecord(r);
+  var filled=0;
+  Object.keys(mapped).forEach(function(k){if(!(String(d[k]||'')).trim()&&(String(mapped[k]||'')).trim()){d[k]=mapped[k];filled++;}});
+  toast(filled>0?('已帶入 '+filled+' 個欄位（記得按儲存）'):'沒有可帶入的空白欄位（已填的不會被覆蓋）');
+  render();
 };
 window.caseBack=function(){S.caseEditId=null;S.caseDraft=null;S.page='cases';render();};
 window.caseOpenLink=function(inputId){const v=($(inputId)?.value||'').trim();if(!v){alert('這一格還沒貼上連結');return;}window.open(v,'_blank');};
