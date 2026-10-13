@@ -651,7 +651,7 @@ const DEFAULT_DEPOSIT_PLANS=[
   {id:'B',name:'B方案（舊）',actualReceived:36800,amount:46000,desc:'儲值 36,800 享 46,000 服務（20% 優惠）'},
 ];
 const EXP_CATS=['房租','水電','材料耗材','薪資','行銷廣告','平台費用','設備維修','進貨成本','進修學費','雜支','其他'];
-const PAY=['轉帳','現金','儲值扣款']; // 付款方式
+const PAY=['轉帳','現金','儲值扣款','免費/贈送']; // 付款方式（免費/贈送＝$0 服務，如贈送補色）
 const MOS=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 // ── 預設首次建檔健康問卷（完整版） ───────────────────────────
@@ -813,7 +813,7 @@ function startSync(){
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases'].forEach(col=>{
     const unsub=onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -1244,6 +1244,7 @@ function appHTML(){
     {id:'serviceCost',ico:'💎',lbl:'服務成本卡'},
     {id:'courses',ico:'📋',lbl:'課程管理'},
     {id:'notes',ico:'📒',lbl:'備課筆記'},
+    {id:'cases',ico:'📚',lbl:'案例研究室'},
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
     {id:'reports',ico:'📈',lbl:'月報年報'},
     {id:'refund',ico:'⚖️',lbl:'退費計算機'},
@@ -1297,6 +1298,7 @@ function renderPage(){
     case'serviceCost': return pgServiceCost();
     case'courses':   return pgCourses();
     case'notes':     return pgNotes();
+    case'cases':     return pgCases();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
     case'myfinance': return pgMyFinance();
@@ -3858,6 +3860,7 @@ function pgCustomerDetail(c){
             })()}
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
               <button class="btn btn-s btn-sm" onclick="viewPmuRecord('${r.id}')">📋 看完整</button>
+              <button class="btn btn-sm" style="background:#9333ea;color:#fff;" onclick="caseFromPmuRecord('${r.id}')">📚 建立/看案例</button>
               <label class="btn btn-sm" style="background:#0891b2;color:#fff;cursor:pointer;">📷 補照片<input type="file" accept="image/*" multiple style="display:none;" onchange="addPhotoToPmuRecord('${r.id}',this)"></label>
               ${r.consentSignature?`<button class="btn btn-s btn-sm" onclick="viewPmuSignature('${r.id}')">✍️ 看簽名</button><button class="btn btn-s btn-sm" onclick="downloadPmuRecordConsent('${r.id}')">🖼️ 下載同意書</button>`:''}
               <button class="btn btn-sm" style="background:var(--gold);color:#fff;" onclick="openM('editPmu','${r.id}')">✏️ 編輯</button>
@@ -9348,6 +9351,209 @@ function pgReports(){
   </div>`;
 }
 
+// ═══════════ 📚 案例研究室（霧眉施作案例資料庫）═══════════
+const CASE_GOAL=100;
+function caseStat(cs){
+  const hasPre=!!((cs.preFaceAnalysis||'').trim()||(cs.preDesignIdea||'').trim()||(cs.preSkin||'').trim()||(cs.preBaseColor||'').trim());
+  const hasOp=!!((cs.opTool||'').trim()||(cs.opPigment||'').trim()||(cs.opTechnique||'').trim()||(cs.opNotes||'').trim());
+  const hasPost=Array.isArray(cs.followups)&&cs.followups.length>0;
+  const hasReview=!!((cs.reviewSelf||'').trim()||(cs.reviewTeacher||'').trim());
+  return{hasPre:hasPre,hasOp:hasOp,hasPost:hasPost,hasReview:hasReview,complete:hasPre&&hasOp&&hasPost};
+}
+function renderCaseList(){
+  const cases=(S.data.pmuCases||[]).slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  const q=(S.caseSearch||'').trim().toLowerCase();
+  const filtered=q?cases.filter(function(c){return((c.customer||'')+(c.serviceType||'')+(c.reviewSchool||'')+(c.date||'')).toLowerCase().includes(q);}):cases;
+  if(filtered.length===0){
+    return'<div class="empty" style="padding:40px;"><div class="empty-ico">📚</div><p>'+(q?'找不到符合的案例':'還沒有案例。點「＋ 新增空白案例」或從客戶的紋繡紀錄建立第一個案例。')+'</p></div>';
+  }
+  return'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">'+filtered.map(function(c){
+    const st=caseStat(c);
+    const badge=st.complete?'<span class="bdg" style="background:#16a34a;color:#fff;">✓ 完整案例</span>':'<span class="bdg" style="background:#fef3c7;color:#92400e;">追蹤中</span>';
+    const steps='<span style="font-size:11px;color:'+(st.hasPre?'#16a34a':'#cbd5e1')+';">術前</span> <span style="font-size:11px;color:'+(st.hasOp?'#16a34a':'#cbd5e1')+';">操作</span> <span style="font-size:11px;color:'+(st.hasPost?'#16a34a':'#cbd5e1')+';">術後</span> <span style="font-size:11px;color:'+(st.hasReview?'#16a34a':'#cbd5e1')+';">複盤</span>';
+    const hasFolder=(c.photoFolder||'').trim();
+    return'<div class="card" style="cursor:pointer;border:1px solid #e9d5f5;" onclick="caseOpen(&quot;'+c.id+'&quot;)"><div class="card-bd">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:6px;"><span style="font-weight:800;color:#9333ea;font-size:16px;">'+(c.customer||'未命名')+'</span>'+badge+'</div>'
+      +'<div class="tm" style="font-size:12px;margin-bottom:8px;">'+(c.serviceType||'霧眉')+'　'+(c.date||'')+(hasFolder?'　📁 有雲端照片':'')+'</div>'
+      +'<div style="margin-bottom:6px;">'+steps+'</div>'
+      +((c.reviewSelf||'').trim()?'<div class="tm" style="font-size:12px;color:#555;border-top:1px dashed #eee;padding-top:6px;">📝 '+(c.reviewSelf||'').slice(0,40)+((c.reviewSelf||'').length>40?'…':'')+'</div>':'')
+      +'</div></div>';
+  }).join('')+'</div>';
+}
+function pgCases(){
+  if(S.caseEditId)return pgCaseEditor();
+  const cases=(S.data.pmuCases||[]);
+  const total=cases.length;
+  const complete=cases.filter(function(c){return caseStat(c).complete;}).length;
+  const pct=Math.min(100,Math.round(complete/CASE_GOAL*100));
+  var html='<div class="pg-ttl">📚 案例研究室</div>';
+  html+='<div class="pg-sub">霧眉施作案例資料庫 — 術前分析 × 操作記錄 × 術後追蹤 × 複盤精進</div>';
+  // 大師心法
+  html+='<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#1e293b,#312e45);color:#fff;border:none;box-shadow:0 4px 20px rgba(30,41,59,0.22);"><div class="card-bd">';
+  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:20px;">🎨</span><span style="font-weight:800;font-size:15px;">大師心法</span></div>';
+  html+='<div style="font-size:14px;line-height:1.85;opacity:0.95;">成為大師，不是因為做了很多作品，而是<b style="color:#fbbf24;">看到作品時，能先分析每個人的特性、預測花樣變化，再設計出專屬的操作方式</b>——而不是每個客人都用同一套流程。<br>真正讓你進步的，不是每天重複，而是<b style="color:#fbbf24;">每天從每個作品學到一點新東西</b>。把每一位客人變成一個被研究、被驗證的案例，最後長出屬於你自己的一套系統。</div>';
+  html+='</div></div>';
+  // 100 目標
+  html+='<div class="card" style="margin-bottom:16px;border:1px solid var(--gold);"><div class="card-bd">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-weight:800;color:var(--goldDk);">🎯 100 個完整案例目標</span><span style="font-size:14px;color:var(--mut);">完整 <b style="color:#16a34a;font-size:20px;">'+complete+'</b> / '+CASE_GOAL+'　（總案例 '+total+'）</span></div>';
+  html+='<div style="background:#e5e7eb;border-radius:10px;height:20px;overflow:hidden;"><div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--gold),var(--rose));min-width:2px;"></div></div>';
+  html+='<div class="tm" style="font-size:12px;margin-top:8px;">「完整」＝術前分析＋操作記錄＋至少一筆術後追蹤都填了。'+(complete>=CASE_GOAL?'🎉 你已達成 100 個完整案例，你已經建立起自己的系統！':('每完成一個，離你的大師系統就更近一步。還差 '+(CASE_GOAL-complete)+' 個。'))+'</div>';
+  html+='</div></div>';
+  // 工具列
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">';
+  html+='<input type="text" placeholder="🔍 搜尋客戶／服務／流派" value="'+((S.caseSearch||'').replace(/"/g,'&quot;'))+'" oninput="caseDoSearch(this.value)" style="flex:1;min-width:180px;padding:10px 14px;border:1px solid var(--bdr);border-radius:8px;">';
+  html+='<button class="btn btn-p" style="background:#9333ea;" onclick="caseNew()">＋ 新增空白案例</button>';
+  html+='</div>';
+  html+='<div id="case-list">'+renderCaseList()+'</div>';
+  return html;
+}
+
+// ── 案例編輯器 ──
+function pgCaseEditor(){
+  const d=S.caseDraft;
+  if(!d)return'<div class="empty"><p>找不到案例</p></div>';
+  const S2=S.data.settings||{};
+  const tools=S2.pmuTools||['圓針','排針','霧針','手工排','機器'];
+  const pigments=S2.pmuPigments||['棕色','咖啡色','灰棕色','紅棕色','橘調'];
+  const numbs=S2.pmuNumbCreams||['表面麻','注射前麻','二次麻'];
+  const ev=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
+  const et=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  function ta(k,label,ph,rows){return'<div class="fgrp" style="grid-column:1/-1;"><label>'+label+'</label><textarea id="ce_'+k+'" rows="'+(rows||3)+'" placeholder="'+ev(ph||'')+'" style="width:100%;padding:10px;border:1px solid var(--bdr);border-radius:8px;line-height:1.6;resize:vertical;">'+et(d[k])+'</textarea></div>';}
+  function inp(k,label,ph){return'<div class="fgrp"><label>'+label+'</label><input type="text" id="ce_'+k+'" value="'+ev(d[k])+'" placeholder="'+ev(ph||'')+'"></div>';}
+  function inpList(k,label,listId){return'<div class="fgrp"><label>'+label+'</label><input type="text" id="ce_'+k+'" list="'+listId+'" value="'+ev(d[k])+'" placeholder="可選或自行輸入"></div>';}
+  function photoRow(k,label){const v=(d[k]||'').trim();return'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;"><span style="width:80px;font-size:13px;color:#555;flex-shrink:0;">'+label+'</span><input type="url" id="ce_'+k+'" value="'+ev(d[k])+'" placeholder="貼上 Google 雲端連結" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--bdr);border-radius:8px;"><button class="btn btn-sm" style="background:#0891b2;color:#fff;" onclick="caseOpenLink(&quot;ce_'+k+'&quot;)">🔗 開啟</button></div>';}
+
+  var h='<div style="margin-bottom:12px;"><button class="btn btn-s btn-sm" onclick="caseBack()">← 返回案例研究室</button></div>';
+  h+='<div class="pg-ttl">📚 '+(d.customer||'新案例')+'　<span style="font-size:14px;color:var(--mut);">'+(d.serviceType||'霧眉')+'</span></div>';
+  // datalists
+  h+='<datalist id="dl_tools">'+tools.map(function(x){return'<option value="'+ev(x)+'">';}).join('')+'</datalist>';
+  h+='<datalist id="dl_pig">'+pigments.map(function(x){return'<option value="'+ev(x)+'">';}).join('')+'</datalist>';
+  h+='<datalist id="dl_numb">'+numbs.map(function(x){return'<option value="'+ev(x)+'">';}).join('')+'</datalist>';
+
+  // 基本資料
+  h+='<div class="card" style="margin-bottom:14px;"><div class="card-hd"><span class="card-ttl">🪪 基本資料</span></div><div class="card-bd"><div class="fg fg2">';
+  h+=inp('customer','客戶名稱','');
+  h+='<div class="fgrp"><label>服務類型</label><select id="ce_serviceType">'+['霧眉','霧唇','霧眉+霧唇','其他'].map(function(s){return'<option '+(d.serviceType===s?'selected':'')+'>'+s+'</option>';}).join('')+'</select></div>';
+  h+='<div class="fgrp"><label>施作日期</label><input type="date" id="ce_date" value="'+ev(d.date||today())+'"></div>';
+  h+='<div class="fgrp"><label>施作老師</label><input type="text" id="ce_staff" value="'+ev(d.staff||'于蜜')+'"></div>';
+  h+='<div class="fgrp"><label>狀態</label><select id="ce_status"><option value="tracking" '+(d.status!=='complete'?'selected':'')+'>追蹤中</option><option value="complete" '+(d.status==='complete'?'selected':'')+'>已完成</option></select></div>';
+  h+='</div></div></div>';
+
+  // 術前分析
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #2563eb;"><div class="card-hd" style="background:#eff6ff;"><span class="card-ttl" style="color:#2563eb;">🔍 術前分析（看懂這個人的特性）</span></div><div class="card-bd"><div class="fg fg2">';
+  h+=inp('preSkin','膚質（乾/油/混合/敏感）','');
+  h+=inp('preBaseColor','原有底色','例：偏紅/偏灰/殘留舊色');
+  h+=inp('preHairFlow','原生眉毛毛流','');
+  h+=inp('preBrowCond','原眉狀況','濃淡、對稱、缺口');
+  h+=ta('preBone','🦴 骨骼與臉型分析（眉骨、額骨、顴骨、臉型）','他的骨相適合什麼眉型？',2);
+  h+=ta('preMuscle','💪 肌肉與表情習慣','挑眉/皺眉習慣會影響眉型？',2);
+  h+=ta('preFaceAnalysis','🧠 整體特性分析','這個人的五官、氣質、需求的綜合判斷',3);
+  h+=ta('preCustomerWish','客人的期待','她想要的風格、在意的點',2);
+  h+=ta('preDesignIdea','✍️ 我的設計理念','為什麼為她設計這個眉型、這個顏色',3);
+  h+=ta('prePredict','🔮 預測變化','結痂/代謝後可能的落色、偏色、需要注意的地方',2);
+  h+='</div></div></div>';
+
+  // 操作記錄
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;"><div class="card-hd" style="background:#faf5ff;"><span class="card-ttl" style="color:#9333ea;">🎨 操作記錄</span></div><div class="card-bd"><div class="fg fg2">';
+  h+=inpList('opTool','使用工具','dl_tools');
+  h+=inpList('opPigment','色料','dl_pig');
+  h+=inpList('opNumb','麻膏','dl_numb');
+  h+=inp('opDepth','下針深度/手法力道','');
+  h+=inp('opTechnique','施作技術/線條','例：根根/霧化/混合');
+  h+=inp('opRounds','施作回數','例：打底1次+加強1次');
+  h+=ta('opNotes','操作細節筆記','過程中的觀察、調整、客人反應',3);
+  h+='</div></div></div>';
+
+  // Google 雲端照片
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #0891b2;"><div class="card-hd" style="background:#ecfeff;"><span class="card-ttl" style="color:#0891b2;">📁 Google 雲端照片（連結，不佔系統容量）</span></div><div class="card-bd">';
+  h+='<div class="notice" style="background:#ecfeff;border-left-color:#0891b2;color:#155e75;font-size:12px;margin-bottom:12px;">照片放在你的 Google 雲端硬碟，系統只存「連結」。<br><b>怎麼做：</b>① 把這個客人的照片上傳到 Google 雲端的一個資料夾　② 該資料夾／照片按「共用 → 知道連結的人皆可檢視」　③ 複製連結貼到下面　④ 之後按「🔗 開啟」就能看照片。</div>';
+  h+=photoRow('photoFolder','📁 整個資料夾');
+  h+=photoRow('photoBefore','術前');
+  h+=photoRow('photoAfter','術後');
+  h+=photoRow('photoHealed','癒合/定色');
+  h+=photoRow('photoTouchup','補色');
+  h+='</div></div>';
+
+  // 術後追蹤
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">📈 術後追蹤（每次回訪記一筆）</span></div><div class="card-bd">';
+  const fus=d.followups||[];
+  if(fus.length===0){h+='<div class="tm" style="margin-bottom:10px;">還沒有追蹤紀錄。每次客人回來（結痂、脫痂、定色、補色），記一筆，就能看出顏色怎麼走。</div>';}
+  h+=fus.map(function(f,i){return'<div style="border:1px solid #d1fae5;border-radius:10px;padding:12px;margin-bottom:10px;background:#f7fef9;">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'
+    +'<div style="flex:1;min-width:120px;"><label style="font-size:12px;color:#555;">日期</label><input type="date" id="cf_date_'+i+'" value="'+ev(f.date||'')+'" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;"></div>'
+    +'<div style="flex:1;min-width:120px;"><label style="font-size:12px;color:#555;">階段</label><input type="text" id="cf_stage_'+i+'" value="'+ev(f.stage||'')+'" placeholder="結痂/脫痂/定色/補色" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;"></div>'
+    +'<div style="flex:1;min-width:120px;"><label style="font-size:12px;color:#555;">目前顏色/落色</label><input type="text" id="cf_color_'+i+'" value="'+ev(f.color||'')+'" placeholder="例：偏淡30%/偏紅" style="width:100%;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;"></div>'
+    +'</div>'
+    +'<div style="margin-bottom:8px;"><label style="font-size:12px;color:#555;">狀況/客人回饋</label><textarea id="cf_condition_'+i+'" rows="2" style="width:100%;padding:8px;border:1px solid var(--bdr);border-radius:6px;">'+et(f.condition||'')+'</textarea></div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="url" id="cf_photo_'+i+'" value="'+ev(f.photo||'')+'" placeholder="這次追蹤照片的雲端連結" style="flex:1;min-width:160px;padding:6px 8px;border:1px solid var(--bdr);border-radius:6px;"><button class="btn btn-sm" style="background:#0891b2;color:#fff;" onclick="caseOpenLink(&quot;cf_photo_'+i+'&quot;)">🔗</button><button class="btn btn-sm btn-d" onclick="caseFollowupDel('+i+')">🗑️ 刪這筆</button></div>'
+    +'</div>';}).join('');
+  h+='<button class="btn btn-s btn-sm" onclick="caseFollowupAdd()">＋ 新增一筆術後追蹤</button>';
+  h+='</div></div>';
+
+  // 複盤
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid var(--rose);"><div class="card-hd" style="background:var(--roseL);"><span class="card-ttl" style="color:var(--rose);">🔄 複盤與精進（這個案例教會我什麼）</span></div><div class="card-bd"><div class="fg fg2">';
+  h+=ta('reviewTeacher','👩‍🏫 老師給我的建議','複盤時老師點出的問題與方向',3);
+  h+=ta('reviewSelf','📝 我的自我複盤','我自己看這個作品的檢討',3);
+  h+=ta('reviewSuccess','✅ 成功的原因','這次哪裡做對了、要保留',2);
+  h+=ta('reviewImprove','⚠️ 需要改善的地方','下次要調整什麼',2);
+  h+=inp('reviewSchool','技術流派/來源','這次用了哪一派的手法');
+  h+=ta('reviewConclusion','🧭 我驗證後的結論','吸收後，加入我自己系統的一條心得',2);
+  h+='</div></div></div>';
+
+  // 底部操作
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:30px;">';
+  h+='<button class="btn btn-p" style="flex:1;min-width:160px;background:#9333ea;font-size:16px;padding:14px;" onclick="caseSave()">✓ 儲存案例</button>';
+  h+='<button class="btn btn-s" onclick="caseBack()">返回</button>';
+  h+='<button class="btn btn-s" style="color:var(--red);" onclick="caseDelete(&quot;'+d.id+'&quot;)">× 刪除整個案例</button>';
+  h+='</div>';
+  return h;
+}
+
+// ── 案例研究室：互動函式 ──
+function caseReadDOM(){
+  const d=S.caseDraft;if(!d)return;
+  ['customer','serviceType','date','staff','status',
+   'preSkin','preBaseColor','preHairFlow','preBrowCond','preBone','preMuscle','preFaceAnalysis','preCustomerWish','preDesignIdea','prePredict',
+   'opTool','opPigment','opNumb','opDepth','opTechnique','opRounds','opNotes',
+   'photoFolder','photoBefore','photoAfter','photoHealed','photoTouchup',
+   'reviewTeacher','reviewSelf','reviewSuccess','reviewImprove','reviewSchool','reviewConclusion'
+  ].forEach(function(k){const el=$('ce_'+k);if(el)d[k]=el.value;});
+  (d.followups||[]).forEach(function(f,i){
+    ['date','stage','color','condition','photo'].forEach(function(k){const el=$('cf_'+k+'_'+i);if(el)f[k]=el.value;});
+  });
+}
+window.caseDoSearch=function(v){S.caseSearch=v;const el=$('case-list');if(el)el.innerHTML=renderCaseList();};
+window.caseOpen=function(id){const cs=(S.data.pmuCases||[]).find(function(x){return x.id===id;});S.caseDraft=cs?JSON.parse(JSON.stringify(cs)):null;S.caseEditId=id;render();};
+window.caseNew=function(prefill){const id='case_'+uid();S.caseDraft=Object.assign({id:id,date:today(),serviceType:'霧眉',staff:'于蜜',status:'tracking',followups:[]},prefill||{});S.caseEditId=id;render();};
+window.caseFromPmuRecord=function(recId){
+  const r=(S.data.pmuRecords||[]).find(function(x){return x.id===recId;});
+  if(!r){toast('找不到紋繡紀錄');return;}
+  const existed=(S.data.pmuCases||[]).find(function(x){return x.pmuRecordId===recId;});
+  if(existed){caseOpen(existed.id);return;}
+  caseNew({customer:(r.customer||'').trim(),serviceType:r.serviceType||'霧眉',date:r.date||today(),staff:r.staff||'于蜜',pmuRecordId:recId});
+};
+window.caseBack=function(){S.caseEditId=null;S.caseDraft=null;S.page='cases';render();};
+window.caseOpenLink=function(inputId){const v=($(inputId)?.value||'').trim();if(!v){alert('這一格還沒貼上連結');return;}window.open(v,'_blank');};
+window.caseFollowupAdd=function(){caseReadDOM();if(!S.caseDraft.followups)S.caseDraft.followups=[];S.caseDraft.followups.push({date:today(),stage:'',color:'',condition:'',photo:''});render();};
+window.caseFollowupDel=function(i){caseReadDOM();S.caseDraft.followups.splice(i,1);render();};
+window.caseSave=async function(){
+  caseReadDOM();
+  const d=S.caseDraft;if(!d)return;
+  if(!(d.customer||'').trim()){alert('請先填客戶名稱');return;}
+  if(!d.createdAt)d.createdAt=today();
+  d.updatedAt=today();
+  await setSub('pmuCases',d.id,d);
+  toast('✅ 案例已儲存');
+  render();
+};
+window.caseDelete=async function(id){
+  if(!confirm('確定刪除整個案例？此動作無法復原。'))return;
+  await delSub('pmuCases',id);
+  S.caseEditId=null;S.caseDraft=null;
+  toast('已刪除');
+  render();
+};
+
 // ═══════════ 👑 我的理財（個人抽成 20/40/40 卡爾登法則）═══════════
 // 花費帳戶（20%）：只能付「不付會死」的生存開銷
 const PF_ALLOWED=['房租','伙食','水電瓦斯','交通油錢/保養','保險費','手機費'];
@@ -13467,8 +13673,8 @@ window.saveCartOrder=async(continueInput)=>{
   try{
     if(S.cart.length===0){alert('購物車是空的，請先加入商品');return;}
     // 過濾掉空商品
-    const items=S.cart.filter(it=>it.name&&toN(it.price)*toN(it.qty)>0);
-    if(items.length===0){alert('購物車內所有商品都還沒填寫名稱或價格');return;}
+    const items=S.cart.filter(it=>it.name&&toN(it.qty)>0);
+    if(items.length===0){alert('購物車是空的，或商品都還沒填名稱');return;}
     const date=$('m_pd0')?.value||today();
     const totalAmount=items.reduce((s,it)=>s+toN(it.price)*toN(it.qty),0);
     let customer=$('m_pd5')?.value?.trim()||'';
@@ -13585,7 +13791,10 @@ window.saveOrder=async(type,continueInput)=>{
       const date=$('m_od0')?.value;
       const inputAmount=parseFloat($('m_od3')?.value)||0;  // 使用者輸入金額（=儲值池要扣的面額）
       if(!date){alert('請選擇日期');return;}
-      if(!inputAmount||inputAmount<=0){alert('請輸入金額（必須大於 0）');return;}
+      if(inputAmount<0){alert('金額不能是負數');return;}
+      // 金額 0 ＝ 免費／贈送（例：贈送補色）：允許開單，會進服務歷史、觸發關懷提醒，但不計營收也不抽成。
+      // 防呆：金額 0 時付款方式須為「免費/贈送」，避免忘記收費而誤開 $0 單。
+      if(inputAmount===0&&($('m_od6')?.value||'')!=='免費/贈送'){alert('金額是 0 喔！\n\n如果這是贈送服務（例如免費補色），請把「付款方式」改成「免費/贈送」再開單。\n如果要收費，請填入金額再送出。');return;}
       const sel=$('m_od1')?.value||'';
       const item=sel==='自訂項目'?($('m_od2')?.value?.trim()||'自訂服務'):sel;
       let customer=$('m_od4')?.value?.trim()||'';
