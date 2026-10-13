@@ -2164,10 +2164,103 @@ function renderQuarterSummary(){
   return html;
 }
 
+// ── 四季對比分析（白話：哪季進步/退步＋原因）──
+function quarterStat(q){
+  const months=[(q-1)*3+1,(q-1)*3+2,(q-1)*3+3];
+  var rev=0,exp=0,pmu=0;
+  months.forEach(function(m){rev+=getRevTotal(m);exp+=getExpTotal(m);pmu+=periodPmuRev(m);});
+  return{q:q,rev:rev,exp:exp,net:rev-exp,netPct:rev>0?Math.round((rev-exp)/rev*100):0,pmu:pmu,pmuPct:rev>0?Math.round(pmu/rev*100):0,has:(rev>0||exp>0)};
+}
+function fmtSigned(n){return(n>=0?'+$':'-$')+fmt(Math.abs(n));}
+function quarterTransitionText(a,b){
+  const dRev=b.rev-a.rev,dExp=b.exp-a.exp,dNet=b.net-a.net,dPmu=b.pmuPct-a.pmuPct;
+  var verdict,vColor;
+  if(dNet>500){verdict='📈 進步';vColor='#16a34a';}
+  else if(dNet<-500){verdict='📉 退步';vColor='#dc2626';}
+  else{verdict='➡️ 大致持平';vColor='#d97706';}
+  var cause='';
+  if(dNet<=-500){
+    const revDrop=dRev<0,expRise=dExp>0;
+    if(revDrop&&expRise)cause='營收少了 $'+fmt(-dRev)+'、費用又多了 $'+fmt(dExp)+'，兩頭夾擊';
+    else if(revDrop&&Math.abs(dRev)>=Math.abs(dExp))cause='主要是營收少了 $'+fmt(-dRev)+'（來客變少或單價變低）';
+    else if(expRise)cause='主要是費用多了 $'+fmt(dExp)+'（開銷變大，檢查是不是囤貨或雜支）';
+    else cause='賺得比上一季少了 $'+fmt(-dNet);
+  }else if(dNet>=500){
+    const revUp=dRev>0,expCut=dExp<0;
+    if(revUp&&expCut)cause='營收多了 $'+fmt(dRev)+'、又省下 $'+fmt(-dExp)+' 費用，雙贏';
+    else if(revUp&&Math.abs(dRev)>=Math.abs(dExp))cause='主要靠營收增加 $'+fmt(dRev);
+    else if(expCut)cause='主要靠省下 $'+fmt(-dExp)+' 費用';
+    else cause='賺得比上一季多了 $'+fmt(dNet);
+  }else{
+    cause='淨利跟上一季差不多';
+  }
+  var pmuNote='';
+  if(dPmu>=3)pmuNote='；紋繡佔比 '+a.pmuPct+'%→'+b.pmuPct+'%，轉型有進展 👍';
+  else if(dPmu<=-3)pmuNote='；紋繡佔比 '+a.pmuPct+'%→'+b.pmuPct+'%，往下掉了要注意 ⚠️';
+  return{verdict:verdict,vColor:vColor,text:'第'+a.q+'季 → 第'+b.q+'季：'+verdict+'（淨利 '+fmtSigned(dNet)+'）。'+cause+pmuNote};
+}
+function renderQuarterCompare(){
+  var qs=[1,2,3,4].map(quarterStat);
+  var has=qs.filter(function(x){return x.has;});
+  if(has.length<2){
+    return'<div class="card" style="margin-bottom:16px;background:#f8fafc;border:1px dashed #cbd5e1;"><div class="card-bd"><div style="font-weight:700;color:#475569;margin-bottom:4px;">📊 四季對比分析</div><div class="tm">目前只有 '+has.length+' 季有資料，至少要兩季才能對比。等下一季資料進來，這裡會自動幫你比較進步還退步、並說明原因。</div></div></div>';
+  }
+  // 對照表
+  var cols=has.map(function(x){return'<th style="padding:7px 10px;text-align:right;color:#9333ea;">第'+x.q+'季</th>';}).join('');
+  function rowNum(label,key,fmtFn,color){
+    var cells=has.map(function(x){var v=x[key];return'<td style="padding:6px 10px;text-align:right;'+(color?('color:'+color(v)+';'):'')+'">'+fmtFn(v)+'</td>';}).join('');
+    return'<tr><td style="padding:6px 10px;color:#666;white-space:nowrap;">'+label+'</td>'+cells+'</tr>';
+  }
+  var table='<div class="tw"><table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  table+='<thead><tr style="border-bottom:2px solid #e9d5f5;"><th style="padding:7px 10px;text-align:left;">指標</th>'+cols+'</tr></thead><tbody>';
+  table+=rowNum('📈 營收','rev',function(v){return'$'+fmt(v);});
+  table+=rowNum('📉 費用','exp',function(v){return'$'+fmt(v);},function(){return'#dc2626';});
+  table+='<tr style="border-top:1px solid #eee;background:#faf5ff;">'+'<td style="padding:7px 10px;font-weight:800;white-space:nowrap;">💰 淨利</td>'+has.map(function(x){return'<td style="padding:7px 10px;text-align:right;font-weight:800;color:'+(x.net>=0?'#16a34a':'#dc2626')+';">$'+fmt(x.net)+'</td>';}).join('')+'</tr>';
+  table+=rowNum('　淨利率','netPct',function(v){return v+'%';});
+  table+=rowNum('🎯 紋繡佔比','pmuPct',function(v){return v+'%';},function(v){return v>=40?'#16a34a':(v>=30?'#d97706':'#9333ea');});
+  table+='</tbody></table></div>';
+  // 淨利長條圖
+  var maxAbs=Math.max.apply(null,has.map(function(x){return Math.abs(x.net);}).concat([1]));
+  var bars='<div style="margin:14px 0;">';
+  has.forEach(function(x){
+    var pct=Math.round(Math.abs(x.net)/maxAbs*100);
+    var col=x.net>=0?'#16a34a':'#dc2626';
+    bars+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="width:46px;font-size:12px;color:#666;">第'+x.q+'季</span><div style="flex:1;background:#f1f5f9;border-radius:6px;height:20px;overflow:hidden;"><div style="width:'+pct+'%;min-width:2px;background:'+col+';height:100%;"></div></div><span style="width:72px;text-align:right;font-weight:700;color:'+col+';font-size:13px;">$'+fmt(x.net)+'</span></div>';
+  });
+  bars+='</div>';
+  // 逐季解讀（相鄰有資料的季）
+  var lines='';
+  for(var i=1;i<has.length;i++){
+    var t=quarterTransitionText(has[i-1],has[i]);
+    lines+='<div style="background:#fff;border-left:3px solid '+t.vColor+';border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13px;line-height:1.6;color:#444;">'+t.text+'</div>';
+  }
+  // 整體總評
+  var best=has.slice().sort(function(a,b){return b.net-a.net;})[0];
+  var worst=has.slice().sort(function(a,b){return a.net-b.net;})[0];
+  var first=has[0],last=has[has.length-1];
+  var overallNet=last.net-first.net;
+  var overallTxt;
+  if(overallNet>500)overallTxt='整體來看，從第'+first.q+'季到第'+last.q+'季淨利是往上走的（'+fmtSigned(overallNet)+'），方向正確，保持下去。';
+  else if(overallNet<-500)overallTxt='整體來看，從第'+first.q+'季到第'+last.q+'季淨利是往下走的（'+fmtSigned(overallNet)+'）。最賺的是第'+best.q+'季（$'+fmt(best.net)+'），回想那季做對了什麼、把它複製回來。';
+  else overallTxt='整體來看幾季淨利差不多。要讓它往上走，關鍵還是把紋繡佔比拉高——那是最省力、最能放大淨利的槓桿。';
+  var html='<div class="card" style="margin-bottom:16px;border:1px solid #e9d5f5;">';
+  html+='<div class="card-hd" style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);"><span class="card-ttl" style="color:#9333ea;">📊 四季對比分析</span></div>';
+  html+='<div class="card-bd">';
+  html+=table;
+  html+='<div style="font-size:12px;color:#999;margin:10px 0 2px;">各季淨利高低一眼看</div>';
+  html+=bars;
+  html+='<div style="font-size:13px;font-weight:700;color:#333;margin:12px 0 8px;">📖 逐季解讀（進步 / 退步 ＋ 原因）</div>';
+  html+=lines;
+  html+='<div style="margin-top:6px;background:#faf5ff;border-left:3px solid #9333ea;border-radius:8px;padding:10px 12px;color:#444;font-size:13px;line-height:1.6;"><b style="color:#9333ea;">🧭 整體總評：</b>'+overallTxt+'　最弱的是第'+worst.q+'季（$'+fmt(worst.net)+'）。</div>';
+  html+='</div></div>';
+  return html;
+}
+
 // ── 季度損益表 ──
 function renderQuarterPL(){
   const curY=yr();
   var html=renderQuarterSummary();
+  html+=renderQuarterCompare();
   // 四季各自的損益
   const quarters=[1,2,3,4];
   quarters.forEach(function(q){
