@@ -3870,9 +3870,77 @@ function pgCustomerDetail(c){
         <button class="btn btn-s" onclick="delCustomer('${c.id}')" style="color:var(--red);">× 刪除客戶</button>`}
   </div>
 
+  <div class="sg sg2">
+    <!-- 儲值紀錄 -->
+    <div class="card">
+      <div class="card-hd"><span class="card-ttl">💳 儲值入帳紀錄</span></div>
+      <div class="tw"><table>
+        <thead><tr><th>日期</th><th>面額</th><th>實收</th><th>折扣</th><th>付款方式</th><th>類型</th><th>備註</th><th></th></tr></thead>
+        <tbody>${c.deposits.length===0?`<tr><td colspan="8"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
+          c.deposits.map(d=>{
+            const actual=toN(d.actualReceived||d.amount);
+            const face=toN(d.amount);
+            const rate=face>0?actual/face:1;
+            const rateText=rate<1?`${(rate*10).toFixed(1)}折`:'-';
+            const isRestricted=d.scope==='restricted';
+            const allowedList=(d.allowedServices||[]).join('、');
+            return`<tr style="${isRestricted?'background:var(--purL);':''}">
+            <td>${d.date}${d.signed?`<br><button class="bdg" style="background:var(--purL);color:var(--pur);font-size:10px;border:none;cursor:pointer;margin-top:2px;" onclick="showDepositSign('${d.id}')">✍️ 已簽名</button>`:''}</td>
+            <td class="ag">$${fmt(face)}</td>
+            <td class="tm">$${fmt(actual)}</td>
+            <td class="tm">${rateText}</td>
+            <td><span class="bdg">${d.payMethod||''}</span></td>
+            <td>${isRestricted
+              ?`<span class="bdg" style="background:var(--pur);color:#fff;font-size:10px;" title="${allowedList}">🎯 限定</span><div class="tm" style="font-size:10px;margin-top:2px;color:var(--pur);">${allowedList}</div>${d.monthlyLimit>0?`<div class="tm" style="font-size:10px;">${d.monthlyLimit}次/月</div>`:''}`
+              :`<span class="bdg" style="background:var(--bg2);color:var(--mut);font-size:10px;">通用</span>`}</td>
+            <td class="tm">${d.note||''}</td>
+            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editDeposit','${d.id}')" title="編輯">✏️</button><button class="bdel" onclick="delDeposit('${d.id}')" title="刪除">×</button></td>
+          </tr>`;}).join('')}
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- 服務歷史 -->
+    <div class="card">
+      <div class="card-hd"><span class="card-ttl">🌸 服務歷史</span></div>
+      <div class="tw"><table>
+        <thead><tr><th>日期</th><th>項目</th><th>金額</th><th>付款</th><th>老師</th><th></th></tr></thead>
+        <tbody>${c.services.length===0?`<tr><td colspan="6"><div class="empty"><p>尚無服務紀錄</p></div></td></tr>`:
+          c.services.map(s=>`<tr>
+            <td>${s.date}</td>
+            <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}${s.payMethod==='儲值扣款'&&s.depositOwner&&s.depositOwner!==c.name?`<div class="tm" style="color:var(--pur);">🔗 從 ${s.depositOwner} 共用儲值扣款</div>`:''}</td>
+            <td class="ap">$${fmt(s.amount)}</td>
+            <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
+            <td class="tm">${s.staff||''}</td>
+            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  ${c.usedByOthers&&c.usedByOthers.length>0?`<div class="card">
+    <div class="card-hd"><span class="card-ttl">🔗 他人使用 ${c.name} 儲值的紀錄</span></div>
+    <div class="tw"><table>
+      <thead><tr><th>日期</th><th>使用人</th><th>項目</th><th>金額</th><th>老師</th><th></th></tr></thead>
+      <tbody>${c.usedByOthers.map(s=>`<tr>
+        <td>${s.date}</td>
+        <td><b>${s.customer||''}</b></td>
+        <td>${s.item||''}${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
+        <td class="an">-$${fmt(s.amount)}</td>
+        <td class="tm">${s.staff||''}</td>
+        <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </div>`:''}
+
   ${custIntakeHtml(c)}
 
-  <div id="cust-tabs">${custTabsHtml(c)}</div>`;
+  ${custPassHtml(c)}
+
+  ${custPmuHtml(c)}
+
+  ${(S.data.treatmentRecords||[]).some(r=>normalizeName(r.customer)===normalizeName(c.name))?pgTreatmentRecords(c):''}`;
 }
 
 function custIntakeHtml(c){return (() => {
@@ -5104,14 +5172,11 @@ window.showCustomerSignature=(name)=>{
 
 // ─── 療程紀錄區塊（客戶詳情頁專用）───
 function pgTreatmentRecords(c){
-  const records=(S.data.treatmentRecords||[]).filter(r=>(r.customer||'').trim()===(c.name||'').trim()).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const records=(S.data.treatmentRecords||[]).filter(r=>normalizeName(r.customer)===normalizeName(c.name)).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   return`
   <div class="sec-hd" style="margin-top:24px;">
     <span class="sec-ttl">📋 療程紀錄（共 ${records.length} 筆）</span>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-pur btn-sm" style="background:var(--pur);color:#fff;" onclick="openM('iPadSign','${c.name}')">📱 iPad 簽到模式</button>
-      <button class="btn btn-p btn-sm" onclick="openM('addTreatment','${c.name}')">＋ 新增療程紀錄</button>
-    </div>
+
   </div>
 
   ${records.length===0?`<div class="card"><div class="empty"><div class="empty-ico">📋</div><p>${c.name} 尚無療程紀錄</p><p class="tm">點「+新增療程紀錄」建立首筆，或使用「📱 iPad 簽到模式」讓客戶簽名</p></div></div>`:
