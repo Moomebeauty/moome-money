@@ -7021,6 +7021,29 @@ window.pmuSetServiceType=function(key,price){
 };
 
 // 取這位客人的「初次施作日期」（最早一筆紋繡紀錄；優先新客首次）
+// 初次施作日期 → 間隔與免費期判斷（只更新這一小塊，不重繪整頁）
+function pmuFirstDateVerdictHtml(t){
+  var f=t.firstPmuDate||'',d=t.date||today();
+  if(!f)return '';
+  var d1=new Date(f+'T00:00:00'),d2=new Date(d+'T00:00:00');
+  if(isNaN(d1.getTime())||isNaN(d2.getTime()))return '';
+  var days=Math.round((d2-d1)/86400000);
+  if(days<0)return '<div class="notice" style="background:#fef2f2;border-left-color:#dc2626;color:#991b1b;font-size:13px;margin-top:8px;">⚠️ 初次施作日期晚於今天，請再確認</div>';
+  var months=(d2.getFullYear()-d1.getFullYear())*12+(d2.getMonth()-d1.getMonth());
+  var verdict='';
+  if(t.pmuServiceType==='free'){
+    var pr=(S.data.settings&&S.data.settings.pmuPricing&&S.data.settings.pmuPricing['霧眉'])||DEFAULT_PMU_PRICING['霧眉'];
+    var fm=toN(pr.freeMonths)||3;
+    verdict=(days<=fm*31)?'<span style="color:#16a34a;font-weight:800;">✓ 仍在 '+fm+' 個月免費補色期內</span>':'<span style="color:#dc2626;font-weight:800;">⚠️ 已超過 '+fm+' 個月免費期（建議改回娘家付費補色）</span>';
+  }
+  return '<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;margin-top:8px;">距初次施作約 '+months+' 個月（'+days+' 天）　'+verdict+'</div>';
+}
+window.pmuFirstDateChanged=function(v){
+  if(!S.treatment)return;
+  S.treatment.firstPmuDate=v||'';
+  var el=document.getElementById('pmu_firstDate_verdict');
+  if(el)el.innerHTML=pmuFirstDateVerdictHtml(S.treatment);
+};
 function getFirstPmuDate(name){
   if(!name)return '';
   const nm=normalizeName(name);
@@ -7057,27 +7080,15 @@ function pmuConsentStage(t){
   // 📅 補色類：顯示「初次施作日期」做法律佐證，自動帶出並驗證免費期
   if(t.pmuServiceType&&t.pmuServiceType!=='new'){
     var _firstD=t.firstPmuDate||getFirstPmuDate(t.customer);
+    if(_firstD&&!t.firstPmuDate)t.firstPmuDate=_firstD;
     var _today2=t.date||today();
-    var _intvTxt='',_verdict='';
-    if(_firstD){
-      var _d1=new Date(_firstD+'T00:00:00'),_d2=new Date(_today2+'T00:00:00');
-      if(!isNaN(_d1.getTime())&&!isNaN(_d2.getTime())){
-        var _days=Math.round((_d2-_d1)/86400000);
-        var _months=(_d2.getFullYear()-_d1.getFullYear())*12+(_d2.getMonth()-_d1.getMonth());
-        _intvTxt='距初次施作約 '+_months+' 個月（'+_days+' 天）';
-        if(t.pmuServiceType==='free'){
-          var _pr=(S.data.settings&&S.data.settings.pmuPricing&&S.data.settings.pmuPricing['霧眉'])||DEFAULT_PMU_PRICING['霧眉'];
-          var _freeM=toN(_pr.freeMonths)||3;
-          _verdict=(_days<=_freeM*31)?'<span style="color:#16a34a;font-weight:800;">✓ 仍在 '+_freeM+' 個月免費補色期內</span>':'<span style="color:#dc2626;font-weight:800;">⚠️ 已超過 '+_freeM+' 個月免費期（建議改回娘家付費補色）</span>';
-        }
-      }
-    }
     html+='<div class="card" style="margin-bottom:14px;border-left:4px solid #d97706;"><div class="card-hd" style="background:#fffbeb;"><span class="card-ttl" style="color:#d97706;font-size:14px;">📅 初次施作日期（補色佐證）</span></div><div class="card-bd">';
     html+='<div class="fg fg2">';
-    html+='<div class="fgrp"><label>初次施作日期'+(_firstD?'（系統自動帶出，可修改）':'（系統查無，請手動填）')+'</label><input type="date" id="pmu_firstDate" value="'+(_firstD||'')+'" onchange="S.treatment.firstPmuDate=this.value;var c=$(&quot;pg-content&quot;);if(c)c.innerHTML=renderPage();"></div>';
+    // 注意：不要在 onchange 重繪整頁，否則手機/電腦的月曆在切換年、月時會被關掉
+    html+='<div class="fgrp"><label>初次施作日期'+(_firstD?'（系統自動帶出，可修改）':'（系統查無，請手動填）')+'</label><input type="date" id="pmu_firstDate" value="'+(_firstD||'')+'" max="'+_today2+'" onchange="pmuFirstDateChanged(this.value)" oninput="pmuFirstDateChanged(this.value)"></div>';
     html+='<div class="fgrp"><label>本次補色日期</label><input type="date" value="'+_today2+'" disabled style="background:#f8fafc;color:#666;"></div>';
     html+='</div>';
-    if(_intvTxt)html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;margin-top:8px;">'+_intvTxt+'　'+_verdict+'</div>';
+    html+='<div id="pmu_firstDate_verdict">'+pmuFirstDateVerdictHtml(t)+'</div>';
     html+='<div class="tm" style="font-size:12px;margin-top:6px;">💡 這個日期會印進同意書，白紙黑字證明本次補色的時間點，法律證據更完整。</div>';
     html+='</div></div>';
   }
@@ -8029,7 +8040,7 @@ function pgPassSignView(t){
         <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">📅 合約期間（自動計算）</span></div>
         <div class="card-bd">
           <div class="fgrp"><label>開始日期（收款日）</label>
-            <input type="date" id="ps_startdate" value="${t.startDate}" onchange="S.treatment.startDate=this.value;const c=$('pg-content');if(c)c.innerHTML=renderPage();">
+            <input type="date" id="ps_startdate" value="${t.startDate}" onchange="S.treatment.startDate=this.value;" onblur="const c=$('pg-content');if(c)c.innerHTML=renderPage();">
           </div>
           <div style="background:linear-gradient(135deg,var(--grnL),#fff);padding:16px;border-radius:12px;margin-top:12px;text-align:center;border:2px solid var(--grn);">
             <div class="tm" style="font-size:13px;">到期日（系統自動推算 ${t.months} 個月）</div>
