@@ -537,7 +537,7 @@ const DEFAULT_PMU_ALLERGIES=['異位性皮膚炎','食物過敏','植物過敏',
 
 // 身體狀況臨床篩檢清單（每項附「為什麼」原因，讓每次填寫都更清楚背後邏輯）
 const PMU_HEALTH_CATS={
-  red:{t:'🔴 紅燈族群｜原則上不予施作（直接退單）',c:'#dc2626',bg:'#fef2f2'},
+  red:{t:'🔴 紅燈族群｜原則上不予施作',c:'#dc2626',bg:'#fef2f2'},
   yellow:{t:'🟡 黃燈族群｜高風險，需加簽特殊評估免責聲明',c:'#d97706',bg:'#fffbeb'},
   allergy:{t:'🌾 過敏性體質（請細分勾選）',c:'#9333ea',bg:'#faf5ff'},
   recent:{t:'🩹 近期皮膚狀況與日常用藥（近 1 個月）',c:'#0891b2',bg:'#ecfeff'}
@@ -919,9 +919,13 @@ let S={
     treatmentRecords:[]
   }
 };
+// module 模式下 S 不是全域；畫面上的 onchange="S.treatment.x=..." 需要從 window 找得到 S
+window.S=S;
 
 // ── UTILS ──────────────────────────────────────────────────
 const $=id=>document.getElementById(id);
+// 畫面上 inline 事件會直接呼叫這些，module 模式要掛到全域才找得到
+window.$=$;window.render=render;window.renderPage=renderPage;window.pmuSaveInputs=pmuSaveInputs;
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const fmt=v=>{const n=parseFloat(String(v||0).replace(/,/g,''))||0;return Math.abs(n)>=1000?n.toLocaleString('zh-TW'):String(Math.round(n));};
 const toN=v=>parseFloat(String(v||0).replace(/,/g,''))||0;
@@ -1448,7 +1452,17 @@ function appHTML(){
 </div>`;
 }
 
+// 包一層：紋繡同意書頁重繪時，保住畫到一半的簽名，重繪後自動重新綁定簽名板
 function renderPage(){
+  var _pmuSign=S.page==='treatment'&&S.treatment&&S.treatment.mode==='pmu'&&!S.treatment.pmuSubmitted&&S.treatment.pmuStage==='consent';
+  if(_pmuSign){
+    try{var oc=document.getElementById('t_guest_sign_canvas');if(oc&&_sigCanvas===oc&&_sigHasContent&&!S.treatment.consentSignature)S.treatment._sigTemp=oc.toDataURL('image/png');}catch(e){}
+  }
+  var out=_renderPageInner();
+  if(_pmuSign)setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},60);
+  return out;
+}
+function _renderPageInner(){
   switch(S.page){
     case'overview':  return pgOverview();
     case'profit':    return pgProfit();
@@ -6863,7 +6877,7 @@ function pmuDesignStage(t){
 
   // 五、設計溝通紀錄
   h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">⑤ 我幫客人的設計溝通紀錄</span></div><div class="card-bd">'
-    +'<textarea id="pmu_designNote" rows="3" placeholder="怎麼設計的、量了什麼、客人在鏡子前確認了什麼、最後定案的方向" oninput="S.treatment.designNote=this.value">'+((t.designNote||'').replace(/</g,'&lt;'))+'</textarea></div></div>';
+    +'<textarea id="pmu_designNote" rows="9" style="width:100%;min-height:240px;font-size:17px;line-height:1.75;padding:14px 16px;border-radius:12px;resize:vertical;box-sizing:border-box;" placeholder="怎麼設計的、量了什麼、客人在鏡子前確認了什麼、最後定案的方向" oninput="S.treatment.designNote=this.value">'+((t.designNote||'').replace(/</g,'&lt;'))+'</textarea></div></div>';
 
   h+='<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署。</div>';
   h+='<div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;margin-top:10px;">'
@@ -6998,9 +7012,9 @@ function pmuConsentStage(t){
   var _redOn=PMU_HEALTH_ITEMS.some(function(it){return it.cat==='red'&&_hf.indexOf(it.id)>=0;});
   var _yelOn=PMU_HEALTH_ITEMS.some(function(it){return it.cat==='yellow'&&_hf.indexOf(it.id)>=0;});
   html+='<div class="card" style="margin-bottom:14px;">'
-    +'<div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知・臨床篩檢）</span></div>'
+    +'<div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 健康狀況誠實告知</span></div>'
     +'<div class="card-bd">';
-  html+='<div class="tm" style="font-size:12px;line-height:1.75;margin-bottom:10px;">紋繡屬皮膚微創，身體狀況是保護你我最重要的一關。<b>有該狀況請點「有」</b>，每一項都附上原因，讓你每次填寫都更清楚背後的邏輯。</div>';
+  html+='<div class="tm" style="font-size:12px;line-height:1.75;margin-bottom:10px;"><div style="font-size:14px;font-weight:700;color:var(--blu);margin-bottom:4px;">請勾選是否有以下體質，本資料僅供紋繡師評估施作安全使用，本店依法保密。</div>紋繡屬皮膚微創，身體狀況是保護你我最重要的一關。<b>有該狀況請點「有」</b></div>';
   if(_redOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fef2f2;border:2px solid #dc2626;color:#991b1b;font-size:13.5px;font-weight:800;line-height:1.75;margin-bottom:12px;">🔴 偵測到紅燈狀況：原則上<u>不予施作、建議退單</u>。若仍評估施作，務必讓客人充分理解風險並留下紀錄。</div>';
   if(_yelOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fffbeb;border:2px solid #d97706;color:#92400e;font-size:13.5px;font-weight:800;line-height:1.75;margin-bottom:12px;">🟡 偵測到黃燈狀況：屬高風險，施作前<u>務必加簽「特殊評估免責聲明」</u>，並向客人說明癒合與感染風險。</div>';
   ['red','yellow','allergy','recent'].forEach(function(catKey){
@@ -7753,7 +7767,7 @@ window.downloadPmuConsent=()=>{
 
 顧客姓名：${r.customer}　電話：${r.phone||''}
 服務項目：${r.serviceType}　日期：${r.date}
-${(r.pmuServiceType&&r.pmuServiceType!=='new'&&r.firstPmuDate)?`初次施作日期：${r.firstPmuDate}　本次補色日期：${r.date}${(function(){try{var a=new Date(r.firstPmuDate+'T00:00:00'),b=new Date(r.date+'T00:00:00');var dd=Math.round((b-a)/86400000);var mm=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());return '　（間隔約 '+mm+' 個月 / '+dd+' 天'+(r.pmuServiceType==='free'?'，屬3個月內免費補色':'')+'）';}catch(e){return '';}})()}\n`:''}【身體狀況誠實告知】
+${(r.pmuServiceType&&r.pmuServiceType!=='new'&&r.firstPmuDate)?`初次施作日期：${r.firstPmuDate}　本次補色日期：${r.date}${(function(){try{var a=new Date(r.firstPmuDate+'T00:00:00'),b=new Date(r.date+'T00:00:00');var dd=Math.round((b-a)/86400000);var mm=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());return '　（間隔約 '+mm+' 個月 / '+dd+' 天'+(r.pmuServiceType==='free'?'，屬3個月內免費補色':'')+'）';}catch(e){return '';}})()}\n`:''}【健康狀況誠實告知】
 ${pmuHealthSummaryText(r)}
 ${r.isMinor?`未成年，法定代理人：${r.guardianName||''}\n`:''}
 ${notice}
@@ -14935,7 +14949,7 @@ function initSignatureCanvasInline(canvasId){
   ctx.strokeStyle='#000';
   _sigCtx=ctx;
   _sigHasContent=false;
-  const existing=S.treatment&&(S.treatment.signature||S.treatment.consentSignature);
+  const existing=S.treatment&&(S.treatment.signature||S.treatment.consentSignature||S.treatment._sigTemp);
   if(existing){
     const img=new Image();
     img.onload=function(){ctx.drawImage(img,0,0,rect.width,rect.height);_sigHasContent=true;};
@@ -15011,6 +15025,7 @@ window.clearSignature=()=>{
   if(!_sigCanvas||!_sigCtx)return;
   _sigCtx.clearRect(0,0,_sigCanvas.width,_sigCanvas.height);
   _sigHasContent=false;
+  if(S.treatment){delete S.treatment._sigTemp;if(S.treatment.mode==='pmu'&&S.treatment.consentSignature){S.treatment.consentSignature=null;S.treatment.consentSignedAt='';}}
 };
 
 window.saveTreatmentSignature=async(id)=>{
