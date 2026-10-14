@@ -6749,35 +6749,7 @@ function pmuDesignStage(t){
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知）</span></div>
-      <div class="card-bd">
-        <div class="fgrp"><label>有無痼疾/現症治療中（含皮膚病）？</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${conditions.map(cond=>{
-              const on=(t.conditions||[]).includes(cond);
-              return`<label style="padding:6px 12px;background:${on?'var(--red)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('conditions','${cond.replace(/'/g,"\\'")}')">${on?'✓ ':''}${cond}</label>`;
-            }).join('')}
-          </div>
-          <input type="text" id="pmu_conditionNote" value="${(t.conditionNote||'').replace(/"/g,'&quot;')}" placeholder="其他說明（選填）" style="margin-top:8px;" oninput="S.treatment.conditionNote=this.value">
-        </div>
-        <div class="fgrp" style="margin-top:12px;"><label>是否有過敏性體質？</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${allergies.map(a=>{
-              const on=(t.allergies||[]).includes(a);
-              return`<label style="padding:6px 12px;background:${on?'var(--gold)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('allergies','${a.replace(/'/g,"\\'")}')">${on?'✓ ':''}${a}</label>`;
-            }).join('')}
-          </div>
-          <input type="text" id="pmu_allergyNote" value="${(t.allergyNote||'').replace(/"/g,'&quot;')}" placeholder="其他過敏說明（選填）" style="margin-top:8px;" oninput="S.treatment.allergyNote=this.value">
-        </div>
-        <div class="fgrp" style="margin-top:12px;"><label>如何知道本店？</label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-            ${sources.map(s=>`<button type="button" style="padding:6px 12px;background:${t.source===s?'var(--pur)':'var(--bg2)'};color:${t.source===s?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('source','${s.replace(/'/g,"&#39;")}')">${t.source===s?'✓ ':''}${s}</button>`).join('')}
-          </div>
-          ${(t.source||'').includes('介紹')||(t.source||'').includes('朋友')?`<div class="fgrp" style="margin-top:8px;"><label style="font-size:12px;">介紹人姓名</label><input type="text" id="pmu_referrer" value="${(t.referrer||'').replace(/"/g,'&quot;')}" placeholder="是誰介紹的呢？" oninput="S.treatment.referrer=this.value"></div>`:''}
-        </div>
-      </div>
-    </div>
+    <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署，這裡專注眉型設計即可。</div>
 
     <div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;">
       <div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人決定要做了？</div>
@@ -6868,55 +6840,63 @@ function pmuConsentStage(t){
     +pmuServiceTypeSelector(t)
     +'</div></div>';
 
-  var TL=S2.pmuTermLabels||{};var NL=S2.pmuLabels||{};
-  // 勾選列小工具
-  function chkRow(id,field,label,checked,accent){
-    return'<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px 14px;background:'+(accent||'#f0fdf4')+';border-radius:10px;margin-top:10px;">'
-      +'<input type="checkbox" id="'+id+'" style="margin-top:2px;transform:scale(1.4);flex-shrink:0;" '+(checked?'checked':'')+' onchange="S.treatment.'+field+'=this.checked;">'
-      +'<span style="font-size:14px;font-weight:700;color:#166534;">'+label+'</span></label>';
-  }
-  function details(sum,body){
-    return'<details style="margin-top:8px;"><summary style="cursor:pointer;color:#9333ea;font-size:13px;">'+sum+'</summary><div style="font-size:13px;line-height:1.9;white-space:pre-wrap;max-height:240px;overflow-y:auto;margin-top:8px;padding:10px;background:var(--bg2);border-radius:8px;">'+body+'</div></details>';
-  }
+  // 🩺 身體狀況（誠實告知）— 在簽名前先聲明健康狀況
+  var conditions=S2.pmuConditions||DEFAULT_PMU_CONDITIONS;
+  var allergies=S2.pmuAllergies||DEFAULT_PMU_ALLERGIES;
+  var sources=S2.pmuSources||DEFAULT_PMU_SOURCES;
+  html+=`<div class="card" style="margin-bottom:14px;">
+    <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知）</span></div>
+    <div class="card-bd">
+      <div class="fgrp"><label>有無痼疾/現症治療中（含皮膚病）？</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          ${conditions.map(cond=>{
+            const on=(t.conditions||[]).includes(cond);
+            return`<label style="padding:6px 12px;background:${on?'var(--red)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('conditions','${cond.replace(/'/g,"\\'")}')">${on?'✓ ':''}${cond}</label>`;
+          }).join('')}
+        </div>
+        <input type="text" id="pmu_conditionNote" value="${(t.conditionNote||'').replace(/"/g,'&quot;')}" placeholder="其他說明（選填）" style="margin-top:8px;" oninput="S.treatment.conditionNote=this.value">
+      </div>
+      <div class="fgrp" style="margin-top:12px;"><label>是否有過敏性體質？</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          ${allergies.map(a=>{
+            const on=(t.allergies||[]).includes(a);
+            return`<label style="padding:6px 12px;background:${on?'var(--gold)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('allergies','${a.replace(/'/g,"\\'")}')">${on?'✓ ':''}${a}</label>`;
+          }).join('')}
+        </div>
+        <input type="text" id="pmu_allergyNote" value="${(t.allergyNote||'').replace(/"/g,'&quot;')}" placeholder="其他過敏說明（選填）" style="margin-top:8px;" oninput="S.treatment.allergyNote=this.value">
+      </div>
+      <div class="fgrp" style="margin-top:12px;"><label>如何知道本店？</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          ${sources.map(s=>`<button type="button" style="padding:6px 12px;background:${t.source===s?'var(--pur)':'var(--bg2)'};color:${t.source===s?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('source','${s.replace(/'/g,"&#39;")}')">${t.source===s?'✓ ':''}${s}</button>`).join('')}
+        </div>
+        ${(t.source||'').includes('介紹')||(t.source||'').includes('朋友')?`<div class="fgrp" style="margin-top:8px;"><label style="font-size:12px;">介紹人姓名</label><input type="text" id="pmu_referrer" value="${(t.referrer||'').replace(/"/g,'&quot;')}" placeholder="是誰介紹的呢？" oninput="S.treatment.referrer=this.value"></div>`:''}
+      </div>
+    </div>
+  </div>`;
 
-  // ① 個人資料告知（精簡一段 + 勾選）
-  html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">🔐 個人資料蒐集告知</span></div><div class="card-bd">'
-    +'<div style="font-size:13px;line-height:1.8;color:#444;">本工作室因紋繡服務及售後聯繫需要，依《個人資料保護法》蒐集您的姓名、聯絡方式與健康相關資料，僅用於本服務及必要聯繫，善盡安全維護義務、絕不外洩或移作他用。您得依法查詢、更正或刪除您的個人資料。</div>'
-    +details('展開完整個資告知事項',(terms.privacy||''))
-    +chkRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意上述個人資料之蒐集與使用',t.agreePrivacy)
-    +'</div></div>';
-
-  // ② 紋繡服務說明＋術後照護須知（合併，一句話勾選）
-  html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">📋 服務說明與術後照護須知</span></div><div class="card-bd">'
-    +chkRow('pmu_agree_notice','agreeNotice','顧客已確實閱讀並理解店內提供之紋繡服務說明與術後照護須知',t.agreeNotice)
-    +details('展開完整服務說明與須知',(notice||'')+'\n\n'+(terms.serviceDesc||''))
-    +'</div></div>';
-
-  // ③ 核心：服務與退費同意書（完整＋本次專屬條款，唯一需簽名處）
-  html+='<div class="card" style="margin-bottom:12px;border:2px solid #9333ea;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="font-size:15px;color:#9333ea;">📜 服務與退費同意書（核心主契約・需簽名）</span></div><div class="card-bd">'
-    +'<div style="font-size:13px;line-height:1.95;white-space:pre-wrap;max-height:300px;overflow-y:auto;">'+(terms.consent||'')+'</div>';
-  if(t.pmuServiceType){
-    var stageTxt=pmuStageTermsFor(t.pmuServiceType);
-    if(stageTxt){
-      html+='<div style="margin-top:12px;border:2px solid #d97706;border-radius:10px;overflow:hidden;"><div style="background:#fffbeb;padding:8px 12px;font-size:14px;font-weight:700;color:#d97706;">⚠️ 本次專屬條款 — '+(PMU_STAGE_LABELS[t.pmuServiceType]||'')+'</div><div style="font-size:13px;line-height:1.95;white-space:pre-wrap;max-height:300px;overflow-y:auto;padding:12px;">'+stageTxt+'</div></div>';
-    }
-  }else{
-    html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;margin-top:10px;">⬆️ 請先在上方選「這次服務類型」，系統會自動帶出該階段專屬條款（新客／免費補色／回娘家各不同）。</div>';
+  // 📝 最後確認：法律條文全部收進「藍字點開才看」，畫面只留一行行勾選（像官網/App）
+  function legalRow(id,field,stA,linkText,stB,fullText,checked){
+    return'<div style="padding:12px 14px;background:#f0fdf4;border-radius:10px;margin-bottom:10px;">'
+      +'<div style="display:flex;align-items:flex-start;gap:10px;">'
+      +'<input type="checkbox" id="'+id+'" style="margin-top:3px;transform:scale(1.5);flex-shrink:0;" '+(checked?'checked':'')+' onchange="S.treatment.'+field+'=this.checked;">'
+      +'<div style="font-size:14px;line-height:1.7;color:#166534;font-weight:700;">'+stA
+      +'<span style="color:#2563eb;text-decoration:underline;cursor:pointer;" onclick="pmuToggleTerms(&quot;'+id+'_full&quot;)">【'+linkText+'】</span>'+stB+'</div></div>'
+      +'<div id="'+id+'_full" style="display:none;margin-top:10px;padding:12px;background:#fff;border:1px solid #d1fae5;border-radius:8px;font-size:12px;line-height:1.85;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:#444;">'+(fullText||'')+'</div>'
+      +'</div>';
   }
+  var stageFull='';
+  if(t.pmuServiceType){var _st=pmuStageTermsFor(t.pmuServiceType);if(_st)stageFull='\n\n──────────\n【本次專屬條款 — '+(PMU_STAGE_LABELS[t.pmuServiceType]||'')+'】\n'+_st;}
+
+  html+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="font-size:14px;color:#9333ea;">📝 最後確認</span></div><div class="card-bd">';
+  html+='<div class="tm" style="font-size:12px;margin-bottom:12px;">每一項請勾選確認。想看完整條款，點<span style="color:#2563eb;">藍色文字</span>就會展開；看完再收起。</div>';
+  html+=legalRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意','個人資料蒐集、處理及利用告知事項','（含我填寫的姓名、電話與健康狀況）',(terms.privacy||''),t.agreePrivacy);
+  html+=legalRow('pmu_agree_notice','agreeNotice','我已閱讀並理解','紋繡服務說明與術後照護須知','',((notice||'')+'\n\n'+(terms.serviceDesc||'')),t.agreeNotice);
+  html+=legalRow('pmu_consent_agree','consentAgreed','我已詳閱並同意','服務與退費同意書','（含本次專屬條款、定金退費與補色權益）',((terms.consent||'')+stageFull),t.consentAgreed);
+  if(!t.pmuServiceType){
+    html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin:-2px 0 10px;">⬆️ 記得先在上方選「這次服務類型」，才會帶出對應的退費與補色條款。</div>';
+  }
+  html+=legalRow('pmu_agree_media','agreeMedia','我同意','多媒體影像使用','（服務過程拍攝，供品質追蹤與諮詢參考）',(terms.media||''),(t.agreeMedia!==false));
   html+='</div></div>';
-
-  // ④ 多媒體使用同意（勾選即可）
-  html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">📸 多媒體使用同意</span></div><div class="card-bd">'
-    +chkRow('pmu_agree_media','agreeMedia','我同意本店於服務過程拍攝紀錄影像，供服務品質追蹤與後續諮詢參考',(t.agreeMedia!==false),'#eff6ff')
-    +details('展開多媒體使用說明',(terms.media||''))
-    +'</div></div>';
-
-  html+='<div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-bottom:14px;font-size:13px;line-height:1.9;">'+(terms.closing||'')+'</div>';
-
-  // 主要同意（簽署服務同意書）
-  html+='<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px;background:#f3e8ff;border-radius:10px;margin-bottom:14px;">'
-    +'<input type="checkbox" id="pmu_consent_agree" style="margin-top:3px;transform:scale(1.4);flex-shrink:0;" '+(t.consentAgreed?'checked':'')+' onchange="S.treatment.consentAgreed=this.checked;">'
-    +'<span style="font-size:14px;font-weight:700;color:#9333ea;">本人 '+(t.customer||'')+' 已詳閱並充分理解上述「服務與退費同意書」及本次專屬條款，同意接受紋繡服務，所填資料均屬實。</span></label>';
 
   // 簽名
   html+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">✍️ 顧客簽名</span></div><div class="card-bd">'
@@ -6929,6 +6909,9 @@ function pmuConsentStage(t){
 
   return html;
 }
+
+// 展開/收起條款全文（藍字超連結點開才看）
+window.pmuToggleTerms=function(id){var el=document.getElementById(id);if(el)el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none';};
 
 // 確認簽署（存簽名，不跳階段，讓使用者自己按下一步）
 window.pmuConfirmConsent=function(){
