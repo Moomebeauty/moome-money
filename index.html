@@ -6678,85 +6678,102 @@ window.pmuDelPhoto=function(when,i){
   if(S.treatment[photosKey]){S.treatment[photosKey].splice(i,1);pmuAutoSave();var c=$('pg-content');if(c)c.innerHTML=renderPage();}
 };
 
-// ── 階段① 眉型設計 ──
+// ── 階段② 眉型設計與諮詢 ──
+const PMU_STYLE_DESC={
+  '溫柔感·韓系平眉':'眉峰平緩圓潤、線條柔和。適合長相清秀、韓系穿搭、希望整個人變溫柔、沒有攻擊性的客人。',
+  '俐落專業感':'眉峰角度明顯、眉尾俐落。適合眼神深邃、個性或歐美型穿搭、工作需展現氣場與專業度的都會女性。',
+  '精緻知性·標準眉':'順著骨骼微微上揚、眉尾自然收尖，不挑臉型最百搭。適合注重質感、日系簡約知性的客人。',
+  '原生自然風':'清透感、幾乎沒有框感，像用眉粉輕輕掃過。適合極少化妝、想「天生好看、不被發現做了眉」的低調客人。',
+  '男士自然眉':'順毛流、根根仿真、框感低、眉形略粗，保留陽剛與自然，避免過濃過黑。適合想修飾稀疏/雜亂又不想被看出來的男性。'
+};
 function pmuDesignStage(t){
-  const sources=S.data.settings?.pmuSources||DEFAULT_PMU_SOURCES;
-  const conditions=S.data.settings?.pmuConditions||DEFAULT_PMU_CONDITIONS;
-  const allergies=S.data.settings?.pmuAllergies||DEFAULT_PMU_ALLERGIES;
   const custList=(S.data.customers||[]).map(c=>c.name);
-  return`
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">👤 基本資料</span></div>
-      <div class="card-bd">
-        <div class="fg fg2">
-          <div class="fgrp"><label>姓名 *</label><input type="text" id="pmu_customer" list="pmu_custlist" value="${(t.customer||'').replace(/"/g,'&quot;')}" oninput="S.treatment.customer=this.value"><datalist id="pmu_custlist">${custList.map(n=>`<option value="${n}">`).join('')}</datalist></div>
-          <div class="fgrp"><label>行動電話 *</label><input type="tel" id="pmu_phone" value="${(t.phone||'').replace(/"/g,'&quot;')}" oninput="S.treatment.phone=this.value"></div>
-          <div class="fgrp"><label>生日</label><input type="date" id="pmu_birthday" value="${t.birthday||''}"></div>
-          <div class="fgrp"><label>LINE ID</label><input type="text" id="pmu_lineId" value="${(t.lineId||'').replace(/"/g,'&quot;')}" oninput="S.treatment.lineId=this.value"></div>
-          <div class="fgrp" style="grid-column:1/-1;"><label>通訊地址</label><input type="text" id="pmu_address" value="${(t.address||'').replace(/"/g,'&quot;')}" oninput="S.treatment.address=this.value"></div>
-          <div class="fgrp" style="grid-column:1/-1;"><label>E-mail</label><input type="email" id="pmu_email" value="${(t.email||'').replace(/"/g,'&quot;')}" oninput="S.treatment.email=this.value"></div>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
-          <input type="checkbox" ${t.isMinor?'checked':''} onchange="S.treatment.isMinor=this.checked;pmuSaveInputs();const c=$('pg-content');if(c)c.innerHTML=renderPage();"> 未成年（需法定代理人同意）
-        </label>
-        ${t.isMinor?`<div class="fgrp" style="margin-top:8px;"><label>法定代理人姓名</label><input type="text" id="pmu_guardian" value="${(t.guardianName||'').replace(/"/g,'&quot;')}" oninput="S.treatment.guardianName=this.value"></div>`:''}
-      </div>
-    </div>
+  function chipsOne(field,opts,accent){
+    accent=accent||'#9333ea';
+    return opts.map(function(o){var on=t[field]===o;return'<button type="button" style="padding:7px 13px;margin:3px;background:'+(on?accent:'var(--bg2)')+';color:'+(on?'#fff':'var(--txt)')+';border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet(&quot;'+field+'&quot;,&quot;'+o+'&quot;)">'+(on?'✓ ':'')+o+'</button>';}).join('');
+  }
+  function chipsMulti(field,opts){
+    return opts.map(function(o){var on=(t[field]||[]).includes(o);return'<label style="padding:7px 13px;margin:3px;display:inline-block;background:'+(on?'var(--pur)':'var(--bg2)')+';color:'+(on?'#fff':'var(--txt)')+';border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle(&quot;'+field+'&quot;,&quot;'+o+'&quot;)">'+(on?'✓ ':'')+o+'</label>';}).join('');
+  }
+  function lrRow(label,field,opts){
+    return '<div style="margin-top:12px;"><div style="font-size:13px;font-weight:700;color:#9333ea;margin-bottom:4px;">'+label+'</div>'
+      +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:4px;"><span style="width:40px;font-size:12px;color:#0891b2;font-weight:700;">左眉</span>'+chipsOne(field+'Left',opts,'#0891b2')+'</div>'
+      +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;"><span style="width:40px;font-size:12px;color:#db2777;font-weight:700;">右眉</span>'+chipsOne(field+'Right',opts,'#db2777')+'</div></div>';
+  }
+  function tip(txt){return'<div class="tm" style="font-size:12px;color:#92400e;background:#fffbeb;border-radius:8px;padding:8px 10px;margin-top:6px;line-height:1.6;">💡 '+txt+'</div>';}
 
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">✏️ 眉型設計與溝通</span></div>
-      <div class="card-bd">
-        <div class="fgrp"><label>服務項目</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            ${['霧眉','霧唇','霧眉+霧唇'].map(s=>`<button type="button" style="padding:8px 16px;background:${t.serviceType===s?'#9333ea':'var(--bg2)'};color:${t.serviceType===s?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:14px;" onclick="pmuSet('serviceType','${s}')">${s}</button>`).join('')}
-          </div>
-        </div>
-        <div class="fgrp" style="margin-top:10px;"><label>客人想要的風格</label>
-          <input type="text" id="pmu_designStyle" value="${(t.designStyle||'').replace(/"/g,'&quot;')}" placeholder="如：自然野生眉、韓系平眉、根根分明" oninput="S.treatment.designStyle=this.value">
-        </div>
-        <div class="fgrp" style="margin-top:10px;"><label>客人期待與需求</label>
-          <textarea id="pmu_expectation" rows="2" placeholder="客人對紋繡的期待、在意的點" oninput="S.treatment.expectation=this.value">${t.expectation||''}</textarea>
-        </div>
-        <div class="fgrp" style="margin-top:10px;"><label>設計溝通紀錄</label>
-          <textarea id="pmu_designNote" rows="3" placeholder="怎麼設計的、量了什麼、客人確認了什麼" oninput="S.treatment.designNote=this.value">${t.designNote||''}</textarea>
-        </div>
-      </div>
-    </div>
+  var h='';
+  // 基本資料（已移除通訊地址與 E-mail）
+  h+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">👤 基本資料</span></div><div class="card-bd"><div class="fg fg2">'
+    +'<div class="fgrp"><label>姓名 *</label><input type="text" id="pmu_customer" list="pmu_custlist" value="'+((t.customer||'').replace(/"/g,'&quot;'))+'" oninput="S.treatment.customer=this.value"><datalist id="pmu_custlist">'+custList.map(function(n){return'<option value="'+n+'">';}).join('')+'</datalist></div>'
+    +'<div class="fgrp"><label>行動電話 *</label><input type="tel" id="pmu_phone" value="'+((t.phone||'').replace(/"/g,'&quot;'))+'" oninput="S.treatment.phone=this.value"></div>'
+    +'<div class="fgrp"><label>生日</label><input type="date" id="pmu_birthday" value="'+(t.birthday||'')+'"></div>'
+    +'<div class="fgrp"><label>LINE ID</label><input type="text" id="pmu_lineId" value="'+((t.lineId||'').replace(/"/g,'&quot;'))+'" oninput="S.treatment.lineId=this.value"></div>'
+    +'</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;"><input type="checkbox" '+(t.isMinor?'checked':'')+' onchange="S.treatment.isMinor=this.checked;pmuSaveInputs();const c=$(&quot;pg-content&quot;);if(c)c.innerHTML=renderPage();"> 未成年（需法定代理人同意）</label>'
+    +(t.isMinor?'<div class="fgrp" style="margin-top:8px;"><label>法定代理人姓名</label><input type="text" id="pmu_guardian" value="'+((t.guardianName||'').replace(/"/g,'&quot;'))+'" oninput="S.treatment.guardianName=this.value"></div>':'')
+    +'<div class="fgrp" style="margin-top:10px;"><label>服務項目</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">'
+    +['霧眉','霧唇','霧眉+霧唇'].map(function(s){return'<button type="button" style="padding:8px 16px;background:'+(t.serviceType===s?'#9333ea':'var(--bg2)')+';color:'+(t.serviceType===s?'#fff':'var(--txt)')+';border:none;border-radius:16px;cursor:pointer;font-size:14px;" onclick="pmuSet(&quot;serviceType&quot;,&quot;'+s+'&quot;)">'+s+'</button>';}).join('')
+    +'</div></div></div></div>';
 
-    <div class="card" style="margin-bottom:14px;">
-      <div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">🔍 顧客面診評估</span></div>
-      <div class="card-bd">
-        ${(()=>{
-          const questions=S.data.settings?.pmuFaceQuestions||DEFAULT_PMU_FACE_QUESTIONS;
-          const colors=['#9333ea','#0891b2','#16a34a','#d97706','#dc2626','#7e22ce'];
-          return questions.map((q,qi)=>{
-            const val=(t.faceAnswers&&t.faceAnswers[q.key])||t[q.key]||'';
-            const col=colors[qi%colors.length];
-            if(q.type==='text'){
-              // 文字題
-              return`<div class="fgrp" style="${qi>0?'margin-top:12px;':''}"><label>${q.label}</label>
-                <textarea rows="2" placeholder="${(q.placeholder||'').replace(/"/g,'&quot;')}" oninput="pmuSetFaceAnswer('${q.key}',this.value)">${(val||'').replace(/</g,'&lt;')}</textarea>
-              </div>`;
-            }
-            // 單選題
-            return`<div class="fgrp" style="${qi>0?'margin-top:12px;':''}"><label>${q.label}</label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-                ${(q.options||[]).map(o=>`<button type="button" style="padding:6px 12px;background:${val===o?col:'var(--bg2)'};color:${val===o?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSetFaceAnswer('${q.key}','${o.replace(/'/g,"&#39;")}')">${val===o?'✓ ':''}${o}</button>`).join('')}
-              </div>
-            </div>`;
-          }).join('');
-        })()}
-      </div>
-    </div>
+  // 一、了解客人的需求
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">① 了解客人的需求</span></div><div class="card-bd">';
+  h+='<div class="tm" style="font-size:12px;margin-bottom:10px;">了解生活痛點與習慣，才能決定眉型方向與日常實用性。</div>';
+  h+='<div class="fgrp"><label>日常化妝習慣</label><div style="margin-top:4px;">'+chipsOne('makeupHabit',['天天全妝','常輕薄淡妝','偶爾淡妝','平常素顏'])+'</div>'
+    +tip('化妝習慣影響霧眉濃淡：天天全妝可做飽和一點；平常素顏要做得輕薄自然。')+'</div>';
+  h+='<div class="fgrp" style="margin-top:14px;"><label>工作是否常面對客戶／上鏡頭？</label><div style="margin-top:4px;">'+chipsOne('workFace',['常面對客戶/上鏡','偶爾','幾乎不用'])+'</div>'
+    +tip('影響眉型俐落度：常面對人群 → 可走專業俐落感或親和自然感。')+'</div>';
+  h+='<div class="fgrp" style="margin-top:14px;"><label>運動／流汗／游泳／戶外習慣？</label><div style="margin-top:4px;">'+chipsOne('exerciseHabit',['常運動流汗/游泳/戶外','偶爾','幾乎不'])+'</div>'
+    +tip('大油肌或愛運動者 → 留色率有挑戰，要提前告知，並建議適合的色乳。')+'</div>';
+  h+='<div class="fgrp" style="margin-top:14px;"><label>客人的生活痛點（最重要，可複選）</label><div style="margin-top:4px;">'+chipsMulti('painPoints',['高低眉','毛量稀疏','疤痕/空洞','手殘不會畫','想多睡10分鐘','舊眉/顏色不均','不對稱','其他'])+'</div>'
+    +'<input type="text" id="pmu_painPointNote" value="'+((t.painPointNote||'').replace(/"/g,'&quot;'))+'" placeholder="痛點補充（自訂填寫）" style="margin-top:8px;" oninput="S.treatment.painPointNote=this.value">'
+    +tip('這是他為什麼想做的原因。針對痛點加強了解與說明，客人會覺得非常貼心。')+'</div>';
+  h+='</div></div>';
 
-    <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署，這裡專注眉型設計即可。</div>
+  // 二、釐清風格
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #db2777;"><div class="card-hd" style="background:#fdf2f8;"><span class="card-ttl" style="color:#db2777;">② 釐清風格（可引導客人）</span></div><div class="card-bd">';
+  h+='<div style="margin-top:2px;">'+chipsOne('styleChoice',Object.keys(PMU_STYLE_DESC),'#db2777')+'</div>';
+  if(t.styleChoice&&PMU_STYLE_DESC[t.styleChoice]){
+    h+='<div style="margin-top:8px;background:#fdf2f8;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:#9d174d;"><b>'+t.styleChoice+'</b><br>'+PMU_STYLE_DESC[t.styleChoice]+'</div>';
+  }
+  h+='<div class="fgrp" style="margin-top:10px;"><label>自訂風格（選項沒有的自己填）</label><input type="text" id="pmu_styleCustom" value="'+((t.styleCustom||'').replace(/"/g,'&quot;'))+'" placeholder="客人講的風格、參考圖重點等" oninput="S.treatment.styleCustom=this.value"></div>';
+  h+='</div></div>';
 
-    <div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;">
-      <div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人決定要做了？</div>
-      <button type="button" class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuNext('consent')">
-        客人確定 → 交給客人簽同意書 →
-      </button>
-    </div>`;
+  // 三、期待值與衛教（防客訴）
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #d97706;"><div class="card-hd" style="background:#fffbeb;"><span class="card-ttl" style="color:#d97706;">③ 期待值對齊與衛教（防客訴）</span></div><div class="card-bd">';
+  h+='<div class="fgrp"><label>客人的期待（理解他想要什麼）</label><textarea id="pmu_expectation" rows="2" placeholder="客人對霧眉/霧唇的期待、最在意的點" oninput="S.treatment.expectation=this.value">'+((t.expectation||'').replace(/</g,'&lt;'))+'</textarea></div>';
+  h+='<div class="tm" style="font-size:12px;margin:10px 0 6px;color:#92400e;">以下觀念向客人說明後打勾，先打預防針，過渡期才不會驚慌：</div>';
+  function eduRow(field,title,desc){
+    return'<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;background:#fffbeb;border-radius:10px;margin-bottom:8px;">'
+      +'<input type="checkbox" '+(t[field]?'checked':'')+' style="margin-top:3px;transform:scale(1.3);flex-shrink:0;" onchange="S.treatment.'+field+'=this.checked;">'
+      +'<span style="font-size:13px;line-height:1.6;color:#444;"><b style="color:#d97706;">'+title+'</b><br>'+desc+'</span></label>';
+  }
+  h+=eduRow('eduSymmetry','對稱觀念','骨骼、肌肉、表情都是不對稱的，世上沒有100%對稱的眉毛。設計完一定讓客人在「正常坐姿、說話、微笑」時照鏡子確認，不能只躺著看。');
+  h+=eduRow('eduScab','結痂過渡期','前幾天顏色會偏深（像蠟筆小新），第5-7天開始皮屑代謝，請絕對不要用手摳。');
+  h+=eduRow('eduRetention','持久與留色','半永久通常維持1-2年慢慢變淡；吸色因人而異（油肌代謝快），3個月內的補色才是把不均補滿、讓眉毛完美的關鍵。');
+  h+='</div></div>';
+
+  // 四、顧客面診評估（選項化 + 左右眉 + 自訂）
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #0891b2;"><div class="card-hd" style="background:#ecfeff;"><span class="card-ttl" style="color:#0891b2;">④ 顧客面診評估</span></div><div class="card-bd">';
+  h+='<div class="fgrp"><label>眉毛是否有底色？</label><div style="margin-top:4px;">'+chipsOne('baseColor',['無底色','有·偏淺','有·略深','有·殘留舊色(紅/橘/青)'],'#0891b2')+'</div></div>';
+  h+='<div class="fgrp" style="margin-top:12px;"><label>太陽穴凹陷是否明顯？</label><div style="margin-top:4px;">'+chipsOne('templeHollow',['不明顯','輕微','明顯'],'#0891b2')+'</div></div>';
+  h+=lrRow('🌿 原生毛流狀況','hairFlow',['完整濃密','前濃後缺','整體偏淡','分布不均','雜亂逆生']);
+  h+=lrRow('💪 肌肉狀況（表情施力）','muscle',['正常','眉頭易用力','挑眉習慣','皺眉明顯']);
+  h+=lrRow('🦴 骨骼狀況','bone',['平整','眉骨偏高','眉骨偏低','額/顳骨落差']);
+  h+='<div class="fgrp" style="margin-top:12px;"><label>🧴 皮膚狀況</label><div style="margin-top:4px;">'+chipsOne('skinType',['中性','偏乾','偏油/大油肌','混合','敏感'],'#0891b2')+'</div>'
+    +'<input type="text" id="pmu_skinDesc" value="'+((t.skinDesc||'').replace(/"/g,'&quot;'))+'" placeholder="皮膚補充（出油、毛孔、角質…自訂）" style="margin-top:8px;" oninput="S.treatment.skinDesc=this.value"></div>';
+  h+='<div class="fgrp" style="margin-top:12px;"><label>📌 其他面診觀察（自訂）</label><textarea id="pmu_faceOther" rows="2" placeholder="任何其他重要觀察" oninput="S.treatment.faceOther=this.value">'+((t.faceOther||'').replace(/</g,'&lt;'))+'</textarea></div>';
+  h+='</div></div>';
+
+  // 五、設計溝通紀錄
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">⑤ 我幫客人的設計溝通紀錄</span></div><div class="card-bd">'
+    +'<textarea id="pmu_designNote" rows="3" placeholder="怎麼設計的、量了什麼、客人在鏡子前確認了什麼、最後定案的方向" oninput="S.treatment.designNote=this.value">'+((t.designNote||'').replace(/</g,'&lt;'))+'</textarea></div></div>';
+
+  h+='<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署。</div>';
+  h+='<div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;margin-top:10px;">'
+    +'<div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人在鏡子前確認滿意了？</div>'
+    +'<button type="button" class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuNext(&quot;operation&quot;)">完成設計 → 進入操作紀錄 →</button></div>';
+  return h;
 }
 
 window.pmuToggle=(field,val)=>{
@@ -7496,6 +7513,11 @@ window.pmuSubmit=async()=>{
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,faceAnswers:t.faceAnswers,
     leftBrow:t.leftBrow,rightBrow:t.rightBrow,
     boneDesc:t.boneDesc,muscleDesc:t.muscleDesc,skinDesc:t.skinDesc,faceOther:t.faceOther,
+    makeupHabit:t.makeupHabit,workFace:t.workFace,exerciseHabit:t.exerciseHabit,painPoints:t.painPoints||[],painPointNote:t.painPointNote,
+    styleChoice:t.styleChoice,styleCustom:t.styleCustom,
+    eduSymmetry:t.eduSymmetry,eduScab:t.eduScab,eduRetention:t.eduRetention,
+    templeHollow:t.templeHollow,skinType:t.skinType,
+    hairFlowLeft:t.hairFlowLeft,hairFlowRight:t.hairFlowRight,muscleLeft:t.muscleLeft,muscleRight:t.muscleRight,boneLeft:t.boneLeft,boneRight:t.boneRight,
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
     startTime:t.startTime,endTime:t.endTime,
@@ -9807,18 +9829,38 @@ window.caseNew=function(prefill){const id='case_'+uid();S.caseDraft=Object.assig
 function caseMapFromRecord(r){
   function fa(k){return (r.faceAnswers&&r.faceAnswers[k])||r[k]||'';}
   function asText(v){return Array.isArray(v)?v.join('、'):(v==null?'':String(v));}
+  function lr(left,right){return [left?('左：'+asText(left)):'',right?('右：'+asText(right)):''].filter(Boolean).join('　');}
   const brow=[fa('leftBrow')?('左眉：'+asText(fa('leftBrow'))):'',fa('rightBrow')?('右眉：'+asText(fa('rightBrow'))):''].filter(Boolean).join('\n');
-  const design=[r.designStyle?('設計風格：'+asText(r.designStyle)):'',r.designNote?asText(r.designNote):''].filter(Boolean).join('\n');
+  // 毛流/肌肉/骨骼：優先用新的左右眉欄位，沒有再用舊的文字
+  const hair=lr(r.hairFlowLeft,r.hairFlowRight)||asText(fa('hairFlow'));
+  const bone=lr(r.boneLeft,r.boneRight)||asText(fa('boneDesc'));
+  const muscle=lr(r.muscleLeft,r.muscleRight)||asText(fa('muscleDesc'));
+  const skin=[asText(r.skinType),asText(fa('skinDesc'))].filter(Boolean).join('　');
+  const faceAna=[asText(fa('faceOther')),r.templeHollow?('太陽穴凹陷：'+asText(r.templeHollow)):''].filter(Boolean).join('\n');
+  // 需求（化妝習慣/生活型態/痛點）併入客人期待
+  const needs=[
+    r.makeupHabit?('化妝習慣：'+asText(r.makeupHabit)):'',
+    r.workFace?('工作型態：'+asText(r.workFace)):'',
+    r.exerciseHabit?('運動/出油：'+asText(r.exerciseHabit)):'',
+    (r.painPoints&&r.painPoints.length)?('痛點：'+asText(r.painPoints)+(r.painPointNote?('（'+r.painPointNote+'）'):'')):''
+  ].filter(Boolean).join('\n');
+  const wish=[asText(r.expectation),needs].filter(Boolean).join('\n');
+  // 設計理念：風格 + 自訂 + 溝通紀錄
+  const design=[
+    r.styleChoice?('風格：'+asText(r.styleChoice)):(r.designStyle?('設計風格：'+asText(r.designStyle)):''),
+    r.styleCustom?('自訂風格：'+asText(r.styleCustom)):'',
+    r.designNote?asText(r.designNote):''
+  ].filter(Boolean).join('\n');
   const numb=[asText(r.numbCream),asText(r.numbTime)].filter(Boolean).join('　');
   return{
     preBaseColor:asText(fa('baseColor')),
-    preHairFlow:asText(fa('hairFlow')),
-    preSkin:asText(fa('skinDesc')),
-    preBone:asText(fa('boneDesc')),
-    preMuscle:asText(fa('muscleDesc')),
+    preHairFlow:hair,
+    preSkin:skin,
+    preBone:bone,
+    preMuscle:muscle,
     preBrowCond:brow,
-    preFaceAnalysis:asText(fa('faceOther')),
-    preCustomerWish:asText(r.expectation),
+    preFaceAnalysis:faceAna,
+    preCustomerWish:wish,
     preDesignIdea:design,
     opTool:asText(r.tools),
     opPigment:asText(r.pigments),
