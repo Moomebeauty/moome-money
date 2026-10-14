@@ -418,20 +418,103 @@ const DEFAULT_CARE_RULES=[
 // 補色價目表（基本設定可編輯）
 const DEFAULT_PMU_PRICING={
   '霧眉':{
-    firstPrice:8800, firstDiscount:6800,
+    firstPrice:8800, firstDiscount:6800,   // 原價 8800、新客優惠 6800
     freeMonths:3,          // 3個月內免費補色
-    m4to12:3000,           // 第4~12個月固定價
-    y1to2Discount:0.6,     // 第1~2年 6折
-    over2Discount:0.8      // 超過2年 8折
+    m4to12Discount:0.4,    // 第4~12個月 原價4折（8800×0.4=3520）
+    y1to2Discount:0.6,     // 第1~2年 原價6折（8800×0.6=5280）
+    over2Discount:0.8      // 超過2年 原價8折（8800×0.8=7040）
   },
   '霧唇':{
     firstPrice:10800, firstDiscount:8800,
     freeMonths:3,
-    m4to12:4000,
+    m4to12Discount:0.4,
     y1to2Discount:0.6,
     over2Discount:0.8
   }
 };
+// 依「原價(firstPrice)」為基準算各階段價格（補色折扣一律以原價計）
+function pmuTierPrice(p,key){
+  if(!p)return 0;
+  const orig=toN(p.firstPrice)||toN(p.firstDiscount)||0;
+  if(key==='new')return toN(p.firstDiscount)||orig;
+  if(key==='free')return 0;
+  if(key==='m4to12')return Math.round(orig*(toN(p.m4to12Discount)||0.4));
+  if(key==='y1to2')return Math.round(orig*(toN(p.y1to2Discount)||0.6));
+  if(key==='over2')return Math.round(orig*(toN(p.over2Discount)||0.8));
+  return 0;
+}
+
+// 紋繡「依補色階段」專屬權益條款與免責聲明（基本設定可編輯）
+// 健康聲明與個資是不變底版；選定本次服務類型後，系統自動帶出對應階段的條款
+const DEFAULT_PMU_STAGE_TERMS={
+  'new':`【新客首次施作・完整服務契約】
+
+一、費用與定金
+本次施作項目與金額以上方選定之方案為準。定金於預約時收取，無故取消恕不退還；已施作完成之服務不適用七日猶豫期之退費。
+
+二、風險告知（施作前已充分溝通）
+1. 眉型已於施作前與本人共同確認。本人理解世上沒有100%對稱的眉毛與骨架，紋繡以「視覺協調」為目標，無法保證左右完全對稱。
+2. 結痂期（約5-10天）會有顏色偏深、脫屑、落色不均等正常過渡現象，屬癒合過程，非服務瑕疵。
+3. 最終顏色需待結痂完全代謝（約28天）後方穩定。
+
+三、免費補色權益
+本次施作贈送「3個月內免費補色一次」，用以調整初次留色不均。逾3個月未回補者，視同自動放棄，免費權益即失效；後續補色一律依店內公告標準收費。`,
+
+  'free':`【3個月內免費補色・服務確認書】
+
+一、本次為新客首次施作所含之「免費補色」服務，不另收費。本人確認此為贈送服務，日後不就「本次未收費」提出任何爭議。
+
+二、本次補色為調整初次留色不均之正常程序。本人確認初次施作後已依衛教指示照護；若因個人撕摳結痂、沾水或碰觸等照護不當，導致發炎、感染或留色不良，概由本人自行負責。
+
+三、本次免費補色完成後，初次施作所附贈之免費服務即告終止。後續再行補色，一律依店內公告之補色標準收費。`,
+
+  'm4to12':`【回娘家補色（4-12個月）・付費微調同意書】
+
+本次屬原主契約之延伸加選服務，僅針對原設計範圍進行「填補空缺、加深飽和度、微調不均」，費用與退費標準以本次簽署為準。
+
+一、服務範圍
+本次為「回訪補色微調」，費用僅含原框線範圍內之上色與微調。若現場要求大幅變更眉型、加寬、拉長或重新設計，視同全新項目施作，須另補足全新項目之差額。
+
+二、健康狀況動態更新
+本人承諾自初次施作日至本次補色前，若有身體狀況變更（包括但不限於：確診懷孕、罹患慢性病、服用特定藥物、施作醫美雷射、近一個月內使用A酸等），皆已於本表單如實勾選。若因隱瞞健康變更而致過敏、出血或留色不良，由本人自行承擔風險。
+
+三、原底色疊加之顯色誤差告知
+本人理解皮膚經4-12個月代謝，原留存底色之深淺、冷暖色調皆會影響本次補色之最終發色；同意紋繡師依當下底色專業調色，並理解因個人體質代謝差異，無法保證與初次施作時100%完全相同。
+
+四、本次售後範圍
+本次付費補色為單次獨立服務，不延長或重置初次施作所附贈之免費補色期。完成後若仍有調整需求，後續預約皆依店內補色收費標準計費。`,
+
+  'y1to2':`【老客回訪補色（1-2年）・付費補色同意書】
+
+本次為舊客回娘家優惠期之付費補色，費用與退費標準以本次簽署為準。
+
+一、健康狀況重新確認
+距初次施作已逾一年，本人之健康狀況可能已改變，本表單所勾選者皆為簽署當日之最新真實狀態。若隱瞞（如懷孕、慢性病、服用藥物、近期雷射等）而致術後過敏、出血或留色不良，由本人自行承擔風險。
+
+二、舊色疊加之顯色差異
+皮膚內仍留有原底色，本次補色之最終發色與持久度可能與初次不同。本人同意紋繡師依當下底色專業調色，並理解無法保證與初次施作時完全一致。
+
+三、服務範圍與售後
+本次為原設計範圍內之補色微調；若要求大幅改型、加寬拉長或重新設計，視同全新項目另行計費。本次付費補色為單次獨立服務，不附贈免費補色期。`,
+
+  'over2':`【逾2年回訪・視同全新施作契約 ＋ 改眉轉色免責】
+
+距上次施作已逾24個月，依美業實務與契約時效，本次視同「全新項目施作」，過去之報價、活動與補色權益均已失效，一切以本次簽署之契約為準。
+
+一、舊殘留色免責
+本人明白距上次施作已逾24個月，皮膚內仍可能殘留舊底色（橘、紅、青藍）。本次之顯色度、吃色狀況及最終眉型，皆會受到舊底色影響，無法保證呈現全新無底色之效果。若因底色過深需額外進行「轉色」或「洗眉」，費用另計。
+
+二、費用與活動歸零
+本次視同全新項目施作，過往之活動報價、贈送之補色權益等皆已逾期失效，本次消費金額及後續補色權益，皆以本次簽署之契約條款為準。
+
+三、健康狀況全面重新宣告
+本人承諾本同意書所勾選之健康狀況（是否懷孕、糖尿病、蟹足腫、服用抗凝血劑、近半年內接受雷射等）皆為簽署當日之最新真實狀態。若有隱瞞而導致術後留色不佳或引發發炎、留疤等反應，由本人自行承擔風險。`
+};
+const PMU_STAGE_LABELS={'new':'新客首次（完整主契約）','free':'3個月免費補色（服務確認）','m4to12':'回娘家 4-12個月（付費微調）','y1to2':'回訪 1-2年（付費補色）','over2':'逾2年（視同全新＋改眉免責）'};
+function pmuStageTermsFor(key){
+  const map=(S.data.settings&&S.data.settings.pmuStageTerms)||{};
+  return (map[key]!==undefined?map[key]:DEFAULT_PMU_STAGE_TERMS[key])||'';
+}
 
 const DEFAULT_PMU_FACE_QUESTIONS=[
   {key:'baseColor',type:'choice',label:'是否有底色？',options:['有，略有深度','有，偏淺淡','無，已施作淡色','無']},
@@ -3892,15 +3975,13 @@ function getTouchupPrice(r){
   if(monthsDiff<freeMonths){
     price=0;isFree=true;label='免費補色';note='（'+freeMonths+'個月內免費一次）';
   }else if(monthsDiff<12){
-    price=toN(p.m4to12);label='回娘家補色';note='（第'+(freeMonths+1)+'~12個月）';
+    price=pmuTierPrice(p,'m4to12');label='回娘家補色';note='（第'+(freeMonths+1)+'~12個月・原價'+Math.round((toN(p.m4to12Discount)||0.4)*10)+'折）';
   }else if(monthsDiff<24){
-    const base=toN(p.firstDiscount)||toN(p.firstPrice);
-    price=Math.round(base*(toN(p.y1to2Discount)||0.6));
-    label='老客回娘家';note='（第1~2年 '+Math.round((toN(p.y1to2Discount)||0.6)*10)+'折）';
+    price=pmuTierPrice(p,'y1to2');
+    label='老客回娘家';note='（第1~2年 原價'+Math.round((toN(p.y1to2Discount)||0.6)*10)+'折）';
   }else{
-    const base=toN(p.firstDiscount)||toN(p.firstPrice);
-    price=Math.round(base*(toN(p.over2Discount)||0.8));
-    label='久違回娘家';note='（超過2年 '+Math.round((toN(p.over2Discount)||0.8)*10)+'折）';
+    price=pmuTierPrice(p,'over2');
+    label='久違回娘家';note='（超過2年 原價'+Math.round((toN(p.over2Discount)||0.8)*10)+'折）';
   }
   return {svc:svc,price:price,label:label,isFree:isFree,note:note,monthsDiff:monthsDiff};
 }
@@ -4267,6 +4348,26 @@ window.pmuTermsReset=()=>{
   const which=S.modal?.termsWhich||'privacy';
   if(!confirm('這段還原成預設？'))return;
   const ta=$('pmu_terms_edit');if(ta)ta.value=DEFAULT_PMU_TERMS[which]||'';
+  toast('已還原，記得按儲存');
+};
+
+// ── 紋繡階段專屬條款編輯 ──
+window.pmuStageTab=(k)=>{if(!S.modal)return;S.modal.stageWhich=k;const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();};
+window.savePmuStageTerms=async()=>{
+  const which=S.modal?.stageWhich||'new';
+  const val=$('pmu_stage_edit')?.value||'';
+  const map={...(S.data.settings?.pmuStageTerms||{})};
+  map[which]=val;
+  const settings={...(S.data.settings||{}),pmuStageTerms:map};
+  S.data.settings=settings;
+  await saveMain({settings});
+  toast('✅ 已儲存這段');
+  const inn=$('modal-inner');if(inn)inn.innerHTML=renderModal();
+};
+window.pmuStageReset=()=>{
+  const which=S.modal?.stageWhich||'new';
+  if(!confirm('這段還原成預設條款？'))return;
+  const ta=$('pmu_stage_edit');if(ta)ta.value=DEFAULT_PMU_STAGE_TERMS[which]||'';
   toast('已還原，記得按儲存');
 };
 
@@ -6709,11 +6810,11 @@ function pmuServiceTypeSelector(t){
   var pricing=(S.data.settings&&S.data.settings.pmuPricing)||DEFAULT_PMU_PRICING;
   var p=pricing[svc]||{};
   var types=[
-    {key:'new',label:'新客首次',price:toN(p.firstDiscount)||toN(p.firstPrice),note:'優惠價'},
+    {key:'new',label:'新客首次',price:pmuTierPrice(p,'new'),note:'優惠價'},
     {key:'free',label:'3個月免費補色',price:0,note:'🎁 免費'},
-    {key:'m4to12',label:'回娘家(4-12月)',price:toN(p.m4to12),note:''},
-    {key:'y1to2',label:'回娘家(1-2年)',price:Math.round((toN(p.firstDiscount)||toN(p.firstPrice))*(toN(p.y1to2Discount)||0.6)),note:'6折'},
-    {key:'over2',label:'回娘家(2年以上)',price:Math.round((toN(p.firstDiscount)||toN(p.firstPrice))*(toN(p.over2Discount)||0.8)),note:'8折'}
+    {key:'m4to12',label:'回娘家(4-12月)',price:pmuTierPrice(p,'m4to12'),note:'原價'+Math.round((toN(p.m4to12Discount)||0.4)*10)+'折'},
+    {key:'y1to2',label:'回娘家(1-2年)',price:pmuTierPrice(p,'y1to2'),note:'原價'+Math.round((toN(p.y1to2Discount)||0.6)*10)+'折'},
+    {key:'over2',label:'回娘家(2年以上)',price:pmuTierPrice(p,'over2'),note:'原價'+Math.round((toN(p.over2Discount)||0.8)*10)+'折'}
   ];
   var cur=t.pmuServiceType||'';
   var html='<div class="fgrp" style="margin-top:12px;background:#faf5ff;padding:12px;border-radius:10px;border:1px solid #e5d5f5;">'
@@ -6767,18 +6868,55 @@ function pmuConsentStage(t){
     +pmuServiceTypeSelector(t)
     +'</div></div>';
 
-  // 同意書內容（可捲動）— 標題讀自訂
   var TL=S2.pmuTermLabels||{};var NL=S2.pmuLabels||{};
-  var sections=[[NL.pmuNotice||'📋 紋繡須知',notice],[TL.privacy||'🔐 個人資料告知',terms.privacy],[TL.serviceDesc||'📖 服務說明書',terms.serviceDesc],[TL.consent||'📜 服務同意書',terms.consent],[TL.media||'📸 多媒體使用同意',terms.media]];
-  sections.forEach(function(sec){
-    html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">'+sec[0]+'</span></div><div class="card-bd"><div style="font-size:13px;line-height:1.9;white-space:pre-wrap;max-height:200px;overflow-y:auto;">'+(sec[1]||'')+'</div></div></div>';
-  });
+  // 勾選列小工具
+  function chkRow(id,field,label,checked,accent){
+    return'<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px 14px;background:'+(accent||'#f0fdf4')+';border-radius:10px;margin-top:10px;">'
+      +'<input type="checkbox" id="'+id+'" style="margin-top:2px;transform:scale(1.4);flex-shrink:0;" '+(checked?'checked':'')+' onchange="S.treatment.'+field+'=this.checked;">'
+      +'<span style="font-size:14px;font-weight:700;color:#166534;">'+label+'</span></label>';
+  }
+  function details(sum,body){
+    return'<details style="margin-top:8px;"><summary style="cursor:pointer;color:#9333ea;font-size:13px;">'+sum+'</summary><div style="font-size:13px;line-height:1.9;white-space:pre-wrap;max-height:240px;overflow-y:auto;margin-top:8px;padding:10px;background:var(--bg2);border-radius:8px;">'+body+'</div></details>';
+  }
+
+  // ① 個人資料告知（精簡一段 + 勾選）
+  html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">🔐 個人資料蒐集告知</span></div><div class="card-bd">'
+    +'<div style="font-size:13px;line-height:1.8;color:#444;">本工作室因紋繡服務及售後聯繫需要，依《個人資料保護法》蒐集您的姓名、聯絡方式與健康相關資料，僅用於本服務及必要聯繫，善盡安全維護義務、絕不外洩或移作他用。您得依法查詢、更正或刪除您的個人資料。</div>'
+    +details('展開完整個資告知事項',(terms.privacy||''))
+    +chkRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意上述個人資料之蒐集與使用',t.agreePrivacy)
+    +'</div></div>';
+
+  // ② 紋繡服務說明＋術後照護須知（合併，一句話勾選）
+  html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">📋 服務說明與術後照護須知</span></div><div class="card-bd">'
+    +chkRow('pmu_agree_notice','agreeNotice','顧客已確實閱讀並理解店內提供之紋繡服務說明與術後照護須知',t.agreeNotice)
+    +details('展開完整服務說明與須知',(notice||'')+'\n\n'+(terms.serviceDesc||''))
+    +'</div></div>';
+
+  // ③ 核心：服務與退費同意書（完整＋本次專屬條款，唯一需簽名處）
+  html+='<div class="card" style="margin-bottom:12px;border:2px solid #9333ea;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="font-size:15px;color:#9333ea;">📜 服務與退費同意書（核心主契約・需簽名）</span></div><div class="card-bd">'
+    +'<div style="font-size:13px;line-height:1.95;white-space:pre-wrap;max-height:300px;overflow-y:auto;">'+(terms.consent||'')+'</div>';
+  if(t.pmuServiceType){
+    var stageTxt=pmuStageTermsFor(t.pmuServiceType);
+    if(stageTxt){
+      html+='<div style="margin-top:12px;border:2px solid #d97706;border-radius:10px;overflow:hidden;"><div style="background:#fffbeb;padding:8px 12px;font-size:14px;font-weight:700;color:#d97706;">⚠️ 本次專屬條款 — '+(PMU_STAGE_LABELS[t.pmuServiceType]||'')+'</div><div style="font-size:13px;line-height:1.95;white-space:pre-wrap;max-height:300px;overflow-y:auto;padding:12px;">'+stageTxt+'</div></div>';
+    }
+  }else{
+    html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;margin-top:10px;">⬆️ 請先在上方選「這次服務類型」，系統會自動帶出該階段專屬條款（新客／免費補色／回娘家各不同）。</div>';
+  }
+  html+='</div></div>';
+
+  // ④ 多媒體使用同意（勾選即可）
+  html+='<div class="card" style="margin-bottom:12px;"><div class="card-hd" style="background:var(--bg2);"><span class="card-ttl" style="font-size:14px;">📸 多媒體使用同意</span></div><div class="card-bd">'
+    +chkRow('pmu_agree_media','agreeMedia','我同意本店於服務過程拍攝紀錄影像，供服務品質追蹤與後續諮詢參考',(t.agreeMedia!==false),'#eff6ff')
+    +details('展開多媒體使用說明',(terms.media||''))
+    +'</div></div>';
+
   html+='<div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-bottom:14px;font-size:13px;line-height:1.9;">'+(terms.closing||'')+'</div>';
 
-  // 同意勾選
-  html+='<label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:14px;background:#f3e8ff;border-radius:10px;margin-bottom:14px;">'
-    +'<input type="checkbox" id="pmu_consent_agree" style="margin-top:3px;transform:scale(1.3);" '+(t.consentAgreed?'checked':'')+' onchange="S.treatment.consentAgreed=this.checked;">'
-    +'<span style="font-size:14px;font-weight:700;color:#9333ea;">本人 '+(t.customer||'')+' 已詳細閱讀並充分理解上述全部內容，同意接受紋繡服務，所填資料屬實。</span></label>';
+  // 主要同意（簽署服務同意書）
+  html+='<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px;background:#f3e8ff;border-radius:10px;margin-bottom:14px;">'
+    +'<input type="checkbox" id="pmu_consent_agree" style="margin-top:3px;transform:scale(1.4);flex-shrink:0;" '+(t.consentAgreed?'checked':'')+' onchange="S.treatment.consentAgreed=this.checked;">'
+    +'<span style="font-size:14px;font-weight:700;color:#9333ea;">本人 '+(t.customer||'')+' 已詳閱並充分理解上述「服務與退費同意書」及本次專屬條款，同意接受紋繡服務，所填資料均屬實。</span></label>';
 
   // 簽名
   html+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:var(--purL);"><span class="card-ttl" style="color:var(--pur);">✍️ 顧客簽名</span></div><div class="card-bd">'
@@ -6799,8 +6937,15 @@ window.pmuConfirmConsent=function(){
     if(document.getElementById('pmu_customer'))t.customer=document.getElementById('pmu_customer').value.trim();
   }
   if(!t.customer){alert('請填客戶姓名');return;}
-  if(!t.consentAgreed&&!(document.getElementById('pmu_consent_agree')&&document.getElementById('pmu_consent_agree').checked)){alert('請勾選同意');return;}
-  if(!_sigCanvas||(!_sigHasContent&&!pmuCanvasHasInk(_sigCanvas))){alert('請簽名');return;}
+  // 讀取各勾選狀態
+  var gp=document.getElementById('pmu_agree_privacy');if(gp)t.agreePrivacy=gp.checked;
+  var gn=document.getElementById('pmu_agree_notice');if(gn)t.agreeNotice=gn.checked;
+  var gm=document.getElementById('pmu_agree_media');if(gm)t.agreeMedia=gm.checked;
+  var ca=document.getElementById('pmu_consent_agree');if(ca)t.consentAgreed=ca.checked;
+  if(!t.agreePrivacy){alert('請勾選「我已閱讀並同意個人資料之蒐集與使用」');return;}
+  if(!t.agreeNotice){alert('請勾選「已閱讀並理解服務說明與術後照護須知」');return;}
+  if(!t.consentAgreed){alert('請勾選最下方「同意服務與退費同意書」');return;}
+  if(!_sigCanvas||(!_sigHasContent&&!pmuCanvasHasInk(_sigCanvas))){alert('請在下方簽名');return;}
   t.consentSignature=_sigCanvas.toDataURL('image/jpeg',0.7);
   t.consentSignedAt=nowLocal();
   t.consentAgreed=true;
@@ -7363,6 +7508,7 @@ window.pmuSubmit=async()=>{
     isMinor:t.isMinor,guardianName:t.guardianName,
     date:t.date,staff:t.staff,serviceType:t.serviceType,
     pmuServiceType:t.pmuServiceType,pmuServicePrice:t.pmuServicePrice,
+    stageTermsSnapshot:pmuStageTermsFor(t.pmuServiceType),
     designStyle:t.designStyle,expectation:t.expectation,designNote:t.designNote,
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,faceAnswers:t.faceAnswers,
     leftBrow:t.leftBrow,rightBrow:t.rightBrow,
@@ -7373,6 +7519,7 @@ window.pmuSubmit=async()=>{
     numbCream:t.numbCream,numbTime:t.numbTime,
     tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
     consentSignature:t.consentSignature,consentSignedAt:t.consentSignedAt,
+    agreePrivacy:t.agreePrivacy,agreeNotice:t.agreeNotice,agreeMedia:t.agreeMedia,
     cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,
     aftercareGiven:t.aftercareGiven,photoAfterDone:t.photoAfterDone,
     touchupDate,oneYearDate,
@@ -7382,7 +7529,7 @@ window.pmuSubmit=async()=>{
   const pmuRecords=[...(S.data.pmuRecords||[]),record];
 
   let updates={pmuRecords};
-  if(t.customer&&!(S.data.customers||[]).find(c=>c.name===t.customer)){
+  if(t.customer&&!(S.data.customers||[]).find(c=>normalizeName(c.name)===normalizeName(t.customer))){
     updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
   }
 
@@ -7442,7 +7589,7 @@ ${terms.serviceDesc}
 ${terms.consent}
 
 ${terms.media}
-
+${(r.stageTermsSnapshot||(r.pmuServiceType&&pmuStageTermsFor(r.pmuServiceType)))?('\n━━━━━━━━━━━━━━━━━━━\n【本次專屬條款 — '+(PMU_STAGE_LABELS[r.pmuServiceType]||'')+'】\n'+(r.stageTermsSnapshot||pmuStageTermsFor(r.pmuServiceType))+'\n'):''}
 ${terms.closing}
 
 ━━━━━━━━━━━━━━━━━━━
@@ -10146,7 +10293,11 @@ function pgSettings(){
       <div class="tm" style="margin-bottom:10px;line-height:1.7;">
         設定紋繡服務時「無腦勾選」的選項（工具、色乳、麻膏等），以及同意書內容、須知、補色/回訪訊息。設好之後做紋繡時直接點選就好。
       </div>
-      <button class="btn" style="background:#9333ea;color:#fff;" onclick="openM('pmuSettings')">🎨 紋繡選項與同意書設定</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" style="background:#9333ea;color:#fff;" onclick="openM('pmuSettings')">🎨 紋繡選項與同意書設定</button>
+        <button class="btn" style="background:#d97706;color:#fff;" onclick="openM('pmuStageTerms')">📑 階段專屬條款（新客/補色/回娘家）</button>
+      </div>
+      <div class="tm" style="font-size:12px;margin-top:8px;color:#92400e;">💡 健康聲明與個資是不變底版；選定「這次服務類型」後，同意書會自動帶出該階段專屬的權益與免責條款（5 種版本，可各自編輯）。</div>
     </div>
   </div>
 
@@ -10358,6 +10509,23 @@ function renderModal(){
     <div class="fgrp"><label>項目說明</label><input type="text" id="pf_exp_item" placeholder="例：10月房租"></div>
     <div class="fgrp"><label>金額</label><input type="number" id="pf_exp_amount" placeholder="金額"></div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="pfSaveExpense()">✓ 記錄</button></div>`;
+  }
+
+  if(m.t==='pmuStageTerms'){
+    const which=S.modal.stageWhich||'new';
+    const keys=['new','free','m4to12','y1to2','over2'];
+    const val=pmuStageTermsFor(which);
+    c=`<div class="mttl">📑 紋繡階段專屬條款</div>
+    <div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin-bottom:12px;">做紋繡時選定「這次服務類型」，同意書會自動帶出對應的這段條款。<b>健康聲明與個資是共用底版</b>（在「紋繡選項與同意書設定」裡改），不在這裡。</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+      ${keys.map(function(k){return'<button type="button" class="btn btn-sm '+(which===k?'btn-p':'btn-s')+'" onclick="pmuStageTab(&quot;'+k+'&quot;)">'+PMU_STAGE_LABELS[k]+'</button>';}).join('')}
+    </div>
+    <textarea id="pmu_stage_edit" rows="16" style="width:100%;padding:12px;border:1px solid var(--bdr);border-radius:8px;font-size:13px;line-height:1.7;resize:vertical;">${(val||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+    <div class="mbtns">
+      <button class="btn btn-y" onclick="pmuStageReset()">↺ 這段還原預設</button>
+      <button class="btn btn-s" onclick="closeMod()">關閉</button>
+      <button class="btn btn-p" style="background:#d97706;" onclick="savePmuStageTerms()">✓ 儲存這段</button>
+    </div>`;
   }
 
   if(m.t==='addSale'){c=`<div class="mttl">💰 新增收入</div>
@@ -15513,7 +15681,7 @@ window.submitPassSign=async()=>{
 
   // 若客戶不存在則建檔
   let updates={passContracts};
-  if(t.customer&&!(S.data.customers||[]).find(c=>c.name===t.customer)){
+  if(t.customer&&!(S.data.customers||[]).find(c=>normalizeName(c.name)===normalizeName(t.customer))){
     updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
   }
   await saveMain(updates);
