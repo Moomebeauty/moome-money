@@ -9382,7 +9382,7 @@ function pgCostCompare(){
   const groupNames=Object.keys(groups).sort(function(a,b){return groups[b].length-groups[a].length||a.localeCompare(b);});
   var html='<div class="pg-ttl">🆚 成本比價</div>';
   html+='<div class="pg-sub">同性質產品的成本一起比 — 進貨前挑成本最低的，利潤額自然變高</div>';
-  html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;margin-bottom:14px;">💡 系統自動依品名把同性質的產品分群（安瓶歸安瓶、精華液歸精華液）。有填<b>容量</b>的會比「每 ml／每 g 成本」最公平；分群不對可按產品旁的「群組」自己改。</div>';
+  html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;margin-bottom:14px;">💡 系統自動依品名分群。<b>有填「容量」的會自動算出「每 ml／每 g 成本」</b>做最公平的比價；沒填容量的，按旁邊「✏️容量」就能當場補上、立刻升級成每 ml 比價。分群不對按「群組」可改。</div>';
   html+='<div style="margin-bottom:14px;"><input type="text" placeholder="🔍 搜尋產品／群組" value="'+((S.ccSearch||'').replace(/"/g,'&quot;'))+'" oninput="ccDoSearch(this.value)" style="width:100%;padding:10px 14px;border:1px solid var(--bdr);border-radius:8px;"></div>';
   if(prods.length===0){return html+'<div class="empty" style="padding:40px;"><div class="empty-ico">🆚</div><p>還沒有產品。到「🗂️ 庫存盤點」新增產品後，這裡就會自動幫你分群比價。</p></div>';}
 
@@ -9391,44 +9391,78 @@ function pgCostCompare(){
     var items=groups[g];
     if(q){items=items.filter(function(p){return((p.name||'')+g).toLowerCase().includes(q);});}
     if(items.length===0)return;
-    // 計算每個產品的成本
+    // 計算每個產品的成本（每個產品各自算每容量成本，不需全部都填）
+    function fmtCost(v){return v>=100?fmt(Math.round(v)):(Math.round(v*100)/100);}
     var rows=items.map(function(p){
       const unitCost=getAvgCost(p.id);
-      const cap=toN(p.capacity);
-      const capCost=cap>0?unitCost/cap:null;
-      return{p:p,unitCost:unitCost,cap:cap,capUnit:p.capacityUnit||'',capCost:capCost,hasCost:unitCost>0};
+      const cap=toN(p.capacity);const capUnit=p.capacityUnit||'';
+      const capCost=(cap>0&&unitCost>0&&capUnit)?unitCost/cap:null;
+      return{p:p,unitCost:unitCost,cap:cap,capUnit:capUnit,capCost:capCost,hasCost:unitCost>0};
     });
-    // 判斷比價基準：全部有容量且同單位 → 比每容量成本
-    const withCap=rows.filter(function(r){return r.hasCost&&r.cap>0;});
-    const units=Array.from(new Set(withCap.map(function(r){return r.capUnit;})));
-    const perCap=withCap.length>=2&&withCap.length===rows.filter(function(r){return r.hasCost;}).length&&units.length===1&&units[0]!=='';
-    const basisUnit=perCap?units[0]:'';
-    function cmpVal(r){return perCap?r.capCost:r.unitCost;}
-    // 有成本的排序（便宜→貴），無成本的放最後
-    const withCostRows=rows.filter(function(r){return r.hasCost;}).sort(function(a,b){return cmpVal(a)-cmpVal(b);});
-    const noCostRows=rows.filter(function(r){return !r.hasCost;});
-    const cheapest=withCostRows.length>0?cmpVal(withCostRows[0]):0;
-    const priciest=withCostRows.length>0?cmpVal(withCostRows[withCostRows.length-1]):0;
+    // 找出這群最主要的容量單位（ml / g / 片…）
+    var unitCount={};
+    rows.forEach(function(r){if(r.capCost!=null){unitCount[r.capUnit]=(unitCount[r.capUnit]||0)+1;}});
+    var dominantUnit='',best=0;
+    Object.keys(unitCount).forEach(function(u){if(unitCount[u]>best){best=unitCount[u];dominantUnit=u;}});
+    const hasAnyCap=dominantUnit!=='';
+    function comparable(r){return r.capCost!=null&&r.capUnit===dominantUnit;}
+    const compRows=rows.filter(comparable).slice().sort(function(a,b){return a.capCost-b.capCost;});
+    const usePerCap=compRows.length>=2;
+    // 排名清單（判斷最划算/最貴）
+    var rankList,useMetric;
+    if(usePerCap){rankList=compRows;useMetric='cap';}
+    else{rankList=rows.filter(function(r){return r.hasCost;}).slice().sort(function(a,b){return a.unitCost-b.unitCost;});useMetric='unit';}
+    const cheapest=rankList.length?(useMetric==='cap'?rankList[0].capCost:rankList[0].unitCost):0;
+    const priciest=rankList.length?(useMetric==='cap'?rankList[rankList.length-1].capCost:rankList[rankList.length-1].unitCost):0;
     const savePct=priciest>0?Math.round((priciest-cheapest)/priciest*100):0;
+    const missingCap=rows.filter(function(r){return r.hasCost&&r.capCost==null;}).length;
+    // 顯示順序：可比的(每X成本低→高) → 其餘有成本的(單位成本低→高) → 無成本
+    var displayRows;
+    if(usePerCap){
+      const others=rows.filter(function(r){return r.hasCost&&!comparable(r);}).sort(function(a,b){return a.unitCost-b.unitCost;});
+      const noCost=rows.filter(function(r){return !r.hasCost;});
+      displayRows=compRows.concat(others).concat(noCost);
+    }else{
+      const hc=rows.filter(function(r){return r.hasCost;}).sort(function(a,b){return a.unitCost-b.unitCost;});
+      const noCost=rows.filter(function(r){return !r.hasCost;});
+      displayRows=hc.concat(noCost);
+    }
 
-    html+='<div class="card" style="margin-bottom:14px;border:1px solid #e9d5f5;"><div class="card-hd" style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);"><span class="card-ttl" style="color:#9333ea;">🏷️ '+g+'（'+items.length+' 項）</span>'+(perCap?'<span class="bdg" style="background:#dbeafe;color:#1e40af;">比每 '+basisUnit+' 成本</span>':'<span class="bdg" style="background:#f3f4f6;color:#555;">比每單位成本</span>')+'</div><div class="card-bd">';
-    if(withCostRows.length>=2&&savePct>0){
+    html+='<div class="card" style="margin-bottom:14px;border:1px solid #e9d5f5;"><div class="card-hd" style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);"><span class="card-ttl" style="color:#9333ea;">🏷️ '+g+'（'+items.length+' 項）</span>'+(usePerCap?'<span class="bdg" style="background:#dbeafe;color:#1e40af;">比每 '+dominantUnit+' 成本</span>':'<span class="bdg" style="background:#f3f4f6;color:#555;">比單位成本</span>')+'</div><div class="card-bd">';
+    if(savePct>0&&rankList.length>=2){
       html+='<div class="notice" style="background:#f0fdf4;border-left-color:#16a34a;color:#166534;font-size:13px;margin-bottom:10px;">最貴的比最便宜的貴 <b>'+savePct+'%</b>。同性質優先用最划算的，成本就省下來了。</div>';
     }
-    html+='<div class="tw"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid #e9d5f5;"><th style="padding:7px 8px;text-align:left;">產品</th><th style="padding:7px 8px;text-align:right;">'+(perCap?('每 '+basisUnit+' 成本'):'單位成本')+'</th>'+(perCap?'<th style="padding:7px 8px;text-align:right;">單位成本</th><th style="padding:7px 8px;text-align:right;">容量</th>':'')+'<th style="padding:7px 8px;"></th></tr></thead><tbody>';
-    withCostRows.forEach(function(r,idx){
-      const isCheap=idx===0;const isExp=idx===withCostRows.length-1&&withCostRows.length>=2;
-      const tag=isCheap?'<span class="bdg" style="background:#16a34a;color:#fff;font-size:11px;">✓ 最划算</span>':(isExp?'<span class="bdg" style="background:#fee2e2;color:#dc2626;font-size:11px;">最貴</span>':'');
-      const mainCost=perCap?('$'+(r.capCost>=10?fmt(r.capCost):r.capCost.toFixed(2))+' /'+basisUnit):('$'+fmt(r.unitCost));
-      html+='<tr style="border-bottom:1px solid #f1f5f9;'+(isCheap?'background:#f0fdf4;':'')+'">'
-        +'<td style="padding:7px 8px;"><b>'+(r.p.name||'')+'</b>'+(r.p.supplier?'<span class="tm" style="font-size:11px;"> · '+r.p.supplier+'</span>':'')+' '+tag+'</td>'
-        +'<td style="padding:7px 8px;text-align:right;font-weight:800;color:'+(isCheap?'#16a34a':(isExp?'#dc2626':'#333'))+';">'+mainCost+'</td>'
-        +(perCap?('<td style="padding:7px 8px;text-align:right;color:#666;">$'+fmt(r.unitCost)+'</td><td style="padding:7px 8px;text-align:right;color:#999;">'+(r.cap>0?(r.cap+(r.capUnit||'')):'-')+'</td>'):'')
+    if(usePerCap&&missingCap>0){
+      html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin-bottom:10px;">還有 '+missingCap+' 項沒填容量（或單位不同），按「✏️容量」補上，就能一起比每 '+dominantUnit+' 成本。</div>';
+    }else if(!usePerCap&&rows.filter(function(r){return r.hasCost;}).length>=2){
+      html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin-bottom:10px;">這群還沒有足夠的「容量」資料，目前比整瓶／整盒的單位成本。想比「每 ml 成本」更公平，按產品旁的「✏️容量」把容量填上（例如 10 ml）。</div>';
+    }
+    html+='<div class="tw"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid #e9d5f5;"><th style="padding:7px 8px;text-align:left;">產品</th>'+(hasAnyCap?'<th style="padding:7px 8px;text-align:right;">每 '+dominantUnit+' 成本</th>':'')+'<th style="padding:7px 8px;text-align:right;">單位成本</th><th style="padding:7px 8px;text-align:right;">容量</th><th style="padding:7px 8px;"></th></tr></thead><tbody>';
+    displayRows.forEach(function(r){
+      const isCheap=rankList.length>0&&r===rankList[0];
+      const isExp=rankList.length>=2&&r===rankList[rankList.length-1];
+      const tag=isCheap?' <span class="bdg" style="background:#16a34a;color:#fff;font-size:11px;">✓ 最划算</span>':(isExp?' <span class="bdg" style="background:#fee2e2;color:#dc2626;font-size:11px;">最貴</span>':'');
+      // 每X成本欄
+      var capCell='';
+      if(hasAnyCap){
+        if(comparable(r)){
+          const col=isCheap?'#16a34a':(isExp?'#dc2626':'#333');
+          capCell='<td style="padding:7px 8px;text-align:right;font-weight:800;color:'+col+';">$'+fmtCost(r.capCost)+' /'+dominantUnit+'</td>';
+        }else if(r.capCost!=null){
+          capCell='<td style="padding:7px 8px;text-align:right;color:#666;">$'+fmtCost(r.capCost)+' /'+r.capUnit+'</td>';
+        }else{
+          capCell='<td style="padding:7px 8px;text-align:right;"><button class="btn btn-sm btn-y" style="font-size:11px;padding:3px 8px;" onclick="setProductCapacity(&quot;'+r.p.id+'&quot;)">✏️容量</button></td>';
+        }
+      }
+      const unitCell=r.hasCost?('$'+fmt(r.unitCost)):'<span style="color:#999;">尚無成本</span>';
+      const sizeCell=r.cap>0?(r.cap+(r.capUnit||'')):'<button class="btn btn-sm" style="font-size:11px;padding:2px 7px;color:#d97706;" onclick="setProductCapacity(&quot;'+r.p.id+'&quot;)">＋填</button>';
+      html+='<tr style="border-bottom:1px solid #f1f5f9;'+(isCheap?'background:#f0fdf4;':'')+(r.hasCost?'':'opacity:0.65;')+'">'
+        +'<td style="padding:7px 8px;"><b>'+(r.p.name||'')+'</b>'+(r.p.supplier?'<span class="tm" style="font-size:11px;"> · '+r.p.supplier+'</span>':'')+tag+'</td>'
+        +capCell
+        +'<td style="padding:7px 8px;text-align:right;">'+unitCell+'</td>'
+        +'<td style="padding:7px 8px;text-align:right;color:#999;">'+sizeCell+'</td>'
         +'<td style="padding:7px 8px;text-align:right;white-space:nowrap;"><button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="setCompareGroup(&quot;'+r.p.id+'&quot;)">群組</button></td>'
         +'</tr>';
-    });
-    noCostRows.forEach(function(r){
-      html+='<tr style="border-bottom:1px solid #f1f5f9;opacity:0.6;"><td style="padding:7px 8px;">'+(r.p.name||'')+'</td><td style="padding:7px 8px;text-align:right;color:#999;">尚無成本</td>'+(perCap?'<td></td><td></td>':'')+'<td style="padding:7px 8px;text-align:right;"><button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="setCompareGroup(&quot;'+r.p.id+'&quot;)">群組</button></td></tr>';
     });
     html+='</tbody></table></div></div></div>';
     shown++;
@@ -9437,6 +9471,21 @@ function pgCostCompare(){
   return html;
 }
 window.ccDoSearch=function(v){S.ccSearch=v;const c=$('pg-content');if(c)c.innerHTML=renderPage();};
+window.setProductCapacity=async function(pid){
+  const p=(S.data.products||[]).find(function(x){return x.id===pid;});
+  if(!p)return;
+  const cur=toN(p.capacity)>0?(toN(p.capacity)+' '+(p.capacityUnit||'')):'';
+  const v=prompt('輸入「'+(p.name||'')+'」的容量與單位\n例如：10 ml、400 g、30 片、1 瓶\n（留空可清除）',cur);
+  if(v===null)return;
+  var capacity=0,unit='';
+  const m=(v||'').trim().match(/^([\d.]+)\s*(.*)$/);
+  if(m){capacity=parseFloat(m[1])||0;unit=(m[2]||'').trim();}
+  const prods=(S.data.products||[]).map(function(x){return x.id===pid?Object.assign({},x,{capacity:capacity,capacityUnit:unit}):x;});
+  S.data.products=prods;
+  await saveMain({products:prods});
+  toast('✅ 已更新容量'+(unit?'':'（提醒：要填單位如 ml 才能比每單位成本）'));
+  render();
+};
 window.setCompareGroup=async function(pid){
   const p=(S.data.products||[]).find(function(x){return x.id===pid;});
   if(!p)return;
