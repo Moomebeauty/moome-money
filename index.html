@@ -4454,6 +4454,16 @@ window.delPmuRecordDirect=async function(id){
   }
 };
 
+// 只計算「真正存進主文件」的欄位大小（排除照片等子集合，它們是分開存的獨立文件，不算主文件 1MB）
+const SUBCOLLECTION_KEYS=['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases'];
+function mainDocSize(){
+  try{
+    var obj={};
+    Object.keys(S.data||{}).forEach(function(k){if(SUBCOLLECTION_KEYS.indexOf(k)<0)obj[k]=S.data[k];});
+    return JSON.stringify(obj).length;
+  }catch(e){return 0;}
+}
+
 window.slimMainDoc=async function(){
   const sizeOf=function(obj){try{return JSON.stringify(obj||'').length;}catch(e){return 0;}};
   const parts=[
@@ -4469,9 +4479,9 @@ window.slimMainDoc=async function(){
     {key:'passContracts',label:'除毛合約',size:sizeOf(S.data.passContracts)},
     {key:'trialPacks',label:'試用包',size:sizeOf(S.data.trialPacks)}
   ];
-  const total=sizeOf(S.data);
+  const total=mainDocSize();
   parts.sort(function(a,b){return b.size-a.size;});
-  let msg='【主文件體檢】目前約 '+(total/1048576).toFixed(2)+' MB（上限 1 MB）\n\n各部分大小：\n';
+  let msg='【主文件體檢】目前約 '+(total/1048576).toFixed(2)+' MB（上限 1 MB）\n（照片是分開存的，不算在這裡）\n\n各部分大小：\n';
   parts.forEach(function(p){
     if(p.size>1000)msg+='・'+p.label+'：'+(p.size/1024).toFixed(0)+' KB\n';
   });
@@ -4517,8 +4527,7 @@ window.slimMainDoc=async function(){
 
 window.cleanPmuDrafts=async function(){
   var drafts=S.data.pmuDrafts||[];
-  var totalSize=0;
-  try{totalSize=JSON.stringify(S.data).length;}catch(e){}
+  var totalSize=mainDocSize();
   var sizeMB=(totalSize/1048576).toFixed(2);
   var msg='目前資料約 '+sizeMB+' MB（上限 1 MB）。\n\n';
   if(drafts.length===0){
@@ -6833,6 +6842,16 @@ window.pmuSetServiceType=function(key,price){
   setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},100);
 };
 
+// 取這位客人的「初次施作日期」（最早一筆紋繡紀錄；優先新客首次）
+function getFirstPmuDate(name){
+  if(!name)return '';
+  const nm=normalizeName(name);
+  const recs=(S.data.pmuRecords||[]).filter(function(r){return normalizeName(r.customer)===nm&&r.date;}).sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
+  if(recs.length===0)return '';
+  const firstNew=recs.find(function(r){return r.pmuServiceType==='new'||!r.pmuServiceType;});
+  return (firstNew&&firstNew.date)||recs[0].date||'';
+}
+
 function pmuConsentStage(t){
   var S2=S.data.settings||{};
   var terms=S2.pmuTerms||DEFAULT_PMU_TERMS;
@@ -6856,6 +6875,34 @@ function pmuConsentStage(t){
     +'</div></div>'
     +pmuServiceTypeSelector(t)
     +'</div></div>';
+
+  // 📅 補色類：顯示「初次施作日期」做法律佐證，自動帶出並驗證免費期
+  if(t.pmuServiceType&&t.pmuServiceType!=='new'){
+    var _firstD=t.firstPmuDate||getFirstPmuDate(t.customer);
+    var _today2=t.date||today();
+    var _intvTxt='',_verdict='';
+    if(_firstD){
+      var _d1=new Date(_firstD+'T00:00:00'),_d2=new Date(_today2+'T00:00:00');
+      if(!isNaN(_d1.getTime())&&!isNaN(_d2.getTime())){
+        var _days=Math.round((_d2-_d1)/86400000);
+        var _months=(_d2.getFullYear()-_d1.getFullYear())*12+(_d2.getMonth()-_d1.getMonth());
+        _intvTxt='距初次施作約 '+_months+' 個月（'+_days+' 天）';
+        if(t.pmuServiceType==='free'){
+          var _pr=(S.data.settings&&S.data.settings.pmuPricing&&S.data.settings.pmuPricing['霧眉'])||DEFAULT_PMU_PRICING['霧眉'];
+          var _freeM=toN(_pr.freeMonths)||3;
+          _verdict=(_days<=_freeM*31)?'<span style="color:#16a34a;font-weight:800;">✓ 仍在 '+_freeM+' 個月免費補色期內</span>':'<span style="color:#dc2626;font-weight:800;">⚠️ 已超過 '+_freeM+' 個月免費期（建議改回娘家付費補色）</span>';
+        }
+      }
+    }
+    html+='<div class="card" style="margin-bottom:14px;border-left:4px solid #d97706;"><div class="card-hd" style="background:#fffbeb;"><span class="card-ttl" style="color:#d97706;font-size:14px;">📅 初次施作日期（補色佐證）</span></div><div class="card-bd">';
+    html+='<div class="fg fg2">';
+    html+='<div class="fgrp"><label>初次施作日期'+(_firstD?'（系統自動帶出，可修改）':'（系統查無，請手動填）')+'</label><input type="date" id="pmu_firstDate" value="'+(_firstD||'')+'" onchange="S.treatment.firstPmuDate=this.value;var c=$(&quot;pg-content&quot;);if(c)c.innerHTML=renderPage();"></div>';
+    html+='<div class="fgrp"><label>本次補色日期</label><input type="date" value="'+_today2+'" disabled style="background:#f8fafc;color:#666;"></div>';
+    html+='</div>';
+    if(_intvTxt)html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;margin-top:8px;">'+_intvTxt+'　'+_verdict+'</div>';
+    html+='<div class="tm" style="font-size:12px;margin-top:6px;">💡 這個日期會印進同意書，白紙黑字證明本次補色的時間點，法律證據更完整。</div>';
+    html+='</div></div>';
+  }
 
   // 🩺 身體狀況（誠實告知）— 在簽名前先聲明健康狀況
   var conditions=S2.pmuConditions||DEFAULT_PMU_CONDITIONS;
@@ -6906,13 +6953,10 @@ function pmuConsentStage(t){
 
   html+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="font-size:14px;color:#9333ea;">📝 最後確認</span></div><div class="card-bd">';
   html+='<div class="tm" style="font-size:12px;margin-bottom:12px;">每一項請勾選確認。想看完整條款，點<span style="color:#2563eb;">藍色文字</span>就會展開；看完再收起。</div>';
-  html+=legalRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意','個人資料蒐集、處理及利用告知事項','（含我填寫的姓名、電話與健康狀況）',(terms.privacy||''),t.agreePrivacy);
+  html+=legalRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意','個人資料蒐集、處理及利用告知事項','',(terms.privacy||''),t.agreePrivacy);
   html+=legalRow('pmu_agree_notice','agreeNotice','我已閱讀並理解','紋繡服務說明與術後照護須知','',((notice||'')+'\n\n'+(terms.serviceDesc||'')),t.agreeNotice);
-  html+=legalRow('pmu_consent_agree','consentAgreed','我已詳閱並同意','服務與退費同意書','（含本次專屬條款、定金退費與補色權益）',((terms.consent||'')+stageFull),t.consentAgreed);
-  if(!t.pmuServiceType){
-    html+='<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:12px;margin:-2px 0 10px;">⬆️ 記得先在上方選「這次服務類型」，才會帶出對應的退費與補色條款。</div>';
-  }
-  html+=legalRow('pmu_agree_media','agreeMedia','我同意','多媒體影像使用','（服務過程拍攝，供品質追蹤與諮詢參考）',(terms.media||''),(t.agreeMedia!==false));
+  html+=legalRow('pmu_consent_agree','consentAgreed','我已詳閱並同意','服務與退費同意書','',((terms.consent||'')+stageFull),t.consentAgreed);
+  html+=legalRow('pmu_agree_media','agreeMedia','我同意','多媒體影像使用','',(terms.media||''),(t.agreeMedia!==false));
   html+='</div></div>';
 
   // 簽名
@@ -6942,6 +6986,7 @@ window.pmuConfirmConsent=function(){
   var gn=document.getElementById('pmu_agree_notice');if(gn)t.agreeNotice=gn.checked;
   var gm=document.getElementById('pmu_agree_media');if(gm)t.agreeMedia=gm.checked;
   var ca=document.getElementById('pmu_consent_agree');if(ca)t.consentAgreed=ca.checked;
+  var fd=document.getElementById('pmu_firstDate');if(fd&&fd.value)t.firstPmuDate=fd.value;
   if(!t.agreePrivacy){alert('請勾選「我已閱讀並同意個人資料之蒐集與使用」');return;}
   if(!t.agreeNotice){alert('請勾選「已閱讀並理解服務說明與術後照護須知」');return;}
   if(!t.consentAgreed){alert('請勾選最下方「同意服務與退費同意書」');return;}
@@ -7525,6 +7570,7 @@ window.pmuSubmit=async()=>{
     tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
     consentSignature:t.consentSignature,consentSignedAt:t.consentSignedAt,
     agreePrivacy:t.agreePrivacy,agreeNotice:t.agreeNotice,agreeMedia:t.agreeMedia,
+    firstPmuDate:t.firstPmuDate||'',
     cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,
     aftercareGiven:t.aftercareGiven,photoAfterDone:t.photoAfterDone,
     touchupDate,oneYearDate,
@@ -7582,7 +7628,7 @@ window.downloadPmuConsent=()=>{
 
 顧客姓名：${r.customer}　電話：${r.phone||''}
 服務項目：${r.serviceType}　日期：${r.date}
-身體狀況：${condStr}
+${(r.pmuServiceType&&r.pmuServiceType!=='new'&&r.firstPmuDate)?`初次施作日期：${r.firstPmuDate}　本次補色日期：${r.date}${(function(){try{var a=new Date(r.firstPmuDate+'T00:00:00'),b=new Date(r.date+'T00:00:00');var dd=Math.round((b-a)/86400000);var mm=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());return '　（間隔約 '+mm+' 個月 / '+dd+' 天'+(r.pmuServiceType==='free'?'，屬3個月內免費補色':'')+'）';}catch(e){return '';}})()}\n`:''}身體狀況：${condStr}
 過敏史：${allergyStr}
 ${r.isMinor?`未成年，法定代理人：${r.guardianName||''}\n`:''}
 ${notice}
@@ -15524,7 +15570,7 @@ window.copyPassContractText=()=>{
 window.startPmuFlow=()=>{
   // 開始前檢查主文件大小，太大先提醒清理（避免流程中一直存檔失敗）
   let dataSize=0;
-  try{dataSize=JSON.stringify(S.data).length;}catch(e){}
+  dataSize=mainDocSize();
   if(dataSize>950000){
     if(confirm('⚠️ 系統資料已接近上限（'+(dataSize/1048576).toFixed(2)+'MB / 1MB），現在開始可能會一直存檔失敗。\n\n建議先去「基本設定 → 資料修復 → 主文件體檢瘦身」清理空間。\n\n要先去清理嗎？（取消＝仍要開始）')){
       setP('settings');
