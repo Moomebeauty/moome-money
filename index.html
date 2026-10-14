@@ -1408,7 +1408,6 @@ function appHTML(){
     {id:'customerAsset',ico:'💎',lbl:'客戶資產名單'},
     {id:'sales',ico:'💰',lbl:'收入記帳'},
     {id:'order',ico:'🧴',lbl:'銷售開單'},
-    {id:'treatment',ico:'📱',lbl:'服務確認與簽名'},
     {id:'expenses',ico:'💸',lbl:'支出記帳'},
     {id:'purchase',ico:'📦',lbl:'進貨管理'},
     {id:'inventory',ico:'🗂️',lbl:'庫存盤點'},
@@ -3871,71 +3870,12 @@ function pgCustomerDetail(c){
         <button class="btn btn-s" onclick="delCustomer('${c.id}')" style="color:var(--red);">× 刪除客戶</button>`}
   </div>
 
-  <div class="sg sg2">
-    <!-- 儲值紀錄 -->
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">💳 儲值入帳紀錄</span></div>
-      <div class="tw"><table>
-        <thead><tr><th>日期</th><th>面額</th><th>實收</th><th>折扣</th><th>付款方式</th><th>類型</th><th>備註</th><th></th></tr></thead>
-        <tbody>${c.deposits.length===0?`<tr><td colspan="8"><div class="empty"><p>尚無儲值紀錄</p></div></td></tr>`:
-          c.deposits.map(d=>{
-            const actual=toN(d.actualReceived||d.amount);
-            const face=toN(d.amount);
-            const rate=face>0?actual/face:1;
-            const rateText=rate<1?`${(rate*10).toFixed(1)}折`:'-';
-            const isRestricted=d.scope==='restricted';
-            const allowedList=(d.allowedServices||[]).join('、');
-            return`<tr style="${isRestricted?'background:var(--purL);':''}">
-            <td>${d.date}${d.signed?`<br><button class="bdg" style="background:var(--purL);color:var(--pur);font-size:10px;border:none;cursor:pointer;margin-top:2px;" onclick="showDepositSign('${d.id}')">✍️ 已簽名</button>`:''}</td>
-            <td class="ag">$${fmt(face)}</td>
-            <td class="tm">$${fmt(actual)}</td>
-            <td class="tm">${rateText}</td>
-            <td><span class="bdg">${d.payMethod||''}</span></td>
-            <td>${isRestricted
-              ?`<span class="bdg" style="background:var(--pur);color:#fff;font-size:10px;" title="${allowedList}">🎯 限定</span><div class="tm" style="font-size:10px;margin-top:2px;color:var(--pur);">${allowedList}</div>${d.monthlyLimit>0?`<div class="tm" style="font-size:10px;">${d.monthlyLimit}次/月</div>`:''}`
-              :`<span class="bdg" style="background:var(--bg2);color:var(--mut);font-size:10px;">通用</span>`}</td>
-            <td class="tm">${d.note||''}</td>
-            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editDeposit','${d.id}')" title="編輯">✏️</button><button class="bdel" onclick="delDeposit('${d.id}')" title="刪除">×</button></td>
-          </tr>`;}).join('')}
-        </tbody>
-      </table></div>
-    </div>
+  ${custIntakeHtml(c)}
 
-    <!-- 服務歷史 -->
-    <div class="card">
-      <div class="card-hd"><span class="card-ttl">🌸 服務歷史</span></div>
-      <div class="tw"><table>
-        <thead><tr><th>日期</th><th>項目</th><th>金額</th><th>付款</th><th>老師</th><th></th></tr></thead>
-        <tbody>${c.services.length===0?`<tr><td colspan="6"><div class="empty"><p>尚無服務紀錄</p></div></td></tr>`:
-          c.services.map(s=>`<tr>
-            <td>${s.date}</td>
-            <td><b>${s.item||''}</b>${s.subNote?`<div class="tm">${s.subNote}</div>`:''}${s.payMethod==='儲值扣款'&&s.depositOwner&&s.depositOwner!==c.name?`<div class="tm" style="color:var(--pur);">🔗 從 ${s.depositOwner} 共用儲值扣款</div>`:''}</td>
-            <td class="ap">$${fmt(s.amount)}</td>
-            <td><span class="bdg ${s.payMethod==='儲值扣款'?'gold':''}">${s.payMethod||''}</span></td>
-            <td class="tm">${s.staff||''}</td>
-            <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
-          </tr>`).join('')}
-        </tbody>
-      </table></div>
-    </div>
-  </div>
+  <div id="cust-tabs">${custTabsHtml(c)}</div>`;
+}
 
-  ${c.usedByOthers&&c.usedByOthers.length>0?`<div class="card">
-    <div class="card-hd"><span class="card-ttl">🔗 他人使用 ${c.name} 儲值的紀錄</span></div>
-    <div class="tw"><table>
-      <thead><tr><th>日期</th><th>使用人</th><th>項目</th><th>金額</th><th>老師</th><th></th></tr></thead>
-      <tbody>${c.usedByOthers.map(s=>`<tr>
-        <td>${s.date}</td>
-        <td><b>${s.customer||''}</b></td>
-        <td>${s.item||''}${s.subNote?`<div class="tm">${s.subNote}</div>`:''}</td>
-        <td class="an">-$${fmt(s.amount)}</td>
-        <td class="tm">${s.staff||''}</td>
-        <td style="white-space:nowrap;"><button class="bdel" style="color:#aaa;" onclick="openM('editSale','${s.id}')" title="編輯">✏️</button><button class="bdel" onclick="delSale('${s.id}')" title="刪除">×</button></td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-  </div>`:''}
-
-  ${(() => {
+function custIntakeHtml(c){return (() => {
     // 初次建檔的同意書與健康檔案（從客戶檔案讀取）
     const cust=(S.data.customers||[]).find(x=>x.name===c.name)||{};
     const hasHealth=cust.healthForm&&Object.keys(cust.healthForm).length>0;
@@ -3958,10 +3898,9 @@ function pgCustomerDetail(c){
         </div>
       </div>
     </div>`;
-  })()}
-
-  ${(() => {
-    const passes=(S.data.passContracts||[]).filter(p=>p.customer===c.name);
+  })();}
+function custPassHtml(c){return (() => {
+    const passes=(S.data.passContracts||[]).filter(p=>normalizeName(p.customer)===normalizeName(c.name));
     if(passes.length===0)return'';
     return`<div class="sec" style="margin-top:20px;">
       <div class="sec-hd"><span class="sec-ttl">🎫 除毛吃到飽合約（${passes.length} 筆）</span></div>
@@ -3990,9 +3929,8 @@ function pgCustomerDetail(c){
         </div>`;
       }).join('')}
     </div>`;
-  })()}
-
-  ${(() => {
+  })();}
+function custPmuHtml(c){return (() => {
     // 🎨 紋繡紀錄（客名比對忽略空格/全半形，撈回同一人所有拼法）
     const recs=(S.data.pmuRecords||[]).filter(r=>normalizeName(r.customer)===normalizeName(c.name)).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     if(recs.length===0)return'';
@@ -4056,10 +3994,132 @@ function pgCustomerDetail(c){
         </div>`;
       }).join('')}
     </div>`;
-  })()}
+  })();}
 
-  ${pgTreatmentRecords(c)}`;
+// ── 客戶頁：分頁＋時間軸 ──
+function custTimelineItems(c,kind){
+  const items=[];
+  const pmuTypeLabels={new:'新客首次',free:'3個月免費補色',m4to12:'回娘家(4-12月)',y1to2:'回娘家(1-2年)',over2:'回娘家(2年以上)'};
+  if(kind==='all'||kind==='sales'){
+    (c.services||[]).forEach(s=>{
+      const ico=s.type==='product'?'🧴':s.type==='course'?'📋':'🌸';
+      items.push({date:s.date||'',ico,bg:'#fdf2f8',title:s.item||'（未填項目）',
+        amount:'$'+fmt(s.amount),amtColor:'var(--rose)',
+        meta:[s.payMethod?'<span class="bdg '+(s.payMethod==='儲值扣款'?'gold':'')+'" style="font-size:10px;">'+s.payMethod+'</span>':'',s.staff||''].filter(Boolean).join('　'),
+        extra:(s.subNote?'<div class="tm" style="font-size:12px;">'+s.subNote+'</div>':'')+(s.payMethod==='儲值扣款'&&s.depositOwner&&normalizeName(s.depositOwner)!==normalizeName(c.name)?'<div class="tm" style="font-size:12px;color:var(--pur);">🔗 從 '+s.depositOwner+' 共用儲值扣款</div>':''),
+        actions:'<button class="bdel" style="color:#aaa;" onclick="openM(\'editSale\',\''+s.id+'\')" title="編輯">✏️</button><button class="bdel" onclick="delSale(\''+s.id+'\')" title="刪除">×</button>'});
+    });
+    (c.usedByOthers||[]).forEach(s=>{
+      items.push({date:s.date||'',ico:'🔗',bg:'#f3e8ff',title:(s.customer||'')+' 用了你的儲值：'+(s.item||''),
+        amount:'-$'+fmt(s.amount),amtColor:'var(--red)',meta:s.staff||'',extra:'',
+        actions:'<button class="bdel" style="color:#aaa;" onclick="openM(\'editSale\',\''+s.id+'\')" title="編輯">✏️</button><button class="bdel" onclick="delSale(\''+s.id+'\')" title="刪除">×</button>'});
+    });
+  }
+  if(kind==='all'||kind==='deposits'){
+    (c.deposits||[]).forEach(d=>{
+      const actual=toN(d.actualReceived||d.amount),face=toN(d.amount);
+      const rate=face>0?actual/face:1;
+      const restricted=d.scope==='restricted';
+      items.push({date:d.date||'',ico:'💳',bg:'#fffbeb',title:'儲值 面額 $'+fmt(face),
+        amount:'+$'+fmt(actual),amtColor:'var(--grn)',
+        meta:[d.payMethod?'<span class="bdg" style="font-size:10px;">'+d.payMethod+'</span>':'',rate<1?(rate*10).toFixed(1)+'折':'',restricted?'<span class="bdg" style="background:var(--pur);color:#fff;font-size:10px;">🎯 限定 '+(d.allowedServices||[]).join('、')+'</span>':''].filter(Boolean).join('　'),
+        extra:(d.note?'<div class="tm" style="font-size:12px;">'+d.note+'</div>':'')+(d.signed?'<button class="bdg" style="background:var(--purL);color:var(--pur);font-size:10px;border:none;cursor:pointer;margin-top:4px;" onclick="showDepositSign(\''+d.id+'\')">✍️ 看簽名</button>':''),
+        actions:'<button class="bdel" style="color:#aaa;" onclick="openM(\'editDeposit\',\''+d.id+'\')" title="編輯">✏️</button><button class="bdel" onclick="delDeposit(\''+d.id+'\')" title="刪除">×</button>'});
+    });
+  }
+  if(kind==='all'){
+    (S.data.pmuRecords||[]).filter(r=>normalizeName(r.customer)===normalizeName(c.name)).forEach(r=>{
+      const price=toN(r.pmuServicePrice);
+      items.push({date:r.date||'',ico:'🎨',bg:'#f3e8ff',title:(r.serviceType||'紋繡')+(r.pmuServiceType?'　<span class="tm" style="font-size:12px;">'+(pmuTypeLabels[r.pmuServiceType]||'')+'</span>':''),
+        amount:r.pmuServiceType?(price===0?'免費':'$'+fmt(price)):'',amtColor:'#9333ea',
+        meta:(r.consentSignature?'✓ 已簽同意書':'<span style="color:var(--red);">未簽同意書</span>')+(r.touchupDate&&!r.touchupDone?'　補色日 '+r.touchupDate:''),
+        extra:'',actions:'<button class="btn btn-s btn-sm" style="font-size:11px;padding:3px 8px;" onclick="viewPmuRecord(\''+r.id+'\')">看完整</button>'});
+    });
+    (S.data.passContracts||[]).filter(p=>normalizeName(p.customer)===normalizeName(c.name)).forEach(p=>{
+      items.push({date:p.startDate||'',ico:'🎫',bg:'#ecfdf5',title:p.planName||'吃到飽合約',amount:'$'+fmt(p.price),amtColor:'var(--grn)',
+        meta:(p.startDate||'')+' ～ '+(p.endDate||''),extra:'',actions:'<button class="btn btn-s btn-sm" style="font-size:11px;padding:3px 8px;" onclick="viewPassContract(\''+p.id+'\')">看合約</button>'});
+    });
+    // 舊的療程紀錄（功能已停用，資料保留在時間軸上）
+    (S.data.treatmentRecords||[]).filter(r=>normalizeName(r.customer)===normalizeName(c.name)).forEach(r=>{
+      items.push({date:r.date||'',ico:'📋',bg:'#f1f5f9',title:'療程紀錄：'+(r.serviceName||''),amount:'',amtColor:'',
+        meta:[r.staff||'',r.signature?'✓ 已簽名':''].filter(Boolean).join('　'),
+        extra:[r.skinCondition?'皮膚狀況：'+r.skinCondition:'',r.feedback?'客戶反饋：'+r.feedback:'',r.nextSuggestion?'下次建議：'+r.nextSuggestion:''].filter(Boolean).map(x=>'<div class="tm" style="font-size:12px;">'+x+'</div>').join(''),actions:''});
+    });
+  }
+  items.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return items;
 }
+function custTimelineHtml(items){
+  if(items.length===0)return '<div class="empty"><p>這段期間沒有紀錄</p></div>';
+  let h='',lastMonth='';
+  items.forEach(it=>{
+    const ym=(it.date||'').slice(0,7);
+    if(ym!==lastMonth){
+      lastMonth=ym;
+      h+='<div style="font-size:12px;font-weight:800;color:var(--mut);padding:12px 0 4px;letter-spacing:.5px;">'+(ym?ym.replace('-','年')+'月':'未填日期')+'</div>';
+    }
+    h+='<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--bdr);">'
+      +'<div style="width:36px;height:36px;border-radius:50%;background:'+it.bg+';display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">'+it.ico+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;"><div style="font-weight:700;font-size:14px;line-height:1.5;min-width:0;">'+it.title+'</div>'
+      +(it.amount?'<div style="font-weight:800;font-size:14px;color:'+it.amtColor+';white-space:nowrap;">'+it.amount+'</div>':'')+'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:2px;">'
+      +'<div class="tm" style="font-size:12px;min-width:0;">'+(it.date||'')+(it.meta?'　'+it.meta:'')+'</div>'
+      +(it.actions?'<div style="display:flex;gap:0;flex-shrink:0;align-items:center;transform:scale(.9);transform-origin:right center;">'+it.actions+'</div>':'')+'</div>'
+      +it.extra
+      +'</div>'
+      +'</div>';
+  });
+  return h;
+}
+function custTabsHtml(c){
+  S._custDetailC=c;
+  if(S._custTabFor!==c.name){S._custTabFor=c.name;S.custTab='all';S.custYear='all';}
+  const tab=S.custTab||'all';
+  const pmuN=(S.data.pmuRecords||[]).filter(r=>normalizeName(r.customer)===normalizeName(c.name)).length;
+  const passN=(S.data.passContracts||[]).filter(p=>normalizeName(p.customer)===normalizeName(c.name)).length;
+  const salesN=(c.services||[]).length+(c.usedByOthers||[]).length;
+  const depN=(c.deposits||[]).length;
+  const allItems=custTimelineItems(c,'all');
+  const tabs=[{k:'all',l:'🕒 全部',n:allItems.length},{k:'sales',l:'🌸 服務消費',n:salesN},{k:'deposits',l:'💳 儲值入帳',n:depN}];
+  if(pmuN>0)tabs.push({k:'pmu',l:'🎨 紋繡',n:pmuN});
+  if(passN>0)tabs.push({k:'contracts',l:'🎫 合約',n:passN});
+  const cur=tabs.find(t=>t.k===tab)?tab:'all';
+  let h='<div style="display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;margin-top:6px;-webkit-overflow-scrolling:touch;">';
+  tabs.forEach(t=>{
+    const on=t.k===cur;
+    h+='<button type="button" onclick="custSetTab(\''+t.k+'\')" style="flex-shrink:0;padding:9px 14px;border-radius:20px;border:1px solid '+(on?'var(--pur)':'var(--bdr)')+';background:'+(on?'var(--pur)':'var(--card)')+';color:'+(on?'#fff':'var(--txt)')+';font-size:14px;font-weight:700;cursor:pointer;">'+t.l+' <span style="opacity:.75;font-weight:400;">'+t.n+'</span></button>';
+  });
+  h+='</div>';
+  if(cur==='pmu')return h+custPmuHtml(c);
+  if(cur==='contracts')return h+custPassHtml(c);
+  const items=cur==='all'?allItems:custTimelineItems(c,cur);
+  const years=[...new Set(items.map(i=>(i.date||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  const yr=(S.custYear&&years.indexOf(S.custYear)>=0)?S.custYear:'all';
+  const shown=yr==='all'?items:items.filter(i=>(i.date||'').startsWith(yr));
+  let summary='';
+  if(cur==='sales'){
+    const sum=shown.reduce((s,i)=>s+(i.amount&&i.amount[0]==='$'?toN(i.amount.slice(1).replace(/,/g,'')):0),0);
+    summary='消費 '+shown.filter(i=>i.ico!=='🔗').length+' 筆　合計 <b style="color:var(--rose);">$'+fmt(sum)+'</b>';
+  }else if(cur==='deposits'){
+    const sum=shown.reduce((s,i)=>s+toN((i.amount||'').replace(/[+$,]/g,'')),0);
+    summary='儲值 '+shown.length+' 筆　實收合計 <b style="color:var(--grn);">$'+fmt(sum)+'</b>　·　目前餘額 <b style="color:var(--gold);">$'+fmt(c.balance)+'</b>';
+  }
+  h+='<div class="card"><div class="card-bd" style="padding-top:6px;">';
+  if(years.length>1){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px;">';
+    ['all'].concat(years).forEach(y=>{
+      const on=y===yr;
+      h+='<button type="button" onclick="custSetYear(\''+y+'\')" style="padding:4px 11px;border-radius:14px;border:none;background:'+(on?'var(--goldDk,#b45309)':'var(--bg2)')+';color:'+(on?'#fff':'var(--mut)')+';font-size:12px;cursor:pointer;">'+(y==='all'?'全部年份':y+' 年')+'</button>';
+    });
+    h+='</div>';
+  }
+  if(summary)h+='<div class="tm" style="font-size:13px;margin:4px 0 2px;">'+summary+'</div>';
+  h+=custTimelineHtml(shown)+'</div></div>';
+  return h;
+}
+window.custSetTab=function(k){S.custTab=k;S.custYear='all';const el=document.getElementById('cust-tabs');if(el&&S._custDetailC)el.innerHTML=custTabsHtml(S._custDetailC);else render();};
+window.custSetYear=function(y){S.custYear=y;const el=document.getElementById('cust-tabs');if(el&&S._custDetailC)el.innerHTML=custTabsHtml(S._custDetailC);else render();};
 
 // 補色提醒：複製訊息
 // 計算某筆紋繡紀錄「現在補色該收多少」
@@ -4788,6 +4848,7 @@ window.viewPmuRecord=(id)=>{
         ${r.faceOther?`📌 其他：${r.faceOther}<br>`:''}
         ${(()=>{const L=(x,y)=>[x?'左：'+x:'',y?'右：'+y:''].filter(Boolean).join('　');const row=(ic,nm,l,rr,n)=>{const s=L(l,rr);return (s||n)?`${ic} ${nm}：${s}${n?(s?'　':'')+'補充：'+n:''}<br>`:'';};
           return row('🌿','毛流',r.hairFlowLeft,r.hairFlowRight,r.hairFlowNote)+row('💪','肌肉',r.muscleLeft,r.muscleRight,r.muscleNote)+row('🦴','骨骼',r.boneLeft,r.boneRight,r.boneNote)+row('🫥','太陽穴凹陷',r.templeLeft,r.templeRight,r.templeNote)+(!r.templeLeft&&!r.templeRight&&r.templeHollow?`🫥 太陽穴凹陷：${r.templeHollow}<br>`:'')+(r.skinType?`🧴 膚質：${r.skinType}<br>`:'');})()}
+        ${(r.colorRecipe||r.colorNote||r.browHairTone||r.hairTone||r.skinTone)?`<div style="margin-top:6px;padding:8px 10px;background:#fdf2f8;border-radius:8px;"><b style="color:#be185d;">🎨 上色的排列邏輯與選色</b><br>${r.colorRecipe?r.colorRecipe+'<br>':''}${r.colorNote?'調整：'+r.colorNote+'<br>':''}${[r.browHairTone?'毛色：'+r.browHairTone:'',r.hairTone?'髮色：'+r.hairTone:'',r.skinTone?'膚色：'+r.skinTone:''].filter(Boolean).join('　')}</div>`:''}
         ${r.faceMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 舊版圈記圖：</div><img src="${r.faceMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
       </div>
       <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
@@ -6043,7 +6104,14 @@ function calcServiceCardFinancials(card,fixedPerSvc,costMode){
 
 // ─── 療程確認與簽名（iPad 模式 + 結帳）─────────────────────
 function pgTreatment(){
-  // 初始化暫存
+  // 「服務確認與簽名（平板結帳）」已停用：沒有進行中的流程時，回到總覽
+  // （紋繡、新客人填寫、儲值簽約、除毛吃到飽 這四個流程仍借用此頁）
+  if(!S.treatment||!S.treatment.mode||S.treatment.mode==='staff'||S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'){
+    S.treatment=null;S.page='overview';
+    setTimeout(function(){render();},0);
+    return pgOverview();
+  }
+  // 初始化暫存（舊平板結帳模式，保留程式但不再進入）
   if(!S.treatment){
     S.treatment={
       mode:'staff',     // 'staff'=老師設定 / 'customer'=客戶顯示簽名 / 'newCustomer'=首次建檔
@@ -6865,6 +6933,108 @@ window.pmuDelPhoto=function(when,i){
 };
 
 // ── 階段② 眉型設計與諮詢 ──
+// ── 上色的排列邏輯與選色（于蜜的選色系統）──
+const PMU_HABIT_SOLUTION={
+  '平常素顏':'素顏無違和感的溫柔感：要很淡很淡、不要被發現，主要是<b>補毛流的空洞</b>。',
+  '偶爾淡妝':'想讓日常上妝更輕鬆：<b>眉形要完整</b>。',
+  '常輕薄淡妝':'想讓日常上妝更輕鬆：<b>眉形要完整</b>。',
+  '天天全妝':'想讓日常上妝更輕鬆：<b>眉形要完整</b>。'
+};
+const PMU_LASTING_POINT='想要持久、不要一直補';
+const PMU_COLOR_LINES=[
+  {key:'brown',label:'咖色系（越南色乳）',note:'越南色乳：無機色乳，上色時間偏久一點，顏色呈咖啡效果（台灣目前多數偏灰）。優點是分子小、霧感漂亮；缺點是不好上色，價格約 $1,280。',effects:[
+    {label:'有眉型、但不要太深',opts:[{arr:'一般排列',mix:'00 ＋ 04（4：1）'}]},
+    {label:'淡淡的感覺',opts:[{arr:'邊框要散',mix:'00 ＋ 04（4：1）'},{arr:'一般排列',mix:'全部 00'}]},
+    {label:'深一點的感覺',opts:[{arr:'整體偏密的排列（咖啡色較多、皮損較高）',mix:'00 ＋ 04（1：1）'},{arr:'一般排列',mix:'全部 04'},{arr:'一般排列（皮損較低）',mix:'02 ＋ 04（1：2）'}]}
+  ]},
+  {key:'gray',label:'灰色系（越南色乳）',note:'',effects:[
+    {label:'眉型完整',opts:[{arr:'一般排列',mix:'02 ＋ 04（2：1）'}]},
+    {label:'霧感',opts:[{arr:'一般排列，邊框散著走',mix:'02 ＋ 04（2：1）'}]},
+    {label:'深一點的灰感',opts:[{arr:'走得很散',mix:'全部 02'}]}
+  ]},
+  {key:'lightInk',label:'淺色色乳（茶棕・栗灰）',note:'淺色色乳的優點：上色很快。',effects:[
+    {label:'眉型完整',opts:[{arr:'一般排列',mix:'茶棕 ＋ 栗灰（1：1）'}]},
+    {label:'霧感',opts:[{arr:'散著刷的排列',mix:'茶棕 ＋ 栗灰（2：1）'}]},
+    {label:'深一點、不要有框感',opts:[{arr:'打得很散',mix:'全部 栗灰'}]},
+    {label:'深一點的顏色',opts:[{arr:'一般排列',mix:'茶棕 ＋ 栗灰（1：2）'},{arr:'栗灰打散',mix:'全部 栗灰（打散也能走出這種深度）'}]}
+  ]}
+];
+const PMU_BROW_HAIR_TONES=['偏淡/稀疏','一般','很濃/偏黑'];
+const PMU_HAIR_TONES=['黑髮','深棕','淺棕/染淺','灰白髮'];
+const PMU_SKIN_TONES=['白皙','自然','小麥/偏深','偏黃','偏紅'];
+// 依色系＋效果＋毛色，取出建議方案
+function pmuColorOptions(t){
+  const line=PMU_COLOR_LINES.find(l=>l.label===t.colorLine);if(!line)return null;
+  const eff=line.effects.find(e=>e.label===t.colorEffect);if(!eff)return {line,eff:null,opts:[]};
+  let opts=eff.opts.map(o=>Object.assign({},o));
+  // 特例：咖色、喜歡淡淡的，但原生毛很濃
+  if(line.key==='brown'&&eff.label==='淡淡的感覺'&&t.browHairTone==='很濃/偏黑'){
+    opts=[{arr:'一排一排刷，全部不做到眉脊、不加強眉脊',mix:'全部 00',tip:'原生毛很濃：後續可用染眉膏或染眉的方式銜接，呈現淡淡的柔和感。',special:true}].concat(opts);
+  }
+  return {line,eff,opts};
+}
+function pmuColorPickKey(t,i){return (t.colorLine||'')+'|'+(t.colorEffect||'')+'|'+(t.browHairTone==='很濃/偏黑'?'thick':'n')+'|'+i;}
+function pmuColorRecipeText(t){
+  const r=pmuColorOptions(t);if(!r||!r.eff)return '';
+  let pick=null;
+  r.opts.forEach((o,i)=>{if(t.colorPick===pmuColorPickKey(t,i))pick=o;});
+  if(!pick&&r.opts.length===1)pick=r.opts[0];
+  return r.line.label+'｜'+r.eff.label+(pick?'｜'+pick.arr+'｜'+pick.mix:'');
+}
+function pmuNeedHints(t){
+  const hints=[];
+  if(t.makeupHabit==='平常素顏')hints.push('素顏無違和 → 建議走「淡淡的感覺」');
+  else if(t.makeupHabit)hints.push('想讓日常上妝更輕鬆 → 眉形要完整（建議「有眉型／眉型完整」）');
+  if((t.painPoints||[]).indexOf(PMU_LASTING_POINT)>=0)hints.push('想要很持久、不要一直補 → <b>顏色要選深一點</b>');
+  return hints;
+}
+function pmuColorAdvisorHtml(t){
+  const step=(n,title,sub)=>'<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px;"><span style="width:24px;height:24px;border-radius:50%;background:#be185d;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+n+'</span><b style="font-size:14px;">'+title+'</b>'+(sub?'<span class="tm" style="font-size:12px;">'+sub+'</span>':'')+'</div>';
+  const chip=(field,o,on,accent)=>'<button type="button" style="padding:7px 13px;margin:3px;background:'+(on?accent:'var(--bg2)')+';color:'+(on?'#fff':'var(--txt)')+';border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet(&quot;'+field+'&quot;,&quot;'+o+'&quot;)">'+(on?'✓ ':'')+o+'</button>';
+  let h='';
+  h+='<div style="background:#fdf2f8;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.7;color:#831843;">思考順序：<b>① 需求 → ② 毛色 → ③ 髮色 → ④ 膚色</b></div>';
+  // ① 需求
+  h+=step('1','需求','先選色系，再選客人想要的效果');
+  const hints=pmuNeedHints(t);
+  if(hints.length)h+='<div style="background:#fffbeb;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.7;color:#92400e;margin-bottom:6px;">💡 依前面了解的需求：<br>'+hints.map(x=>'・'+x).join('<br>')+'</div>';
+  h+='<div>'+PMU_COLOR_LINES.map(l=>chip('colorLine',l.label,t.colorLine===l.label,'#be185d')).join('')+'</div>';
+  const line=PMU_COLOR_LINES.find(l=>l.label===t.colorLine);
+  if(line){
+    if(line.note)h+='<div class="tm" style="font-size:12px;line-height:1.6;margin:6px 2px;">📌 '+line.note+'</div>';
+    h+='<div style="margin-top:4px;">'+line.effects.map(e=>chip('colorEffect',e.label,t.colorEffect===e.label,'#db2777')).join('')+'</div>';
+  }
+  // ② 毛色
+  h+=step('2','毛色','原生眉毛');
+  h+='<div>'+PMU_BROW_HAIR_TONES.map(o=>chip('browHairTone',o,t.browHairTone===o,'#7c3aed')).join('')+'</div>';
+  // ③ 髮色
+  h+=step('3','髮色','');
+  h+='<div>'+PMU_HAIR_TONES.map(o=>chip('hairTone',o,t.hairTone===o,'#7c3aed')).join('')+'</div>';
+  // ④ 膚色
+  h+=step('4','膚色','');
+  h+='<div>'+PMU_SKIN_TONES.map(o=>chip('skinTone',o,t.skinTone===o,'#7c3aed')).join('')+'</div>';
+  // 建議方案
+  const r=pmuColorOptions(t);
+  h+='<div style="margin-top:16px;border-top:2px dashed #fbcfe8;padding-top:12px;">';
+  h+='<div style="font-size:15px;font-weight:800;color:#be185d;margin-bottom:8px;">🎯 建議的排列與選色</div>';
+  if(!r||!r.eff){
+    h+='<div class="tm" style="font-size:13px;">先在 ① 選好色系和效果，這裡就會出現建議方案。</div>';
+  }else{
+    if(r.opts.length>1)h+='<div class="tm" style="font-size:12px;margin-bottom:6px;">有 '+r.opts.length+' 種做法，點選這次要用的：</div>';
+    r.opts.forEach((o,i)=>{
+      const key=pmuColorPickKey(t,i);
+      const on=t.colorPick===key||(r.opts.length===1);
+      h+='<div onclick="pmuSet(&quot;colorPick&quot;,&quot;'+key+'&quot;)" style="cursor:pointer;border:2px solid '+(on?'#be185d':'#fce7f3')+';background:'+(on?'#fdf2f8':'#fff')+';border-radius:12px;padding:12px 14px;margin-bottom:8px;">'
+        +(o.special?'<div style="font-size:11px;font-weight:800;color:#7c3aed;margin-bottom:4px;">⭐ 原生毛很濃的專屬做法</div>':'')
+        +'<div style="font-size:12px;color:#9d174d;">排列方式</div><div style="font-size:15px;font-weight:800;color:#111;margin-bottom:6px;">'+(on?'✓ ':'')+o.arr+'</div>'
+        +'<div style="font-size:12px;color:#9d174d;">色號與比例</div><div style="font-size:20px;font-weight:900;color:#be185d;letter-spacing:.5px;">'+o.mix+'</div>'
+        +(o.tip?'<div style="font-size:12px;color:#5b21b6;margin-top:6px;line-height:1.6;">💡 '+o.tip+'</div>':'')
+        +'</div>';
+    });
+  }
+  h+='<div class="fgrp" style="margin-top:8px;"><label>實際使用的配方／比例調整（自訂）</label><input type="text" id="pmu_colorNote" value="'+((t.colorNote||'').replace(/"/g,'&quot;'))+'" placeholder="例如：00＋04 改 3：1、眉頭再淡一點…" oninput="S.treatment.colorNote=this.value"></div>';
+  h+='</div>';
+  return h;
+}
 const PMU_STYLE_DESC={
   '溫柔感·韓系平眉':'眉峰平緩圓潤、線條柔和。適合長相清秀、韓系穿搭、希望整個人變溫柔、沒有攻擊性的客人。',
   '俐落專業感':'眉峰角度明顯、眉尾俐落。適合眼神深邃、個性或歐美型穿搭、工作需展現氣場與專業度的都會女性。',
@@ -6907,14 +7077,16 @@ function pmuDesignStage(t){
   h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">① 了解客人的需求</span></div><div class="card-bd">';
   h+='<div class="tm" style="font-size:12px;margin-bottom:10px;">了解生活痛點與習慣，才能決定眉型方向與日常實用性。</div>';
   h+='<div class="fgrp"><label>日常化妝習慣</label><div style="margin-top:4px;">'+chipsOne('makeupHabit',['天天全妝','常輕薄淡妝','偶爾淡妝','平常素顏'])+'</div>'
-    +tip('化妝習慣影響霧眉濃淡：天天全妝可做飽和一點；平常素顏要做得輕薄自然。')+'</div>';
+    +(PMU_HABIT_SOLUTION[t.makeupHabit]?'<div style="margin-top:8px;background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:#14532d;">✅ <b>解決方法：</b>'+PMU_HABIT_SOLUTION[t.makeupHabit]+'</div>':'')
+    +'<div style="margin-top:8px;background:#fffbeb;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.7;color:#92400e;">💡 了解客人的日常風格與習慣，會直接影響 <span style="background:#fde047;color:#7c2d12;font-weight:900;font-size:13px;padding:1px 6px;border-radius:4px;">上色的排列邏輯和選色</span></div></div>';
   h+='<div class="fgrp" style="margin-top:14px;"><label>工作是否常面對客戶／上鏡頭？</label><div style="margin-top:4px;">'+chipsOne('workFace',['常面對客戶/上鏡','偶爾','幾乎不用'])+'</div>'
     +tip('影響眉型俐落度：常面對人群 → 可走專業俐落感或親和自然感。')+'</div>';
   h+='<div class="fgrp" style="margin-top:14px;"><label>運動／流汗／游泳／戶外習慣？</label><div style="margin-top:4px;">'+chipsOne('exerciseHabit',['常運動流汗/游泳/戶外','偶爾','幾乎不'])+'</div>'
     +tip('大油肌或愛運動者 → 留色率有挑戰，要提前告知，並建議適合的色乳。')+'</div>';
-  h+='<div class="fgrp" style="margin-top:14px;"><label>客人的生活痛點（最重要，可複選）</label><div style="margin-top:4px;">'+chipsMulti('painPoints',['高低眉','毛量稀疏','疤痕/空洞','手殘不會畫','想多睡10分鐘','舊眉/顏色不均','不對稱','其他'])+'</div>'
+  h+='<div class="fgrp" style="margin-top:14px;"><label>客人的生活痛點（最重要，可複選）</label><div style="margin-top:4px;">'+chipsMulti('painPoints',['高低眉','毛量稀疏','疤痕/空洞','手殘不會畫','想多睡10分鐘','舊眉/顏色不均','不對稱','眉尾下垂','眉峰太後移','眉眼間距太大（挑）','眉眼間距太近（壓）','眉頭太近','眉頭太遠','眉尾太長','眉尾太短','眉型太兇','眉型太平',PMU_LASTING_POINT,'其他'])+'</div>'
     +'<input type="text" id="pmu_painPointNote" value="'+((t.painPointNote||'').replace(/"/g,'&quot;'))+'" placeholder="痛點補充（自訂填寫）" style="margin-top:8px;" oninput="S.treatment.painPointNote=this.value">'
     +tip('這是他為什麼想做的原因。針對痛點加強了解與說明，客人會覺得非常貼心。')+'</div>';
+  h+='<div class="fgrp" style="margin-top:14px;"><label>想做的原因（可複選）</label><div style="margin-top:4px;">'+chipsMulti('motivations',['別人建議','本身條件淡','想試試看','想省時間'])+'</div></div>';
   h+='</div></div>';
 
   // 二、釐清風格
@@ -6952,8 +7124,11 @@ function pmuDesignStage(t){
   h+='<div class="fgrp" style="margin-top:12px;"><label>📌 其他面診觀察（自訂）</label><textarea id="pmu_faceOther" rows="2" placeholder="任何其他重要觀察" oninput="S.treatment.faceOther=this.value">'+((t.faceOther||'').replace(/</g,'&lt;'))+'</textarea></div>';
   h+='</div></div>';
 
-  // 五、設計溝通紀錄
-  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">⑤ 我幫客人的設計溝通紀錄</span></div><div class="card-bd">'
+  // 五、上色的排列邏輯與選色
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #be185d;"><div class="card-hd" style="background:#fdf2f8;"><span class="card-ttl" style="color:#be185d;font-size:16px;">⑤ 🎨 <span style="background:#fde047;color:#7c2d12;padding:1px 6px;border-radius:4px;">上色的排列邏輯與選色</span></span></div><div class="card-bd" id="pmu_color_advisor">'+pmuColorAdvisorHtml(t)+'</div></div>';
+
+  // 六、設計溝通紀錄
+  h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">⑥ 我幫客人的設計溝通紀錄</span></div><div class="card-bd">'
     +'<textarea id="pmu_designNote" rows="9" style="width:100%;min-height:240px;font-size:17px;line-height:1.75;padding:14px 16px;border-radius:12px;resize:vertical;box-sizing:border-box;" placeholder="怎麼設計的、量了什麼、客人在鏡子前確認了什麼、最後定案的方向" oninput="S.treatment.designNote=this.value">'+((t.designNote||'').replace(/</g,'&lt;'))+'</textarea></div></div>';
 
   h+='<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署。</div>';
@@ -6977,6 +7152,8 @@ window.pmuToggle=(field,val)=>{
     el.style.color=on?'#fff':'var(--txt)';
     el.textContent=(on?'✓ ':'')+val;
   }
+  var adv=document.getElementById('pmu_color_advisor');
+  if(adv&&(field==='painPoints'||field==='motivations'))adv.innerHTML=pmuColorAdvisorHtml(S.treatment);
 };
 
 // ── 階段② 簽同意書（客人畫面）──
@@ -7825,6 +8002,8 @@ window.pmuSubmit=async()=>{
     styleChoice:t.styleChoice,styleCustom:t.styleCustom,
     eduSymmetry:t.eduSymmetry,eduScab:t.eduScab,eduRetention:t.eduRetention,
     templeHollow:t.templeHollow,skinType:t.skinType,
+    motivations:t.motivations||[],colorLine:t.colorLine,colorEffect:t.colorEffect,colorPick:t.colorPick,colorNote:t.colorNote,
+    browHairTone:t.browHairTone,hairTone:t.hairTone,skinTone:t.skinTone,colorRecipe:pmuColorRecipeText(t),
     templeLeft:t.templeLeft,templeRight:t.templeRight,templeNote:t.templeNote,hairFlowNote:t.hairFlowNote,muscleNote:t.muscleNote,boneNote:t.boneNote,
     hairFlowLeft:t.hairFlowLeft,hairFlowRight:t.hairFlowRight,muscleLeft:t.muscleLeft,muscleRight:t.muscleRight,boneLeft:t.boneLeft,boneRight:t.boneRight,
     conditions:t.conditions,conditionNote:t.conditionNote,
@@ -10159,14 +10338,17 @@ function caseMapFromRecord(r){
     r.makeupHabit?('化妝習慣：'+asText(r.makeupHabit)):'',
     r.workFace?('工作型態：'+asText(r.workFace)):'',
     r.exerciseHabit?('運動/出油：'+asText(r.exerciseHabit)):'',
-    (r.painPoints&&r.painPoints.length)?('痛點：'+asText(r.painPoints)+(r.painPointNote?('（'+r.painPointNote+'）'):'')):''
+    (r.painPoints&&r.painPoints.length)?('痛點：'+asText(r.painPoints)+(r.painPointNote?('（'+r.painPointNote+'）'):'')):'',
+    (r.motivations&&r.motivations.length)?('想做的原因：'+asText(r.motivations)):''
   ].filter(Boolean).join('\n');
   const wish=[asText(r.expectation),needs].filter(Boolean).join('\n');
   // 設計理念：風格 + 自訂 + 溝通紀錄
   const design=[
     r.styleChoice?('風格：'+asText(r.styleChoice)):(r.designStyle?('設計風格：'+asText(r.designStyle)):''),
     r.styleCustom?('自訂風格：'+asText(r.styleCustom)):'',
-    r.designNote?asText(r.designNote):''
+    r.designNote?asText(r.designNote):'',
+    r.colorRecipe?('上色：'+r.colorRecipe+(r.colorNote?'（'+r.colorNote+'）':'')):'',
+    [r.browHairTone?'毛色 '+r.browHairTone:'',r.hairTone?'髮色 '+r.hairTone:'',r.skinTone?'膚色 '+r.skinTone:''].filter(Boolean).join('、')
   ].filter(Boolean).join('\n');
   const numb=[asText(r.numbCream),asText(r.numbTime)].filter(Boolean).join('　');
   return{
@@ -15899,7 +16081,7 @@ function pmuSaveInputs(){
   set('pmu_guardian','guardianName');
   set('pmu_designNote','designNote');set('pmu_designStyle','designStyle');set('pmu_expectation','expectation');
   set('pmu_conditionNote','conditionNote');set('pmu_allergyNote','allergyNote');
-  set('pmu_healthNote','healthNote');
+  set('pmu_healthNote','healthNote');set('pmu_colorNote','colorNote');
   set('pmu_templeNote','templeNote');set('pmu_hairFlowNote','hairFlowNote');set('pmu_muscleNote','muscleNote');set('pmu_boneNote','boneNote');
   set('pmu_operationNote','operationNote');
   const hd=$('pmu_health_declare');if(hd)t.healthDeclare=hd.checked;
