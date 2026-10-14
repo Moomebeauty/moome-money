@@ -1946,6 +1946,7 @@ function pgOverview(){
     🎨 紋繡服務（霧眉霧唇）
     <div style="font-size:12px;font-weight:400;opacity:0.9;margin-top:4px;">眉型設計→簽同意書→操作紀錄→完成提醒，一站完成</div>
   </button>
+  ${pmuDraftListHtml()}
   <div class="notice" style="background:var(--bluL);border-left-color:var(--blu);color:var(--blu);font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
     <div>📊 <b>日常儀表板</b>：每天/每週打開，看本月即時狀態 — 營收、支出、警示、待辦</div>
     <div style="display:flex;gap:6px;">
@@ -4783,6 +4784,8 @@ window.viewPmuRecord=(id)=>{
         ${r.muscleDesc?`💪 肌肉：${r.muscleDesc}<br>`:''}
         ${r.skinDesc?`🧴 皮膚：${r.skinDesc}<br>`:''}
         ${r.faceOther?`📌 其他：${r.faceOther}<br>`:''}
+        ${(()=>{const L=(x,y)=>[x?'左：'+x:'',y?'右：'+y:''].filter(Boolean).join('　');const row=(ic,nm,l,rr,n)=>{const s=L(l,rr);return (s||n)?`${ic} ${nm}：${s}${n?(s?'　':'')+'補充：'+n:''}<br>`:'';};
+          return row('🌿','毛流',r.hairFlowLeft,r.hairFlowRight,r.hairFlowNote)+row('💪','肌肉',r.muscleLeft,r.muscleRight,r.muscleNote)+row('🦴','骨骼',r.boneLeft,r.boneRight,r.boneNote)+row('🫥','太陽穴凹陷',r.templeLeft,r.templeRight,r.templeNote)+(!r.templeLeft&&!r.templeRight&&r.templeHollow?`🫥 太陽穴凹陷：${r.templeHollow}<br>`:'')+(r.skinType?`🧴 膚質：${r.skinType}<br>`:'');})()}
         ${r.faceMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 舊版圈記圖：</div><img src="${r.faceMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
       </div>
       <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
@@ -6658,32 +6661,76 @@ window.pmuAutoSave=async function(){
   if(!t||t.mode!=='pmu')return;
   if(!t.draftId)t.draftId=uid();
   pmuSaveInputs();
-  // 只存文字類資料，排除照片與大圖（避免超過 Firebase 1MB 限制）
-  var draft={
-    id:t.draftId,isDraft:true,updatedAt:nowLocal(),
-    mode:'pmu',pmuStage:t.pmuStage,draftId:t.draftId,
-    customer:t.customer,phone:t.phone,lineId:t.lineId,birthday:t.birthday,
-    date:t.date,staff:t.staff,serviceType:t.serviceType,
-    isMinor:t.isMinor,guardianName:t.guardianName,
-    designNote:t.designNote,designStyle:t.designStyle,expectation:t.expectation,
-    conditions:t.conditions,conditionNote:t.conditionNote,allergies:t.allergies,allergyNote:t.allergyNote,
-    healthFlags:t.healthFlags||[],healthNote:t.healthNote||'',healthDeclare:!!t.healthDeclare,
-    baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,
-    faceAnswers:t.faceAnswers,leftBrow:t.leftBrow,rightBrow:t.rightBrow,source:t.source,referrer:t.referrer,
-    consentAgreed:t.consentAgreed,consentSignedAt:t.consentSignedAt,
-    startTime:t.startTime,endTime:t.endTime,numbCream:t.numbCream,numbTime:t.numbTime,
-    tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
-    cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,aftercareGiven:t.aftercareGiven,
-    // 記錄照片張數（不存照片本體）
-    photosBeforeCount:(t.photosBefore||[]).length,
-    photosAfterCount:(t.photosAfter||[]).length,
-    hasConsentSign:!!t.consentSignature,hasFaceMarkup:!!t.faceMarkup
-  };
+  // 存「整份流程」的所有欄位（含眉型設計新欄位），只排除照片與大圖（避免超過 Firebase 1MB 限制）
+  var EXCL={photosBefore:1,photosAfter:1,consentSignature:1,faceMarkup:1,_sigTemp:1,pmuSubmitted:1};
+  var draft={};
+  Object.keys(t).forEach(function(k){if(!EXCL[k])draft[k]=t[k];});
+  draft.id=t.draftId;draft.isDraft=true;draft.updatedAt=nowLocal();draft.mode='pmu';
+  draft.photosBeforeCount=(t.photosBefore||[]).length;
+  draft.photosAfterCount=(t.photosAfter||[]).length;
+  draft.hasConsentSign=!!t.consentSignature;draft.hasFaceMarkup=!!t.faceMarkup;
+  // 已簽的簽名縮小後一起存（約幾 KB），繼續流程時不用重簽
+  if(t.consentSignature){try{draft.consentSignatureSmall=await pmuShrinkImage(t.consentSignature,360,0.6);}catch(e){}}
   var drafts=(S.data.pmuDrafts||[]).filter(function(d){return d.id!==t.draftId;});
   drafts.push(draft);
   S.data.pmuDrafts=drafts;
   // 自動存檔：用靜默版，失敗不跳訊息（不影響流程，下一步不依賴它）
   try{await saveMainSilent({pmuDrafts:drafts});}catch(e){}
+};
+
+
+// 把簽名圖縮小（草稿用，節省空間）
+function pmuShrinkImage(src,maxW,q){
+  return new Promise(function(res,rej){
+    var img=new Image();
+    img.onload=function(){try{var w=Math.min(maxW,img.width||maxW),hh=Math.round((img.height||1)*w/(img.width||1));var c=document.createElement('canvas');c.width=w;c.height=hh;var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,hh);x.drawImage(img,0,0,w,hh);res(c.toDataURL('image/jpeg',q||0.6));}catch(e){rej(e);}};
+    img.onerror=rej;img.src=src;
+  });
+}
+
+// 未完成的紋繡流程清單（工作台首頁顯示）
+function pmuDraftListHtml(){
+  var drafts=(S.data.pmuDrafts||[]).slice().sort(function(a,b){return (b.updatedAt||'').localeCompare(a.updatedAt||'');});
+  if(drafts.length===0)return '';
+  var stageName=function(id){var s=PMU_STAGES.find(function(x){return x.id===id;});return s?(s.icon+' '+s.label):'';};
+  var h='<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">⏸️ 未完成的紋繡流程（'+drafts.length+'）</span></div><div class="card-bd">';
+  drafts.forEach(function(d){
+    var lost=[];
+    if(d.photosBeforeCount||d.photosAfterCount)lost.push('照片需重拍');
+    if(d.hasConsentSign&&!d.consentSignatureSmall)lost.push('需重簽');
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #f1f1f1;flex-wrap:wrap;">'
+      +'<div style="min-width:0;"><div style="font-weight:700;font-size:15px;">'+(d.customer||'（未填姓名）')+'　<span style="font-size:13px;color:#9333ea;">'+(d.serviceType||'')+'</span></div>'
+      +'<div class="tm" style="font-size:12px;">停在：'+stageName(d.pmuStage)+'　·　'+(d.updatedAt||'')+(d.hasConsentSign?'　·　✓已簽':'')+(lost.length?'　·　<span style="color:#d97706;">'+lost.join('、')+'</span>':'')+'</div></div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0;">'
+      +'<button class="btn btn-p btn-sm" style="background:#9333ea;" onclick="pmuResumeDraft(&quot;'+d.id+'&quot;)">▶ 繼續</button>'
+      +'<button class="btn btn-s btn-sm" onclick="pmuDeleteDraft(&quot;'+d.id+'&quot;)">🗑️</button></div></div>';
+  });
+  h+='</div></div>';
+  return h;
+}
+window.pmuResumeDraft=function(id){
+  var d=(S.data.pmuDrafts||[]).find(function(x){return x.id===id;});
+  if(!d){toast('找不到這筆草稿');return;}
+  var t=JSON.parse(JSON.stringify(d));
+  delete t.isDraft;delete t.updatedAt;delete t.photosBeforeCount;delete t.photosAfterCount;delete t.hasConsentSign;delete t.hasFaceMarkup;
+  t.mode='pmu';t.draftId=d.id;t.pmuSubmitted=false;
+  t.photosBefore=[];t.photosAfter=[];
+  t.consentSignature=d.consentSignatureSmall||null;delete t.consentSignatureSmall;
+  if(!t.consentSignature){t.consentSignedAt='';}
+  ['tools','pigments','conditions','allergies','healthFlags','painPoints'].forEach(function(k){if(!Array.isArray(t[k]))t[k]=[];});
+  if(!t.faceAnswers)t.faceAnswers={};
+  if(!t.pmuStage)t.pmuStage='consent';
+  S.treatment=t;S.page='treatment';
+  render();
+  toast('▶ 已接續 '+(t.customer||'')+' 的紋繡流程');
+};
+window.pmuDeleteDraft=async function(id){
+  var d=(S.data.pmuDrafts||[]).find(function(x){return x.id===id;});
+  if(!confirm('確定刪除「'+((d&&d.customer)||'未填姓名')+'」這筆未完成的紋繡流程？'))return;
+  var drafts=(S.data.pmuDrafts||[]).filter(function(x){return x.id!==id;});
+  S.data.pmuDrafts=drafts;
+  await saveMain({pmuDrafts:drafts});
+  toast('已刪除');render();
 };
 
 // ── 拍照階段（術前 before / 術後 after）──
@@ -6808,7 +6855,8 @@ function pmuDesignStage(t){
   function lrRow(label,field,opts){
     return '<div style="margin-top:12px;"><div style="font-size:13px;font-weight:700;color:#9333ea;margin-bottom:4px;">'+label+'</div>'
       +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:4px;"><span style="width:40px;font-size:12px;color:#0891b2;font-weight:700;">左眉</span>'+chipsOne(field+'Left',opts,'#0891b2')+'</div>'
-      +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;"><span style="width:40px;font-size:12px;color:#db2777;font-weight:700;">右眉</span>'+chipsOne(field+'Right',opts,'#db2777')+'</div></div>';
+      +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;"><span style="width:40px;font-size:12px;color:#db2777;font-weight:700;">右眉</span>'+chipsOne(field+'Right',opts,'#db2777')+'</div>'
+      +'<input type="text" id="pmu_'+field+'Note" value="'+((t[field+'Note']||'').replace(/"/g,'&quot;'))+'" placeholder="特殊情況補充（自訂，例如：左眉尾有疤、右眉頭毛流往上…）" style="margin-top:8px;" oninput="S.treatment.'+field+'Note=this.value"></div>';
   }
   function tip(txt){return'<div class="tm" style="font-size:12px;color:#92400e;background:#fffbeb;border-radius:8px;padding:8px 10px;margin-top:6px;line-height:1.6;">💡 '+txt+'</div>';}
 
@@ -6866,7 +6914,7 @@ function pmuDesignStage(t){
   // 四、顧客面診評估（選項化 + 左右眉 + 自訂）
   h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #0891b2;"><div class="card-hd" style="background:#ecfeff;"><span class="card-ttl" style="color:#0891b2;">④ 顧客面診評估</span></div><div class="card-bd">';
   h+='<div class="fgrp"><label>眉毛是否有底色？</label><div style="margin-top:4px;">'+chipsOne('baseColor',['無底色','有·偏淺','有·略深','有·殘留舊色(紅/橘/青)'],'#0891b2')+'</div></div>';
-  h+='<div class="fgrp" style="margin-top:12px;"><label>太陽穴凹陷是否明顯？</label><div style="margin-top:4px;">'+chipsOne('templeHollow',['不明顯','輕微','明顯'],'#0891b2')+'</div></div>';
+  h+=lrRow('🫥 太陽穴凹陷是否明顯','temple',['不明顯','輕微','明顯']);
   h+=lrRow('🌿 原生毛流狀況','hairFlow',['完整濃密','前濃後缺','整體偏淡','分布不均','雜亂逆生']);
   h+=lrRow('💪 肌肉狀況（表情施力）','muscle',['正常','眉頭易用力','挑眉習慣','皺眉明顯']);
   h+=lrRow('🦴 骨骼狀況','bone',['平整','眉骨偏高','眉骨偏低','額/顳骨落差']);
@@ -7696,6 +7744,7 @@ window.pmuSubmit=async()=>{
     styleChoice:t.styleChoice,styleCustom:t.styleCustom,
     eduSymmetry:t.eduSymmetry,eduScab:t.eduScab,eduRetention:t.eduRetention,
     templeHollow:t.templeHollow,skinType:t.skinType,
+    templeLeft:t.templeLeft,templeRight:t.templeRight,templeNote:t.templeNote,hairFlowNote:t.hairFlowNote,muscleNote:t.muscleNote,boneNote:t.boneNote,
     hairFlowLeft:t.hairFlowLeft,hairFlowRight:t.hairFlowRight,muscleLeft:t.muscleLeft,muscleRight:t.muscleRight,boneLeft:t.boneLeft,boneRight:t.boneRight,
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
@@ -10017,11 +10066,13 @@ function caseMapFromRecord(r){
   function lr(left,right){return [left?('左：'+asText(left)):'',right?('右：'+asText(right)):''].filter(Boolean).join('　');}
   const brow=[fa('leftBrow')?('左眉：'+asText(fa('leftBrow'))):'',fa('rightBrow')?('右眉：'+asText(fa('rightBrow'))):''].filter(Boolean).join('\n');
   // 毛流/肌肉/骨骼：優先用新的左右眉欄位，沒有再用舊的文字
-  const hair=lr(r.hairFlowLeft,r.hairFlowRight)||asText(fa('hairFlow'));
-  const bone=lr(r.boneLeft,r.boneRight)||asText(fa('boneDesc'));
-  const muscle=lr(r.muscleLeft,r.muscleRight)||asText(fa('muscleDesc'));
+  function withNote(base,note){return [base,note?('補充：'+note):''].filter(Boolean).join('　');}
+  const hair=withNote(lr(r.hairFlowLeft,r.hairFlowRight)||asText(fa('hairFlow')),r.hairFlowNote);
+  const bone=withNote(lr(r.boneLeft,r.boneRight)||asText(fa('boneDesc')),r.boneNote);
+  const muscle=withNote(lr(r.muscleLeft,r.muscleRight)||asText(fa('muscleDesc')),r.muscleNote);
+  const templeTxt=withNote(lr(r.templeLeft,r.templeRight)||asText(r.templeHollow),r.templeNote);
   const skin=[asText(r.skinType),asText(fa('skinDesc'))].filter(Boolean).join('　');
-  const faceAna=[asText(fa('faceOther')),r.templeHollow?('太陽穴凹陷：'+asText(r.templeHollow)):''].filter(Boolean).join('\n');
+  const faceAna=[asText(fa('faceOther')),templeTxt?('太陽穴凹陷：'+templeTxt):''].filter(Boolean).join('\n');
   // 需求（化妝習慣/生活型態/痛點）併入客人期待
   const needs=[
     r.makeupHabit?('化妝習慣：'+asText(r.makeupHabit)):'',
@@ -15768,6 +15819,7 @@ function pmuSaveInputs(){
   set('pmu_designNote','designNote');set('pmu_designStyle','designStyle');set('pmu_expectation','expectation');
   set('pmu_conditionNote','conditionNote');set('pmu_allergyNote','allergyNote');
   set('pmu_healthNote','healthNote');
+  set('pmu_templeNote','templeNote');set('pmu_hairFlowNote','hairFlowNote');set('pmu_muscleNote','muscleNote');set('pmu_boneNote','boneNote');
   set('pmu_operationNote','operationNote');
   const hd=$('pmu_health_declare');if(hd)t.healthDeclare=hd.checked;
   set('pmu_referrer','referrer');
