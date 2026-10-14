@@ -535,6 +535,85 @@ const DEFAULT_PMU_CONDITIONS=['癌症','糖尿病','甲狀腺疾病','心臟病'
 // 過敏項目清單（基本設定可增減）
 const DEFAULT_PMU_ALLERGIES=['異位性皮膚炎','食物過敏','植物過敏','藥物過敏','金屬過敏','其他'];
 
+// 身體狀況臨床篩檢清單（每項附「為什麼」原因，讓每次填寫都更清楚背後邏輯）
+const PMU_HEALTH_CATS={
+  red:{t:'🔴 紅燈族群｜原則上不予施作（直接退單）',c:'#dc2626',bg:'#fef2f2'},
+  yellow:{t:'🟡 黃燈族群｜高風險，需加簽特殊評估免責聲明',c:'#d97706',bg:'#fffbeb'},
+  allergy:{t:'🌾 過敏性體質（請細分勾選）',c:'#9333ea',bg:'#faf5ff'},
+  recent:{t:'🩹 近期皮膚狀況與日常用藥（近 1 個月）',c:'#0891b2',bg:'#ecfeff'}
+};
+const PMU_HEALTH_ITEMS=[
+  {id:'preg',cat:'red',label:'懷孕期間',reason:'施作時的緊張與疼痛，可能引發宮縮風險。'},
+  {id:'keloid',cat:'red',label:'蟹足腫體質',reason:'紋繡屬微創傷口，蟹足腫體質有極高機率留下無法消除的肥厚性疤痕。'},
+  {id:'heart',cat:'red',label:'嚴重心臟病／裝有心臟節律器',reason:'施作時的緊張情緒、或部分儀器的電流，可能造成危險。'},
+  {id:'infectious',cat:'red',label:'傳染性疾病（愛滋／B・C 型肝炎／梅毒）',reason:'過程涉及血液接觸，為保護紋繡師與下一位客人，不予施作。'},
+  {id:'epilepsy',cat:'red',label:'癲癇症',reason:'施作時的燈光刺激或刺痛感，可能誘發癲癇發作。'},
+  {id:'diabetes',cat:'yellow',label:'糖尿病',reason:'傷口癒合極慢，照顧稍有不慎，發炎、感染的風險是常人的數倍。'},
+  {id:'bloodthin',cat:'yellow',label:'凝血功能異常／服用抗凝血劑（如阿斯匹靈）',reason:'施作會異常大量出血，血水會把色乳沖掉導致無法吃色，術後也容易大面積瘀青。'},
+  {id:'scar',cat:'yellow',label:'疤痕體質（非蟹足腫）',reason:'傷口癒合後容易留下白色疤痕，影響成品。'},
+  {id:'immune',cat:'yellow',label:'免疫系統疾病（紅斑性狼瘡／白血病／癌症放化療中）',reason:'自體免疫力極低，微小傷口也極易引發細菌感染。'},
+  {id:'alNumb',cat:'allergy',label:'舒緩膏／麻藥過敏（如 Lidocaine）',reason:'對外用麻醉成分過敏，會造成大面積紅腫、起水泡。'},
+  {id:'alMetal',cat:'allergy',label:'金屬過敏（金／銀／鎳）',reason:'針具多含金屬成分，過敏者當場就會紅腫排斥。'},
+  {id:'alLatex',cat:'allergy',label:'乳膠過敏',reason:'手套若非無粉硝基（Nitrile）材質，會引發皮膚過敏。'},
+  {id:'alAlcohol',cat:'allergy',label:'酒精／皮膚消毒劑過敏',reason:'術前消毒需改用生理食鹽水或溫和消毒劑，避免過敏反應。'},
+  {id:'rLaser',cat:'recent',label:'近 1 個月內做過醫美雷射（皮秒／淨膚）',reason:'皮膚正處於脆弱修復期，施作易抓破皮膚、留色不良。'},
+  {id:'rBotox',cat:'recent',label:'近 1 個月內注射過肉毒',reason:'眉眼周圍肌肉可能還在變化，眉型等肉毒退掉後恐變成高低眉。'},
+  {id:'rAcid',cat:'recent',label:'近 1 個月口服／外擦 A 酸・果酸・水楊酸',reason:'角質層被代謝得極薄，皮膚敏感易出血，術後也會迅速褪色。'},
+  {id:'rLesion',cat:'recent',label:'施作部位有濕疹／異位性皮膚炎／痘痘發炎／傷口',reason:'須避開患部；若整對眉都在發炎，當天不能施作。'},
+  {id:'rPeriod',cat:'recent',label:'正值生理期（月經當天或前兩天）',reason:'痛覺極為敏感、痛感加倍，且凝血較差、較容易流血。'}
+];
+// 將紀錄的健康勾選整理成項目清單（新版 healthFlags/healthChecked；無則回傳空陣列）
+function pmuHealthItemsOf(r){
+  if(!r)return [];
+  if(r.healthChecked&&r.healthChecked.length)return r.healthChecked;
+  var flags=r.healthFlags||[];
+  return flags.map(function(id){var it=PMU_HEALTH_ITEMS.find(function(x){return x.id===id;});return it?{cat:it.cat,label:it.label,reason:it.reason}:{cat:'',label:id,reason:''};});
+}
+function pmuHasNewHealth(r){return !!(r&&((r.healthFlags&&r.healthFlags.length)||(r.healthChecked&&r.healthChecked.length)||r.healthNote||r.healthDeclare));}
+// 身體狀況摘要（HTML，給紀錄檢視）
+function pmuHealthSummaryHtml(r){
+  if(pmuHasNewHealth(r)){
+    var items=pmuHealthItemsOf(r),out='';
+    ['red','yellow','allergy','recent'].forEach(function(ck){
+      var sub=items.filter(function(x){return x.cat===ck;});if(sub.length===0)return;
+      var cat=PMU_HEALTH_CATS[ck]||{t:ck,c:'#555'};
+      out+='<div style="margin-top:6px;"><span style="color:'+cat.c+';font-weight:700;">'+cat.t+'</span><br>';
+      sub.forEach(function(x){out+='・'+x.label+(x.reason?'<span style="color:#999;font-size:12px;">（'+x.reason+'）</span>':'')+'<br>';});
+      out+='</div>';
+    });
+    var other=items.filter(function(x){return ['red','yellow','allergy','recent'].indexOf(x.cat)<0;});
+    other.forEach(function(x){out+='・'+x.label+'<br>';});
+    if(items.length===0)out='（未勾選任何狀況）<br>';
+    if(r.healthNote)out+='<div style="margin-top:4px;">其他補充：'+r.healthNote+'</div>';
+    out+='<div style="margin-top:4px;color:'+(r.healthDeclare?'#16a34a':'#dc2626')+';font-size:12px;">'+(r.healthDeclare?'✓ 已簽真實聲明':'✗ 未簽真實聲明')+'</div>';
+    return out;
+  }
+  var condStr=((r&&r.conditions)||[]).length>0?(r.conditions.join('、')+(r.conditionNote?'；'+r.conditionNote:'')):'無';
+  var allergyStr=((r&&r.allergies)||[]).length>0?(r.allergies.join('、')+(r.allergyNote?'；'+r.allergyNote:'')):'無';
+  return '痼疾：'+condStr+'<br>過敏：'+allergyStr;
+}
+// 身體狀況摘要（純文字，給同意書下載）
+function pmuHealthSummaryText(r){
+  if(pmuHasNewHealth(r)){
+    var items=pmuHealthItemsOf(r),lines=[];
+    ['red','yellow','allergy','recent'].forEach(function(ck){
+      var sub=items.filter(function(x){return x.cat===ck;});if(sub.length===0)return;
+      var cat=PMU_HEALTH_CATS[ck]||{t:ck};
+      lines.push('【'+cat.t+'】');
+      sub.forEach(function(x){lines.push('・'+x.label+(x.reason?'（'+x.reason+'）':''));});
+    });
+    var other=items.filter(function(x){return ['red','yellow','allergy','recent'].indexOf(x.cat)<0;});
+    other.forEach(function(x){lines.push('・'+x.label);});
+    if(items.length===0)lines.push('（未勾選任何狀況）');
+    if(r.healthNote)lines.push('其他補充：'+r.healthNote);
+    lines.push(r.healthDeclare?'✓ 已簽署真實聲明':'✗ 未簽署真實聲明');
+    return lines.join('\n');
+  }
+  var condStr=((r&&r.conditions)||[]).length>0?(r.conditions.join('、')+(r.conditionNote?'；'+r.conditionNote:'')):'無';
+  var allergyStr=((r&&r.allergies)||[]).length>0?(r.allergies.join('、')+(r.allergyNote?'；'+r.allergyNote:'')):'無';
+  return '痼疾：'+condStr+'\n過敏：'+allergyStr;
+}
+
 // 得知管道（基本設定可增減）
 const DEFAULT_PMU_SOURCES=['朋友介紹','IG','Facebook','Google搜尋','路過看到','LINE','小紅書','其他'];
 
@@ -923,14 +1002,21 @@ async function initDefaults(){
   await saveMain({services,suppliers,initialized:true});
 }
 
-async function saveMain(data){setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');return true;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗：'+(e.message||e));return false;}}
+// Firebase 不接受 undefined：存檔前遞迴清掉（物件欄位刪除、陣列元素改 null）
+function fsClean(v){
+  if(v===undefined)return undefined;
+  if(v===null||typeof v!=='object')return (typeof v==='number'&&!isFinite(v))?0:v;
+  if(Array.isArray(v))return v.map(function(x){var c=fsClean(x);return c===undefined?null:c;});
+  var o={};Object.keys(v).forEach(function(k){var c=fsClean(v[k]);if(c!==undefined)o[k]=c;});return o;
+}
+async function saveMain(data){data=fsClean(data);setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');return true;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗：'+(e.message||e));return false;}}
 // 靜默版：自動存檔用，失敗不跳訊息（避免每次下一步都打擾使用者）
-async function saveMainSilent(data){try{await setDoc(doc(db,'studios',FID),data,{merge:true});return true;}catch(e){return false;}}
+async function saveMainSilent(data){data=fsClean(data);try{await setDoc(doc(db,'studios',FID),data,{merge:true});return true;}catch(e){return false;}}
 async function addSub(col,data){
   // 不在這裡 push 本地，因為 onSnapshot 的 pendingWrites 已經會更新 S.data[col]
   setSyncing('syncing');
   try{
-    const r=await addDoc(collection(db,'studios',FID,col),{...data,_at:Date.now()});
+    const r=await addDoc(collection(db,'studios',FID,col),fsClean({...data,_at:Date.now()}));
     setSyncing('synced');
     return r;
   }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
@@ -941,7 +1027,7 @@ async function setSub(col,id,data){
   try{
     // 移除 data 裡的 id 欄位（避免混淆），一律用參數 id 當文件路徑
     const {id:_omit,...clean}=data;
-    await setDoc(doc(db,'studios',FID,col,id),{...clean,_at:Date.now()});
+    await setDoc(doc(db,'studios',FID,col,id),fsClean({...clean,_at:Date.now()}));
     // 立即本地更新（避免 onSnapshot 延遲）
     if(!S.data[col])S.data[col]=[];
     const idx=S.data[col].findIndex(x=>x.id===id);
@@ -4686,8 +4772,8 @@ window.viewPmuRecord=(id)=>{
         ${r.faceMarkup?`<div style="margin-top:8px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">🔹 舊版圈記圖：</div><img src="${r.faceMarkup}" style="max-width:100%;border:1px solid var(--bdr);border-radius:8px;"></div>`:''}
       </div>
       <div style="background:var(--bluL);padding:14px;border-radius:10px;margin-top:10px;">
-        <b>身體狀況</b><br>
-        痼疾：${condStr}<br>過敏：${allergyStr}
+        <b>🩺 身體狀況</b><br>
+        ${pmuHealthSummaryHtml(r)}
       </div>
       <div style="background:var(--roseL);padding:14px;border-radius:10px;margin-top:10px;">
         <b>操作紀錄</b><br>
@@ -6567,6 +6653,7 @@ window.pmuAutoSave=async function(){
     isMinor:t.isMinor,guardianName:t.guardianName,
     designNote:t.designNote,designStyle:t.designStyle,expectation:t.expectation,
     conditions:t.conditions,conditionNote:t.conditionNote,allergies:t.allergies,allergyNote:t.allergyNote,
+    healthFlags:t.healthFlags||[],healthNote:t.healthNote||'',healthDeclare:!!t.healthDeclare,
     baseColor:t.baseColor,hairFlow:t.hairFlow,boneState:t.boneState,muscleState:t.muscleState,
     faceAnswers:t.faceAnswers,leftBrow:t.leftBrow,rightBrow:t.rightBrow,source:t.source,referrer:t.referrer,
     consentAgreed:t.consentAgreed,consentSignedAt:t.consentSignedAt,
@@ -6904,39 +6991,50 @@ function pmuConsentStage(t){
     html+='</div></div>';
   }
 
-  // 🩺 身體狀況（誠實告知）— 在簽名前先聲明健康狀況
-  var conditions=S2.pmuConditions||DEFAULT_PMU_CONDITIONS;
-  var allergies=S2.pmuAllergies||DEFAULT_PMU_ALLERGIES;
+  // 🩺 身體狀況（臨床篩檢，誠實告知）— 每項附原因，讓每次填寫都更清楚背後邏輯
   var sources=S2.pmuSources||DEFAULT_PMU_SOURCES;
-  html+=`<div class="card" style="margin-bottom:14px;">
-    <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知）</span></div>
-    <div class="card-bd">
-      <div class="fgrp"><label>有無痼疾/現症治療中（含皮膚病）？</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-          ${conditions.map(cond=>{
-            const on=(t.conditions||[]).includes(cond);
-            return`<label style="padding:6px 12px;background:${on?'var(--red)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('conditions','${cond.replace(/'/g,"\\'")}')">${on?'✓ ':''}${cond}</label>`;
-          }).join('')}
-        </div>
-        <input type="text" id="pmu_conditionNote" value="${(t.conditionNote||'').replace(/"/g,'&quot;')}" placeholder="其他說明（選填）" style="margin-top:8px;" oninput="S.treatment.conditionNote=this.value">
-      </div>
-      <div class="fgrp" style="margin-top:12px;"><label>是否有過敏性體質？</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-          ${allergies.map(a=>{
-            const on=(t.allergies||[]).includes(a);
-            return`<label style="padding:6px 12px;background:${on?'var(--gold)':'var(--bg2)'};color:${on?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuToggle('allergies','${a.replace(/'/g,"\\'")}')">${on?'✓ ':''}${a}</label>`;
-          }).join('')}
-        </div>
-        <input type="text" id="pmu_allergyNote" value="${(t.allergyNote||'').replace(/"/g,'&quot;')}" placeholder="其他過敏說明（選填）" style="margin-top:8px;" oninput="S.treatment.allergyNote=this.value">
-      </div>
-      <div class="fgrp" style="margin-top:12px;"><label>如何知道本店？</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-          ${sources.map(s=>`<button type="button" style="padding:6px 12px;background:${t.source===s?'var(--pur)':'var(--bg2)'};color:${t.source===s?'#fff':'var(--txt)'};border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet('source','${s.replace(/'/g,"&#39;")}')">${t.source===s?'✓ ':''}${s}</button>`).join('')}
-        </div>
-        ${(t.source||'').includes('介紹')||(t.source||'').includes('朋友')?`<div class="fgrp" style="margin-top:8px;"><label style="font-size:12px;">介紹人姓名</label><input type="text" id="pmu_referrer" value="${(t.referrer||'').replace(/"/g,'&quot;')}" placeholder="是誰介紹的呢？" oninput="S.treatment.referrer=this.value"></div>`:''}
-      </div>
-    </div>
-  </div>`;
+  if(!Array.isArray(t.healthFlags))t.healthFlags=[];
+  var _hf=t.healthFlags;
+  var _redOn=PMU_HEALTH_ITEMS.some(function(it){return it.cat==='red'&&_hf.indexOf(it.id)>=0;});
+  var _yelOn=PMU_HEALTH_ITEMS.some(function(it){return it.cat==='yellow'&&_hf.indexOf(it.id)>=0;});
+  html+='<div class="card" style="margin-bottom:14px;">'
+    +'<div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 身體狀況（誠實告知・臨床篩檢）</span></div>'
+    +'<div class="card-bd">';
+  html+='<div class="tm" style="font-size:12px;line-height:1.75;margin-bottom:10px;">紋繡屬皮膚微創，身體狀況是保護你我最重要的一關。<b>有該狀況請點「有」</b>，每一項都附上原因，讓你每次填寫都更清楚背後的邏輯。</div>';
+  if(_redOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fef2f2;border:2px solid #dc2626;color:#991b1b;font-size:13.5px;font-weight:800;line-height:1.75;margin-bottom:12px;">🔴 偵測到紅燈狀況：原則上<u>不予施作、建議退單</u>。若仍評估施作，務必讓客人充分理解風險並留下紀錄。</div>';
+  if(_yelOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fffbeb;border:2px solid #d97706;color:#92400e;font-size:13.5px;font-weight:800;line-height:1.75;margin-bottom:12px;">🟡 偵測到黃燈狀況：屬高風險，施作前<u>務必加簽「特殊評估免責聲明」</u>，並向客人說明癒合與感染風險。</div>';
+  ['red','yellow','allergy','recent'].forEach(function(catKey){
+    var cat=PMU_HEALTH_CATS[catKey];
+    html+='<div style="margin-bottom:14px;">';
+    html+='<div style="font-size:13px;font-weight:800;color:'+cat.c+';margin-bottom:7px;">'+cat.t+'</div>';
+    PMU_HEALTH_ITEMS.filter(function(it){return it.cat===catKey;}).forEach(function(it){
+      var on=_hf.indexOf(it.id)>=0;
+      html+='<div style="padding:9px 11px;border-radius:9px;margin-bottom:6px;background:'+(on?cat.bg:'#fff')+';border:1px solid '+(on?cat.c:'#eee')+';">'
+        +'<div style="display:flex;align-items:center;gap:9px;">'
+        +'<button type="button" onclick="pmuHealthToggle(&quot;'+it.id+'&quot;)" style="flex-shrink:0;min-width:46px;padding:5px 11px;border:none;border-radius:14px;cursor:pointer;font-size:12px;font-weight:800;background:'+(on?cat.c:'#eef0f3')+';color:'+(on?'#fff':'#9aa0a6')+';">'+(on?'✓ 有':'無')+'</button>'
+        +'<span style="font-weight:700;font-size:13px;line-height:1.5;color:'+(on?cat.c:'var(--txt)')+';">'+it.label+'</span>'
+        +'</div>'
+        +'<div style="font-size:11px;color:#8a8a8a;margin-top:5px;line-height:1.65;padding-left:3px;">💡 '+it.reason+'</div>'
+        +'</div>';
+    });
+    html+='</div>';
+  });
+  html+='<div class="fgrp"><label style="font-size:13px;">其他身體狀況補充（選填）</label><input type="text" id="pmu_healthNote" value="'+(t.healthNote||'').replace(/"/g,'&quot;')+'" placeholder="例如：服用中的藥物、特殊體質、過往手術…" oninput="S.treatment.healthNote=this.value"></div>';
+  var _dec=!!t.healthDeclare;
+  html+='<div style="padding:12px 14px;border-radius:10px;margin-top:10px;background:'+(_dec?'#f0fdf4':'#f8fafc')+';border:1px solid '+(_dec?'#86efac':'#e5e7eb')+';">'
+    +'<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">'
+    +'<input type="checkbox" id="pmu_health_declare" style="margin-top:3px;transform:scale(1.5);flex-shrink:0;" '+(_dec?'checked':'')+' onchange="S.treatment.healthDeclare=this.checked;">'
+    +'<span style="font-size:13px;line-height:1.75;color:#166534;font-weight:700;">本人承諾以上勾選皆為最新、真實的身體狀態；若因隱瞞體質或病史導致術後風險，願自行承擔責任。</span>'
+    +'</label></div>';
+  html+='</div></div>';
+
+  // 📣 得知管道（獨立小卡，保留）
+  html+='<div class="card" style="margin-bottom:14px;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">📣 如何知道本店？</span></div><div class="card-bd">';
+  html+='<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+  sources.forEach(function(s){html+='<button type="button" style="padding:6px 12px;background:'+(t.source===s?'var(--pur)':'var(--bg2)')+';color:'+(t.source===s?'#fff':'var(--txt)')+';border:none;border-radius:16px;cursor:pointer;font-size:13px;" onclick="pmuSet(&quot;source&quot;,&quot;'+s.replace(/'/g,"&#39;").replace(/"/g,'&quot;')+'&quot;)">'+(t.source===s?'✓ ':'')+s+'</button>';});
+  html+='</div>';
+  if((t.source||'').indexOf('介紹')>=0||(t.source||'').indexOf('朋友')>=0)html+='<div class="fgrp" style="margin-top:8px;"><label style="font-size:12px;">介紹人姓名</label><input type="text" id="pmu_referrer" value="'+(t.referrer||'').replace(/"/g,'&quot;')+'" placeholder="是誰介紹的呢？" oninput="S.treatment.referrer=this.value"></div>';
+  html+='</div></div>';
 
   // 📝 最後確認：法律條文全部收進「藍字點開才看」，畫面只留一行行勾選（像官網/App）
   function legalRow(id,field,stA,linkText,stB,fullText,checked){
@@ -6974,6 +7072,16 @@ function pmuConsentStage(t){
 // 展開/收起條款全文（藍字超連結點開才看）
 window.pmuToggleTerms=function(id){var el=document.getElementById(id);if(el)el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none';};
 
+// 身體狀況勾選切換（切換後重繪，更新紅燈/黃燈警示橫幅與highlight）
+window.pmuHealthToggle=function(id){
+  var t=S.treatment;if(!t)return;
+  if(typeof pmuSaveInputs==='function')pmuSaveInputs();
+  if(!Array.isArray(t.healthFlags))t.healthFlags=[];
+  var i=t.healthFlags.indexOf(id);
+  if(i>=0)t.healthFlags.splice(i,1);else t.healthFlags.push(id);
+  var c=$('pg-content');if(c)c.innerHTML=renderPage();
+};
+
 // 確認簽署（存簽名，不跳階段，讓使用者自己按下一步）
 window.pmuConfirmConsent=function(){
   var t=S.treatment;if(!t)return;
@@ -6987,9 +7095,21 @@ window.pmuConfirmConsent=function(){
   var gm=document.getElementById('pmu_agree_media');if(gm)t.agreeMedia=gm.checked;
   var ca=document.getElementById('pmu_consent_agree');if(ca)t.consentAgreed=ca.checked;
   var fd=document.getElementById('pmu_firstDate');if(fd&&fd.value)t.firstPmuDate=fd.value;
+  // 身體狀況：捕捉補充文字與真實聲明
+  var hn=document.getElementById('pmu_healthNote');if(hn)t.healthNote=hn.value;
+  var hd=document.getElementById('pmu_health_declare');if(hd)t.healthDeclare=hd.checked;
   if(!t.agreePrivacy){alert('請勾選「我已閱讀並同意個人資料之蒐集與使用」');return;}
   if(!t.agreeNotice){alert('請勾選「已閱讀並理解服務說明與術後照護須知」');return;}
   if(!t.consentAgreed){alert('請勾選最下方「同意服務與退費同意書」');return;}
+  // 身體狀況紅燈/黃燈提醒（不硬性阻擋，但簽署前再確認一次）
+  var _hf=t.healthFlags||[];
+  var _red=PMU_HEALTH_ITEMS.filter(function(it){return it.cat==='red'&&_hf.indexOf(it.id)>=0;});
+  var _yel=PMU_HEALTH_ITEMS.filter(function(it){return it.cat==='yellow'&&_hf.indexOf(it.id)>=0;});
+  if(_red.length>0){
+    if(!confirm('🔴 偵測到紅燈狀況：'+_red.map(function(x){return x.label;}).join('、')+'\n\n原則上不予施作、建議退單。確定仍要繼續簽署？'))return;
+  }else if(_yel.length>0){
+    if(!confirm('🟡 偵測到黃燈狀況：'+_yel.map(function(x){return x.label;}).join('、')+'\n\n屬高風險，請確認已向客人說明並加簽特殊評估免責。確定繼續簽署？'))return;
+  }
   if(!_sigCanvas||(!_sigHasContent&&!pmuCanvasHasInk(_sigCanvas))){alert('請在下方簽名');return;}
   t.consentSignature=_sigCanvas.toDataURL('image/jpeg',0.7);
   t.consentSignedAt=nowLocal();
@@ -7565,6 +7685,8 @@ window.pmuSubmit=async()=>{
     hairFlowLeft:t.hairFlowLeft,hairFlowRight:t.hairFlowRight,muscleLeft:t.muscleLeft,muscleRight:t.muscleRight,boneLeft:t.boneLeft,boneRight:t.boneRight,
     conditions:t.conditions,conditionNote:t.conditionNote,
     allergies:t.allergies,allergyNote:t.allergyNote,source:t.source,
+    healthFlags:t.healthFlags||[],healthNote:t.healthNote||'',healthDeclare:!!t.healthDeclare,
+    healthChecked:(t.healthFlags||[]).map(function(id){var it=PMU_HEALTH_ITEMS.find(function(x){return x.id===id;});return it?{cat:it.cat,label:it.label,reason:it.reason}:{cat:'',label:id,reason:''};}),
     startTime:t.startTime,endTime:t.endTime,
     numbCream:t.numbCream,numbTime:t.numbTime,
     tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
@@ -7584,7 +7706,8 @@ window.pmuSubmit=async()=>{
     updates.customers=[...(S.data.customers||[]),{id:uid(),name:t.customer,phone:t.phone||'',createdAt:today()}];
   }
 
-  // 先更新本地
+  // 先備份本地，失敗時還原（避免重按產生重複紀錄）
+  const _bkRecords=S.data.pmuRecords,_bkCustomers=S.data.customers,_bkDrafts=S.data.pmuDrafts;
   S.data.pmuRecords=pmuRecords;
   if(updates.customers)S.data.customers=updates.customers;
   // 清草稿
@@ -7594,10 +7717,12 @@ window.pmuSubmit=async()=>{
     updates.pmuDrafts=drafts;
   }
 
-  // 存主紀錄（不含照片，所以很小，不會超過限制）
+  // 存主紀錄（不含照片）
   const ok=await saveMain(updates);
   if(!ok){
-    alert('❌ 儲存失敗！請到「基本設定→資料修復→清理草稿」釋放空間後再試。');
+    S.data.pmuRecords=_bkRecords;S.data.customers=_bkCustomers;S.data.pmuDrafts=_bkDrafts;
+    const _kb=Math.round(mainDocSize()/1024);
+    alert('❌ 儲存失敗，資料還在畫面上沒有遺失，可以直接再按一次。\n\n目前主資料約 '+_kb+' KB / 上限約 1000 KB。'+(_kb>900?'\n空間偏滿，請到「基本設定→資料修復」瘦身後再試。':'\n空間足夠，多半是網路不穩，請確認連線後再按一次。'));
     return;
   }
 
@@ -7628,8 +7753,8 @@ window.downloadPmuConsent=()=>{
 
 顧客姓名：${r.customer}　電話：${r.phone||''}
 服務項目：${r.serviceType}　日期：${r.date}
-${(r.pmuServiceType&&r.pmuServiceType!=='new'&&r.firstPmuDate)?`初次施作日期：${r.firstPmuDate}　本次補色日期：${r.date}${(function(){try{var a=new Date(r.firstPmuDate+'T00:00:00'),b=new Date(r.date+'T00:00:00');var dd=Math.round((b-a)/86400000);var mm=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());return '　（間隔約 '+mm+' 個月 / '+dd+' 天'+(r.pmuServiceType==='free'?'，屬3個月內免費補色':'')+'）';}catch(e){return '';}})()}\n`:''}身體狀況：${condStr}
-過敏史：${allergyStr}
+${(r.pmuServiceType&&r.pmuServiceType!=='new'&&r.firstPmuDate)?`初次施作日期：${r.firstPmuDate}　本次補色日期：${r.date}${(function(){try{var a=new Date(r.firstPmuDate+'T00:00:00'),b=new Date(r.date+'T00:00:00');var dd=Math.round((b-a)/86400000);var mm=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());return '　（間隔約 '+mm+' 個月 / '+dd+' 天'+(r.pmuServiceType==='free'?'，屬3個月內免費補色':'')+'）';}catch(e){return '';}})()}\n`:''}【身體狀況誠實告知】
+${pmuHealthSummaryText(r)}
 ${r.isMinor?`未成年，法定代理人：${r.guardianName||''}\n`:''}
 ${notice}
 
@@ -15627,7 +15752,9 @@ function pmuSaveInputs(){
   set('pmu_guardian','guardianName');
   set('pmu_designNote','designNote');set('pmu_designStyle','designStyle');set('pmu_expectation','expectation');
   set('pmu_conditionNote','conditionNote');set('pmu_allergyNote','allergyNote');
+  set('pmu_healthNote','healthNote');
   set('pmu_operationNote','operationNote');
+  const hd=$('pmu_health_declare');if(hd)t.healthDeclare=hd.checked;
   set('pmu_referrer','referrer');
   set('pmu_leftBrow','leftBrow');set('pmu_rightBrow','rightBrow');
   set('pmu_boneDesc','boneDesc');set('pmu_muscleDesc','muscleDesc');set('pmu_skinDesc','skinDesc');set('pmu_faceOther','faceOther');
