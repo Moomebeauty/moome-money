@@ -1239,6 +1239,7 @@ function appHTML(){
     {id:'expenses',ico:'💸',lbl:'支出記帳'},
     {id:'purchase',ico:'📦',lbl:'進貨管理'},
     {id:'inventory',ico:'🗂️',lbl:'庫存盤點'},
+    {id:'costcompare',ico:'🆚',lbl:'成本比價'},
     {id:'stockout',ico:'📤',lbl:'出貨耗用'},
     {id:'equipment',ico:'🛋️',lbl:'設備資產健檢'},
     {id:'serviceCost',ico:'💎',lbl:'服務成本卡'},
@@ -1293,6 +1294,7 @@ function renderPage(){
     case'expenses':  return pgExpenses();
     case'purchase':  return pgPurchase();
     case'inventory': return pgInventory();
+    case'costcompare': return pgCostCompare();
     case'stockout':  return pgStockOut();
     case'equipment': return pgEquipment();
     case'serviceCost': return pgServiceCost();
@@ -9350,6 +9352,103 @@ function pgReports(){
     </div>
   </div>`;
 }
+
+// ═══════════ 🆚 成本比價（同性質產品成本比較）═══════════
+// 從品名自動判斷「性質」分群
+function inferType(name){
+  const n=(name||'').toString();
+  const map=[['安瓶','安瓶'],['精華液','精華液'],['精華','精華液'],['面膜紙','面膜'],['凍膜','面膜'],['面膜','面膜'],
+    ['乳霜','乳霜'],['面霜','乳霜'],['乳液','乳液'],['化妝水','化妝水'],['化粧水','化妝水'],['爽膚水','化妝水'],['保濕水','化妝水'],
+    ['凝膠','凝膠'],['凝露','凝膠'],['精油','精油'],['按摩油','按摩油'],['卸妝','卸妝'],['潔面','潔顏'],['洗面','潔顏'],['潔顏','潔顏'],
+    ['防曬','防曬'],['眼霜','眼霜'],['眼膜','眼膜'],['修護','修護霜'],
+    ['色乳','色料'],['色膏','色料'],['色料','色料'],['色素','色料'],['麻膏','麻膏'],['麻藥','麻膏'],
+    ['排針','針具'],['圓針','針具'],['針片','針具'],['針','針具'],
+    ['棉片','棉材'],['棉棒','棉材'],['化妝棉','棉材'],['紗布','棉材'],['棉花','棉材'],
+    ['手套','手套'],['口罩','口罩'],['保鮮膜','保鮮膜'],['刀片','刀片']];
+  for(var i=0;i<map.length;i++){if(n.indexOf(map[i][0])>=0)return map[i][1];}
+  return '';
+}
+function getCmpGroup(p){
+  const g=(p.compareGroup||'').trim();if(g)return g;
+  const inf=inferType(p.name);if(inf)return inf;
+  return (p.category||'').trim()||'其他';
+}
+function pgCostCompare(){
+  const prods=(S.data.products||[]);
+  const q=(S.ccSearch||'').trim().toLowerCase();
+  // 分群
+  const groups={};
+  prods.forEach(function(p){const g=getCmpGroup(p);(groups[g]=groups[g]||[]).push(p);});
+  const groupNames=Object.keys(groups).sort(function(a,b){return groups[b].length-groups[a].length||a.localeCompare(b);});
+  var html='<div class="pg-ttl">🆚 成本比價</div>';
+  html+='<div class="pg-sub">同性質產品的成本一起比 — 進貨前挑成本最低的，利潤額自然變高</div>';
+  html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;margin-bottom:14px;">💡 系統自動依品名把同性質的產品分群（安瓶歸安瓶、精華液歸精華液）。有填<b>容量</b>的會比「每 ml／每 g 成本」最公平；分群不對可按產品旁的「群組」自己改。</div>';
+  html+='<div style="margin-bottom:14px;"><input type="text" placeholder="🔍 搜尋產品／群組" value="'+((S.ccSearch||'').replace(/"/g,'&quot;'))+'" oninput="ccDoSearch(this.value)" style="width:100%;padding:10px 14px;border:1px solid var(--bdr);border-radius:8px;"></div>';
+  if(prods.length===0){return html+'<div class="empty" style="padding:40px;"><div class="empty-ico">🆚</div><p>還沒有產品。到「🗂️ 庫存盤點」新增產品後，這裡就會自動幫你分群比價。</p></div>';}
+
+  var shown=0;
+  groupNames.forEach(function(g){
+    var items=groups[g];
+    if(q){items=items.filter(function(p){return((p.name||'')+g).toLowerCase().includes(q);});}
+    if(items.length===0)return;
+    // 計算每個產品的成本
+    var rows=items.map(function(p){
+      const unitCost=getAvgCost(p.id);
+      const cap=toN(p.capacity);
+      const capCost=cap>0?unitCost/cap:null;
+      return{p:p,unitCost:unitCost,cap:cap,capUnit:p.capacityUnit||'',capCost:capCost,hasCost:unitCost>0};
+    });
+    // 判斷比價基準：全部有容量且同單位 → 比每容量成本
+    const withCap=rows.filter(function(r){return r.hasCost&&r.cap>0;});
+    const units=Array.from(new Set(withCap.map(function(r){return r.capUnit;})));
+    const perCap=withCap.length>=2&&withCap.length===rows.filter(function(r){return r.hasCost;}).length&&units.length===1&&units[0]!=='';
+    const basisUnit=perCap?units[0]:'';
+    function cmpVal(r){return perCap?r.capCost:r.unitCost;}
+    // 有成本的排序（便宜→貴），無成本的放最後
+    const withCostRows=rows.filter(function(r){return r.hasCost;}).sort(function(a,b){return cmpVal(a)-cmpVal(b);});
+    const noCostRows=rows.filter(function(r){return !r.hasCost;});
+    const cheapest=withCostRows.length>0?cmpVal(withCostRows[0]):0;
+    const priciest=withCostRows.length>0?cmpVal(withCostRows[withCostRows.length-1]):0;
+    const savePct=priciest>0?Math.round((priciest-cheapest)/priciest*100):0;
+
+    html+='<div class="card" style="margin-bottom:14px;border:1px solid #e9d5f5;"><div class="card-hd" style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);"><span class="card-ttl" style="color:#9333ea;">🏷️ '+g+'（'+items.length+' 項）</span>'+(perCap?'<span class="bdg" style="background:#dbeafe;color:#1e40af;">比每 '+basisUnit+' 成本</span>':'<span class="bdg" style="background:#f3f4f6;color:#555;">比每單位成本</span>')+'</div><div class="card-bd">';
+    if(withCostRows.length>=2&&savePct>0){
+      html+='<div class="notice" style="background:#f0fdf4;border-left-color:#16a34a;color:#166534;font-size:13px;margin-bottom:10px;">最貴的比最便宜的貴 <b>'+savePct+'%</b>。同性質優先用最划算的，成本就省下來了。</div>';
+    }
+    html+='<div class="tw"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="border-bottom:2px solid #e9d5f5;"><th style="padding:7px 8px;text-align:left;">產品</th><th style="padding:7px 8px;text-align:right;">'+(perCap?('每 '+basisUnit+' 成本'):'單位成本')+'</th>'+(perCap?'<th style="padding:7px 8px;text-align:right;">單位成本</th><th style="padding:7px 8px;text-align:right;">容量</th>':'')+'<th style="padding:7px 8px;"></th></tr></thead><tbody>';
+    withCostRows.forEach(function(r,idx){
+      const isCheap=idx===0;const isExp=idx===withCostRows.length-1&&withCostRows.length>=2;
+      const tag=isCheap?'<span class="bdg" style="background:#16a34a;color:#fff;font-size:11px;">✓ 最划算</span>':(isExp?'<span class="bdg" style="background:#fee2e2;color:#dc2626;font-size:11px;">最貴</span>':'');
+      const mainCost=perCap?('$'+(r.capCost>=10?fmt(r.capCost):r.capCost.toFixed(2))+' /'+basisUnit):('$'+fmt(r.unitCost));
+      html+='<tr style="border-bottom:1px solid #f1f5f9;'+(isCheap?'background:#f0fdf4;':'')+'">'
+        +'<td style="padding:7px 8px;"><b>'+(r.p.name||'')+'</b>'+(r.p.supplier?'<span class="tm" style="font-size:11px;"> · '+r.p.supplier+'</span>':'')+' '+tag+'</td>'
+        +'<td style="padding:7px 8px;text-align:right;font-weight:800;color:'+(isCheap?'#16a34a':(isExp?'#dc2626':'#333'))+';">'+mainCost+'</td>'
+        +(perCap?('<td style="padding:7px 8px;text-align:right;color:#666;">$'+fmt(r.unitCost)+'</td><td style="padding:7px 8px;text-align:right;color:#999;">'+(r.cap>0?(r.cap+(r.capUnit||'')):'-')+'</td>'):'')
+        +'<td style="padding:7px 8px;text-align:right;white-space:nowrap;"><button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="setCompareGroup(&quot;'+r.p.id+'&quot;)">群組</button></td>'
+        +'</tr>';
+    });
+    noCostRows.forEach(function(r){
+      html+='<tr style="border-bottom:1px solid #f1f5f9;opacity:0.6;"><td style="padding:7px 8px;">'+(r.p.name||'')+'</td><td style="padding:7px 8px;text-align:right;color:#999;">尚無成本</td>'+(perCap?'<td></td><td></td>':'')+'<td style="padding:7px 8px;text-align:right;"><button class="btn btn-sm" style="font-size:11px;padding:3px 8px;" onclick="setCompareGroup(&quot;'+r.p.id+'&quot;)">群組</button></td></tr>';
+    });
+    html+='</tbody></table></div></div></div>';
+    shown++;
+  });
+  if(shown===0)html+='<div class="empty" style="padding:30px;"><p>找不到符合的產品</p></div>';
+  return html;
+}
+window.ccDoSearch=function(v){S.ccSearch=v;const c=$('pg-content');if(c)c.innerHTML=renderPage();};
+window.setCompareGroup=async function(pid){
+  const p=(S.data.products||[]).find(function(x){return x.id===pid;});
+  if(!p)return;
+  const cur=(p.compareGroup||'').trim()||inferType(p.name)||'';
+  const v=prompt('設定「'+(p.name||'')+'」的比價群組\n（相同群組的產品會一起比成本，例如：安瓶、精華液）',cur);
+  if(v===null)return;
+  const prods=(S.data.products||[]).map(function(x){return x.id===pid?Object.assign({},x,{compareGroup:v.trim()}):x;});
+  S.data.products=prods;
+  await saveMain({products:prods});
+  toast('✅ 已更新比價群組');
+  render();
+};
 
 // ═══════════ 📚 案例研究室（霧眉施作案例資料庫）═══════════
 const CASE_GOAL=100;
