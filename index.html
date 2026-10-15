@@ -925,7 +925,7 @@ window.S=S;
 // ── UTILS ──────────────────────────────────────────────────
 const $=id=>document.getElementById(id);
 // 畫面上 inline 事件會直接呼叫這些，module 模式要掛到全域才找得到
-window.$=$;window.render=render;window.renderPage=renderPage;window.pmuSaveInputs=pmuSaveInputs;
+window.$=$;window.render=render;window.renderNoteText=renderNoteText;window.renderPage=renderPage;window.pmuSaveInputs=pmuSaveInputs;
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const fmt=v=>{const n=parseFloat(String(v||0).replace(/,/g,''))||0;return Math.abs(n)>=1000?n.toLocaleString('zh-TW'):String(Math.round(n));};
 const toN=v=>parseFloat(String(v||0).replace(/,/g,''))||0;
@@ -4291,13 +4291,9 @@ function renderNotePointEditor(p,i){
       ${NOTE_COLORS.map(nc=>`<button type="button" onclick="notePointColor(${i},'${nc.key}')" title="${nc.label}" style="width:26px;height:26px;border-radius:50%;border:2px solid ${p.color===nc.key?'#333':'transparent'};background:${nc.border};cursor:pointer;"></button>`).join('')}
       <span class="tm" style="font-size:11px;align-self:center;margin-left:4px;">${col.label}</span>
     </div>
-    <textarea id="note_pt_${i}" placeholder="寫下這個重點的內容...&#10;想標示的字用 **金色** 或 !!紅色!! 包起來" onchange="notePointEdit(${i},'text',this.value)" rows="2" style="width:100%;font-size:14px;line-height:1.7;background:#fff;">${p.text||''}</textarea>
-    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;align-items:center;">
-      <span class="tm" style="font-size:10px;">選好字後點：</span>
-      <button type="button" onclick="noteWrap(${i},'**')" style="font-size:11px;padding:2px 8px;background:#fffbeb;color:#b45309;border:1px solid #d97706;border-radius:6px;cursor:pointer;font-weight:700;">**金色重點**</button>
-      <button type="button" onclick="noteWrap(${i},'!!')" style="font-size:11px;padding:2px 8px;background:#fef2f2;color:#dc2626;border:1px solid #dc2626;border-radius:6px;cursor:pointer;font-weight:700;">!!紅色超重點!!</button>
-      <button type="button" onclick="noteWrap(${i},'__')" style="font-size:11px;padding:2px 8px;background:#faf5ff;color:#7e22ce;border:1px solid #9333ea;border-radius:6px;cursor:pointer;">__底線__</button>
-    </div>
+    ${noteFmtToolbar('note_pt_'+i)}
+    <textarea id="note_pt_${i}" placeholder="寫下這個重點的內容…" oninput="notePointEdit(${i},'text',this.value);var pv=document.getElementById('note_pv_${i}');if(pv)pv.innerHTML=renderNoteText(this.value)||'';" rows="4" style="width:100%;font-size:15px;line-height:1.8;background:#fff;">${(p.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
+    ${notePreviewBox('note_pv_'+i,p.text)}
   </div>`;
 }
 
@@ -4319,6 +4315,70 @@ window.notePointEdit=(i,field,val)=>{
 };
 
 // 把選取的文字用符號包起來（**金色 !!紅色 __底線）
+
+// ── 筆記畫重點工具列（條列筆記、聯想筆記共用）──
+const NOTE_FMT=[
+  {m:'==',lbl:'螢光黃',st:'background:#fde047;color:#422006;font-weight:700;'},
+  {m:'%%',lbl:'螢光粉',st:'background:#fbcfe8;color:#831843;font-weight:700;'},
+  {m:'!!',lbl:'紅字',st:'background:#fff;color:#dc2626;font-weight:800;'},
+  {m:'**',lbl:'金字',st:'background:#fff;color:#b45309;font-weight:800;'},
+  {m:'@@',lbl:'藍字',st:'background:#fff;color:#2563eb;font-weight:800;'},
+  {m:'++',lbl:'粗體',st:'background:#fff;color:#111;font-weight:900;'},
+  {m:'~~',lbl:'斜體',st:'background:#fff;color:#111;font-style:italic;'},
+  {m:'__',lbl:'底線',st:'background:#fff;color:#111;text-decoration:underline;text-decoration-color:#9333ea;text-decoration-thickness:2px;'}
+];
+function noteFmtToolbar(taId){
+  // onmousedown/ontouchstart 先 preventDefault：點按鈕時不會讓輸入框失焦，選好的字不會跑掉
+  let h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 4px;align-items:center;">';
+  h+='<span style="font-size:12px;color:#6b7280;width:100%;">✍️ 先選取文字，再點要的標記：</span>';
+  NOTE_FMT.forEach(f=>{
+    h+='<button type="button" onmousedown="event.preventDefault()" ontouchstart="noteFmtKeep(\''+taId+'\')" onclick="noteFmt(\''+taId+'\',\''+f.m+'\')" style="'+f.st+'font-size:14px;padding:6px 11px;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;min-height:36px;">'+f.lbl+'</button>';
+  });
+  h+='<button type="button" onmousedown="event.preventDefault()" ontouchstart="noteFmtKeep(\''+taId+'\')" onclick="noteFmtClear(\''+taId+'\')" style="font-size:13px;padding:6px 11px;border:1px dashed #9ca3af;background:#f9fafb;color:#6b7280;border-radius:8px;cursor:pointer;min-height:36px;">⌫ 清除標記</button>';
+  h+='</div>';
+  return h;
+}
+// 手機：點按鈕前先記住選取範圍（有些手機一碰按鈕就會清掉選取）
+const _noteSel={};
+window.noteFmtKeep=function(taId){const ta=document.getElementById(taId);if(ta&&ta.selectionStart!==ta.selectionEnd)_noteSel[taId]=[ta.selectionStart,ta.selectionEnd];};
+document.addEventListener('selectionchange',function(){const a=document.activeElement;if(a&&a.tagName==='TEXTAREA'&&a.id&&a.selectionStart!==a.selectionEnd)_noteSel[a.id]=[a.selectionStart,a.selectionEnd];});
+function noteFmtRange(ta){
+  let s=ta.selectionStart,e=ta.selectionEnd;
+  if(s===e&&_noteSel[ta.id]){s=_noteSel[ta.id][0];e=_noteSel[ta.id][1];}
+  return [s,e];
+}
+function noteFmtCommit(ta,newVal,selS,selE){
+  ta.value=newVal;
+  try{ta.focus();ta.setSelectionRange(selS,selE);}catch(e){}
+  delete _noteSel[ta.id];
+  ta.dispatchEvent(new Event('input',{bubbles:true}));
+}
+window.noteFmt=function(taId,mark){
+  const ta=document.getElementById(taId);if(!ta)return;
+  const [s,e]=noteFmtRange(ta);
+  if(s===e){toast('請先用手指（或滑鼠）選取要標示的文字');return;}
+  const v=ta.value,sel=v.substring(s,e);
+  // 已經有同樣標記 → 取消（再點一次可移除）
+  if(v.substring(s-mark.length,s)===mark&&v.substring(e,e+mark.length)===mark){
+    noteFmtCommit(ta,v.substring(0,s-mark.length)+sel+v.substring(e+mark.length),s-mark.length,e-mark.length);return;
+  }
+  noteFmtCommit(ta,v.substring(0,s)+mark+sel+mark+v.substring(e),s+mark.length,e+mark.length);
+};
+window.noteFmtClear=function(taId){
+  const ta=document.getElementById(taId);if(!ta)return;
+  let [s,e]=noteFmtRange(ta);
+  const v=ta.value;
+  if(s===e){s=0;e=v.length;if(!confirm('沒有選取文字，要清除這一段全部的標記嗎？'))return;}
+  // 往外延伸，把包住選取範圍的標記也一起拿掉
+  NOTE_FMT.forEach(f=>{while(s>=f.m.length&&v.substring(s-f.m.length,s)===f.m&&v.substring(e,e+f.m.length)===f.m){s-=f.m.length;e+=f.m.length;}});
+  let mid=v.substring(s,e);
+  NOTE_FMT.forEach(f=>{mid=mid.split(f.m).join('');});
+  noteFmtCommit(ta,v.substring(0,s)+mid+v.substring(e),s,s+mid.length);
+};
+function notePreviewBox(id,text){
+  return '<div style="font-size:11px;color:#9ca3af;margin-top:6px;">👀 預覽（儲存後就長這樣）</div><div id="'+id+'" style="background:#fff;border:1px dashed #e5e7eb;border-radius:8px;padding:8px 10px;font-size:15px;line-height:1.85;white-space:pre-wrap;min-height:28px;color:#333;">'+(renderNoteText(text||'')||'<span style="color:#ccc;">（還沒有內容）</span>')+'</div>';
+}
+
 window.noteWrap=(i,mark)=>{
   const ta=$(`note_pt_${i}`);
   if(!ta)return;
@@ -9155,6 +9215,16 @@ function renderNoteText(text){
   s=s.replace(/\*\*([^*]+)\*\*/g,'<span style="color:#b45309;font-weight:800;">$1</span>');
   // __字__ → 底線
   s=s.replace(/__([^_]+)__/g,'<span style="text-decoration:underline;text-decoration-color:#9333ea;text-decoration-thickness:2px;">$1</span>');
+  // ==字== → 黃色螢光
+  s=s.replace(/==([^=]+)==/g,'<span style="background:#fde047;color:#422006;font-weight:700;padding:0 3px;border-radius:3px;">$1</span>');
+  // %%字%% → 粉色螢光
+  s=s.replace(/%%([^%]+)%%/g,'<span style="background:#fbcfe8;color:#831843;font-weight:700;padding:0 3px;border-radius:3px;">$1</span>');
+  // @@字@@ → 藍色粗體
+  s=s.replace(/@@([^@]+)@@/g,'<span style="color:#2563eb;font-weight:800;">$1</span>');
+  // ++字++ → 粗體
+  s=s.replace(/\+\+([^+]+)\+\+/g,'<b style="font-weight:900;">$1</b>');
+  // ~~字~~ → 斜體
+  s=s.replace(/~~([^~]+)~~/g,'<i style="font-style:italic;">$1</i>');
   return s;
 }
 
@@ -9368,45 +9438,133 @@ function renderListNotes(){
       <div class="empty-ico">📒</div>
       <p>${search?'找不到符合的筆記':curFolder==='all'?'還沒有筆記':'這個資料夾還沒有筆記'}</p>
       <div class="tm" style="font-size:13px;margin-top:6px;">點右上角「＋ 新增筆記」開始整理你的備課內容</div>
-    </div>`:`
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      ${list.map(n=>renderNoteCard(n,folders)).join('')}
-    </div>`}
+    </div>`:renderNoteTiers(list,folders,!!search)}
   `;
 }
 
-// 單張筆記卡片（檢視用）
-function renderNoteCard(n,folders){
+// ── 筆記三層：📌 正在加強 / ⭐ 常翻閱 / 🗂️ 先收著 ──
+const NOTE_TIERS=[
+  {k:'focus',ico:'📌',lbl:'正在加強',desc:'最近最想加強、隨時翻閱',c:'#dc2626',bg:'#fef2f2'},
+  {k:'often',ico:'⭐',lbl:'常翻閱',desc:'常用的參考，點開才展開',c:'#d97706',bg:'#fffbeb'},
+  {k:'later',ico:'🗂️',lbl:'先收著',desc:'先記起來，需要時再翻',c:'#64748b',bg:'#f1f5f9'}
+];
+function noteTierOf(n){return n.tier||'often';}
+function noteFocusSorted(notes){
+  return notes.filter(n=>noteTierOf(n)==='focus').sort((a,b)=>((a.order==null?1e9:a.order)-(b.order==null?1e9:b.order))||(b.updatedAt||'').localeCompare(a.updatedAt||''));
+}
+function renderNoteTiers(list,folders,searching){
+  const byTime=(a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'');
+  const groups={focus:noteFocusSorted(list),often:list.filter(n=>noteTierOf(n)==='often').sort(byTime),later:list.filter(n=>noteTierOf(n)==='later').sort(byTime)};
+  S.noteOpen=S.noteOpen||{};S.noteTierShut=S.noteTierShut||{};
+  let h='';
+  NOTE_TIERS.forEach(t=>{
+    const arr=groups[t.k];
+    const shut=!searching&&!!S.noteTierShut[t.k];
+    h+='<div style="margin:18px 0 8px;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="noteTierShutToggle(\''+t.k+'\')">'
+      +'<span style="font-size:17px;font-weight:900;color:'+t.c+';">'+t.ico+' '+t.lbl+'</span>'
+      +'<span style="font-size:13px;background:'+t.bg+';color:'+t.c+';padding:2px 9px;border-radius:10px;font-weight:700;">'+arr.length+'</span>'
+      +'<span class="tm" style="font-size:12px;flex:1;">'+t.desc+'</span>'
+      +'<span style="color:#9ca3af;font-size:13px;">'+(shut?'▶ 展開':'▼')+'</span></div>';
+    if(shut)return;
+    if(arr.length===0){
+      h+='<div class="tm" style="font-size:13px;padding:10px 14px;background:'+t.bg+';border-radius:10px;">'+(t.k==='focus'?'把最想加強的筆記點右上角的 📌，就會固定在這裡':'目前沒有')+'</div>';
+      return;
+    }
+    h+='<div style="display:flex;flex-direction:column;gap:'+(t.k==='later'?'6':'10')+'px;">';
+    arr.forEach((n,i)=>{
+      const open=searching||t.k==='focus'||!!S.noteOpen[n.id];
+      h+=renderNoteCard(n,folders,{tier:t,open:open,idx:i,total:arr.length});
+    });
+    h+='</div>';
+  });
+  return h;
+}
+function renderNoteCard(n,folders,o){
+  o=o||{tier:NOTE_TIERS[1],open:true};
+  const t=o.tier;
   const folder=folders.find(f=>f.id===n.folderId);
+  const tierBtns='<div style="display:flex;gap:2px;background:#f3f4f6;border-radius:10px;padding:2px;">'+NOTE_TIERS.map(x=>{
+    const on=noteTierOf(n)===x.k;
+    return '<button type="button" title="移到「'+x.lbl+'」" onclick="event.stopPropagation();noteSetTier(\''+n.id+'\',\''+x.k+'\')" style="border:none;border-radius:8px;padding:4px 7px;font-size:14px;cursor:pointer;background:'+(on?'#fff':'transparent')+';box-shadow:'+(on?'0 1px 3px rgba(0,0,0,.15)':'none')+';opacity:'+(on?'1':'.45')+';">'+x.ico+'</button>';
+  }).join('')+'</div>';
+  const moveBtns=t.k==='focus'&&o.total>1?'<div style="display:flex;flex-direction:column;gap:2px;">'
+    +'<button type="button" onclick="event.stopPropagation();noteMove(\''+n.id+'\',-1)" '+(o.idx===0?'disabled':'')+' style="border:1px solid #e5e7eb;background:#fff;border-radius:6px;font-size:12px;padding:1px 6px;cursor:pointer;opacity:'+(o.idx===0?'.3':'1')+';">⬆️</button>'
+    +'<button type="button" onclick="event.stopPropagation();noteMove(\''+n.id+'\',1)" '+(o.idx===o.total-1?'disabled':'')+' style="border:1px solid #e5e7eb;background:#fff;border-radius:6px;font-size:12px;padding:1px 6px;cursor:pointer;opacity:'+(o.idx===o.total-1?'.3':'1')+';">⬇️</button></div>':'';
+  const pts=n.points||[];
+  // 收合狀態：只顯示標題＋重點標題小標籤，點一下展開
+  if(!o.open){
+    const line=t.k==='later';
+    return '<div class="card" style="border-left:4px solid '+t.c+';margin:0;cursor:pointer;" onclick="noteToggleOpen(\''+n.id+'\')"><div class="card-bd" style="padding:'+(line?'9px 12px':'12px 14px')+';">'
+      +'<div style="display:flex;align-items:center;gap:8px;">'
+      +'<div style="flex:1;min-width:0;">'
+      +(folder&&!line?'<span class="bdg" style="background:'+(folder.color||'var(--bg2)')+';font-size:11px;">'+(folder.icon||'📁')+' '+folder.name+'</span>':'')
+      +'<div style="font-size:'+(line?'15':'17')+'px;font-weight:800;color:var(--txt);'+(line?'':'margin-top:4px;')+'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(n.title||'（未命名）')+'</div>'
+      +(!line&&n.subtitle?'<div style="font-size:13px;color:var(--mut);margin-top:2px;">'+n.subtitle+'</div>':'')
+      +(!line&&pts.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">'+pts.slice(0,4).map((p,i)=>{const col=noteColor(p.color);return '<span style="font-size:11px;background:'+col.bg+';color:'+col.text+';border:1px solid '+col.border+';padding:1px 7px;border-radius:8px;">'+(p.label||('重點 '+(i+1)))+'</span>';}).join('')+(pts.length>4?'<span class="tm" style="font-size:11px;">+'+(pts.length-4)+'</span>':'')+'</div>':'')
+      +'</div>'
+      +'<span class="tm" style="font-size:12px;white-space:nowrap;">'+pts.length+' 個重點 ▶</span>'
+      +tierBtns
+      +'</div></div></div>';
+  }
   return`
-  <div class="card" style="border-left:4px solid #9333ea;">
+  <div class="card" style="border-left:4px solid ${t.c};margin:0;">
     <div class="card-bd">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:0;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        ${moveBtns}
+        <div style="flex:1;min-width:0;${t.k!=='focus'?'cursor:pointer;':''}" ${t.k!=='focus'?`onclick="noteToggleOpen('${n.id}')"`:''}>
           ${folder?`<span class="bdg" style="background:${folder.color||'var(--bg2)'};font-size:11px;">${folder.icon||'📁'} ${folder.name}</span>`:''}
-          <div style="font-size:19px;font-weight:800;color:var(--txt);margin-top:6px;">${n.title||'（未命名）'}</div>
+          <div style="font-size:19px;font-weight:800;color:var(--txt);margin-top:6px;">${n.title||'（未命名）'}${t.k!=='focus'?' <span class="tm" style="font-size:12px;font-weight:400;">▼ 收起</span>':''}</div>
           ${n.subtitle?`<div style="font-size:14px;color:var(--mut);margin-top:2px;">${n.subtitle}</div>`:''}
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn btn-s btn-sm" onclick="openM('editNote','${n.id}')">✏️ 編輯</button>
-          <button class="bdel" onclick="delNote('${n.id}')">×</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
+          ${tierBtns}
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-s btn-sm" onclick="openM('editNote','${n.id}')">✏️ 編輯</button>
+            <button class="bdel" onclick="delNote('${n.id}')">×</button>
+          </div>
         </div>
       </div>
-      ${(n.points||[]).length>0?`<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
-        ${n.points.map((p,i)=>{
+      ${pts.length>0?`<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+        ${pts.map((p,i)=>{
           const col=noteColor(p.color);
           return`<div style="background:${col.bg};border-left:4px solid ${col.border};border-radius:8px;padding:10px 12px;">
             <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
               <span style="font-weight:800;color:${col.text};font-size:14px;">${p.label||`第 ${i+1} 重點`}</span>
               ${p.color&&p.color!=='gray'?`<span style="font-size:10px;background:${col.border};color:#fff;padding:1px 6px;border-radius:8px;">${noteColor(p.color).label}</span>`:''}
             </div>
-            ${p.text?`<div style="font-size:14px;line-height:1.8;color:var(--txt);margin-top:4px;white-space:pre-wrap;">${renderNoteText(p.text)}</div>`:''}
+            ${p.text?`<div style="font-size:15px;line-height:1.85;color:var(--txt);margin-top:4px;white-space:pre-wrap;">${renderNoteText(p.text)}</div>`:''}
           </div>`;
         }).join('')}
       </div>`:''}
     </div>
   </div>`;
 }
+function noteRefresh(){const c=document.getElementById('pg-content');if(c)c.innerHTML=renderPage();}
+window.noteToggleOpen=function(id){S.noteOpen=S.noteOpen||{};S.noteOpen[id]=!S.noteOpen[id];noteRefresh();};
+window.noteTierShutToggle=function(k){S.noteTierShut=S.noteTierShut||{};S.noteTierShut[k]=!S.noteTierShut[k];noteRefresh();};
+window.noteSetTier=async function(id,tier){
+  let notes=(S.data.studyNotes||[]).map(n=>Object.assign({},n));
+  const n=notes.find(x=>x.id===id);if(!n||noteTierOf(n)===tier)return;
+  n.tier=tier;
+  if(tier==='focus'){const f=noteFocusSorted(notes.filter(x=>x.id!==id));n.order=f.length?((f[f.length-1].order||0)+1):0;}
+  S.data.studyNotes=notes;noteRefresh();
+  const t=NOTE_TIERS.find(x=>x.k===tier);
+  await saveMain({studyNotes:notes});
+  toast(t.ico+' 已移到「'+t.lbl+'」');
+};
+window.noteMove=async function(id,dir){
+  let notes=(S.data.studyNotes||[]).map(n=>Object.assign({},n));
+  // 依目前畫面（同一資料夾）排序交換
+  const curFolder=S.noteFolder||'all';
+  const vis=noteFocusSorted(curFolder==='all'?notes:notes.filter(n=>n.folderId===curFolder));
+  const all=noteFocusSorted(notes);
+  all.forEach((n,i)=>{n.order=i;});
+  const i=vis.findIndex(n=>n.id===id),j=i+dir;
+  if(i<0||j<0||j>=vis.length)return;
+  const a=vis[i],b=vis[j];const tmp=a.order;a.order=b.order;b.order=tmp;
+  S.data.studyNotes=notes;noteRefresh();
+  await saveMain({studyNotes:notes});
+};
 
 function pgCourses(){
   const courses=S.data.courses||[];
@@ -12751,7 +12909,9 @@ function renderModal(){
       <input type="text" id="mind_keyword" value="${(node.keyword||'').replace(/"/g,'&quot;')}" placeholder="如：黃金比例、下針深度" style="font-size:17px;font-weight:700;">
     </div>
     <div class="fgrp" style="margin-top:12px;"><label>📝 細節／備注／聯想（點開才看得到）</label>
-      <textarea id="mind_detail" rows="5" placeholder="這個關鍵字的細節、答案、你的聯想...">${node.detail||''}</textarea>
+      ${noteFmtToolbar('mind_detail')}
+      <textarea id="mind_detail" rows="6" style="font-size:15px;line-height:1.8;" placeholder="這個關鍵字的細節、答案、你的聯想..." oninput="var pv=document.getElementById('mind_pv');if(pv)pv.innerHTML=renderNoteText(this.value)||'';">${(node.detail||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
+      ${notePreviewBox('mind_pv',node.detail)}
     </div>
     <div class="fgrp" style="margin-top:12px;"><label>顏色標籤</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
