@@ -901,6 +901,7 @@ let S={
     coolingDecisions:[],
     advisorChats:[],
     learnGoals:[],
+    actionItems:[],
     appointments:[],
     trialPacks:[],
     passContracts:[],
@@ -979,7 +980,7 @@ function startSync(){
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases'].forEach(col=>{
+  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases','actionItems'].forEach(col=>{
     const unsub=onSnapshot(collection(db,'studios',FID,col),snap=>{
       S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
       render();
@@ -1399,6 +1400,7 @@ window.cbSubmit=async()=>{
 function appHTML(){
   const PAGES=[
     {id:'overview',ico:'📊',lbl:'總覽'},
+    {id:'action',ico:'🎯',lbl:'行動計畫'},
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
     {id:'myfinance',ico:'👑',lbl:'我的理財'},
     {id:'profit',ico:'💎',lbl:'季度年度分析'},
@@ -1482,6 +1484,7 @@ function _renderPageInner(){
     case'serviceCost': return pgServiceCost();
     case'courses':   return pgCourses();
     case'notes':     return pgNotes();
+    case'action':    return pgAction();
     case'cases':     return pgCases();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
@@ -1870,6 +1873,318 @@ function cardoneCompass(rev,exp,profit){
   return html;
 }
 
+// ═══════════ 🎯 行動計畫（每月目標 → 每週行動 → 每日必做 → 每件事復盤）═══════════
+const ACT_RESULTS={win:{ico:'✅',lbl:'有成果',c:'#16a34a',bg:'#f0fdf4'},wait:{ico:'🌱',lbl:'還在等結果',c:'#d97706',bg:'#fffbeb'},none:{ico:'❌',lbl:'沒效果',c:'#dc2626',bg:'#fef2f2'}};
+const ACT_WD=['日','一','二','三','四','五','六'];
+function actYmd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function actAddDays(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return actYmd(d);}
+function actWeekStart(ds){const d=new Date(ds+'T00:00:00');const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return actYmd(d);}
+function actItems(){return S.data.actionItems||[];}
+function actTasks(){return actItems().filter(x=>x.type==='task');}
+function actGoals(month){return actItems().filter(x=>x.type==='goal'&&x.month===month).sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));}
+function actGoalById(id){return actItems().find(x=>x.id===id&&x.type==='goal');}
+function actMustToday(ds){return actTasks().filter(t=>t.date===ds&&t.pri==='must');}
+function actMonthRevenue(month){return (S.data.sales||[]).filter(s=>(s.date||'').slice(0,7)===month).reduce((a,s)=>a+toN(s.amount),0);}
+// 今天要傳給客人的訊息（串聯關懷提醒、補色、滿一年）
+function actCustomerMsgs(){
+  const out=[];const td=today();
+  try{getCareDue().forEach(d=>out.push({kind:'care',title:d.title,who:d.customer,sub:d.service+'・開單後第 '+d.sinceOrder+' 天',btn:'<button class="btn btn-sm" style="background:#db2777;color:#fff;" onclick="careCopyMsg(\''+d.saleId+'\',\''+d.ruleId+'\')">📋 複製</button><button class="btn btn-s btn-sm" onclick="careMarkDone(\''+d.saleId+'\',\''+d.ruleId+'\')">✓ 已傳</button>'}));}catch(e){}
+  const d14=actAddDays(td,14);
+  (S.data.pmuRecords||[]).forEach(r=>{
+    if(r.touchupDate&&!r.touchupDone&&r.touchupDate<=d14)out.push({kind:'touchup',title:'補色提醒',who:r.customer,sub:(r.serviceType||'')+'・補色日 '+r.touchupDate+(r.touchupDate<td?'（已過期）':''),btn:'<button class="btn btn-sm" style="background:#9333ea;color:#fff;" onclick="pmuSendTouchup(\''+r.id+'\')">💬 傳訊</button>'});
+    if(r.oneYearDate&&!r.oneYearReminded&&r.oneYearDate<=td)out.push({kind:'yearly',title:'紋繡滿一年回訪',who:r.customer,sub:(r.serviceType||'')+'・滿一年 '+r.oneYearDate,btn:'<button class="btn btn-sm" style="background:var(--rose);color:#fff;" onclick="pmuSendYearly(\''+r.id+'\')">💬 傳訊</button>'});
+  });
+  return out;
+}
+function actFollowUps(){const td=today();return actTasks().filter(t=>t.status==='done'&&t.result==='wait'&&(t.followUpDate||'')<=td);}
+function actOverdue(){const td=today();return actTasks().filter(t=>t.status!=='done'&&t.date&&t.date<td);}
+
+// 單一行動列
+function actTaskRow(t,opt){
+  opt=opt||{};
+  const done=t.status==='done';
+  const g=t.goalId?actGoalById(t.goalId):null;
+  const r=t.result?ACT_RESULTS[t.result]:null;
+  return '<div style="display:flex;gap:10px;align-items:flex-start;padding:11px 12px;background:#fff;border:1px solid #f1e7e3;border-radius:12px;'+(done?'opacity:.85;':'')+'">'
+    +'<button type="button" onclick="actToggle(\''+t.id+'\')" title="'+(done?'取消完成':'完成')+'" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;border:2px solid '+(done?'#16a34a':'#d6c7c1')+';background:'+(done?'#16a34a':'#fff')+';color:#fff;font-size:15px;cursor:pointer;line-height:1;">'+(done?'✓':'')+'</button>'
+    +'<div style="flex:1;min-width:0;cursor:pointer;" onclick="openM(\'actTask\',\''+t.id+'\')">'
+    +'<div style="font-size:15px;font-weight:700;line-height:1.5;'+(done?'text-decoration:line-through;color:#9ca3af;':'color:var(--txt);')+'">'+(t.title||'')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:11px;">'
+    +(opt.showDate&&t.date?'<span style="background:#f3f4f6;color:#6b7280;padding:1px 7px;border-radius:8px;">'+t.date.slice(5)+' 週'+ACT_WD[new Date(t.date+'T00:00:00').getDay()]+'</span>':'')
+    +(t.timebox?'<span style="background:#eff6ff;color:#2563eb;padding:1px 7px;border-radius:8px;">⏱ '+t.timebox+'</span>':'')
+    +(g?'<span style="background:#faf5ff;color:#7c3aed;padding:1px 7px;border-radius:8px;">🎯 '+g.title+'</span>':'')
+    +(r?'<span style="background:'+r.bg+';color:'+r.c+';padding:1px 7px;border-radius:8px;font-weight:700;">'+r.ico+' '+r.lbl+'</span>':'')
+    +'</div>'
+    +(t.resultNote?'<div style="font-size:12px;color:#4b5563;margin-top:4px;line-height:1.6;">成果：'+t.resultNote+'</div>':'')
+    +'</div>'
+    +(opt.extra||'')
+    +'</div>';
+}
+function actSection(title,color,inner,right){
+  return '<div style="margin:18px 0 8px;display:flex;align-items:center;gap:8px;"><span style="font-size:16px;font-weight:900;color:'+color+';">'+title+'</span><span style="flex:1;"></span>'+(right||'')+'</div>'+inner;
+}
+
+function pgAction(){
+  const tab=S.actTab||'today';
+  const tabs=[['today','☀️ 今天'],['week','📅 本週'],['month','🎯 本月目標'],['review','📊 成果復盤']];
+  let h='<div class="pg-ttl">🎯 行動計畫</div><div class="pg-sub">每月 3 個目標 → 每週行動 → 每天只做最重要的 3 件 → 做完看成果</div>';
+  h+='<div style="display:flex;gap:6px;overflow-x:auto;margin:14px 0 4px;padding-bottom:4px;">'+tabs.map(([k,l])=>'<button type="button" onclick="S.actTab=\''+k+'\';actRefresh()" style="flex-shrink:0;padding:10px 16px;border-radius:22px;border:1px solid '+(tab===k?'#7c3aed':'var(--bdr)')+';background:'+(tab===k?'#7c3aed':'var(--card)')+';color:'+(tab===k?'#fff':'var(--txt)')+';font-size:15px;font-weight:800;cursor:pointer;">'+l+'</button>').join('')+'</div>';
+  if(tab==='week')h+=actWeekView();
+  else if(tab==='month')h+=actMonthView();
+  else if(tab==='review')h+=actReviewView();
+  else h+=actTodayView();
+  return h;
+}
+function actRefresh(){const c=document.getElementById('pg-content');if(c)c.innerHTML=renderPage();}
+window.actRefresh=actRefresh;
+
+function actAddBar(ds,defPri){
+  const goals=actGoals(ds.slice(0,7));
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
+    +'<input type="text" id="act_quick" placeholder="想到要做的事，打在這裡…" style="flex:1;min-width:180px;font-size:15px;" onkeydown="if(event.key===\'Enter\')actQuickAdd(\''+ds+'\',\''+defPri+'\')">'
+    +(goals.length?'<select id="act_quick_goal" style="max-width:150px;"><option value="">（不連結目標）</option>'+goals.map(g=>'<option value="'+g.id+'">🎯 '+g.title+'</option>').join('')+'</select>':'')
+    +'<button class="btn btn-p" style="background:#dc2626;" onclick="actQuickAdd(\''+ds+'\',\'must\')">🔥 加到必做</button>'
+    +'<button class="btn btn-s" onclick="actQuickAdd(\''+ds+'\',\'extra\')">⏳ 有空再做</button>'
+    +'</div>';
+}
+function actTodayView(){
+  const td=today();
+  const d=new Date(td+'T00:00:00');
+  const all=actTasks().filter(t=>t.date===td);
+  const must=all.filter(t=>t.pri==='must');
+  const extra=all.filter(t=>t.pri!=='must');
+  const mustDone=must.filter(t=>t.status==='done').length;
+  let h='<div class="card" style="margin-top:10px;background:linear-gradient(135deg,#fff7ed,#fdf2f8);border:none;"><div class="card-bd" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+    +'<div><div style="font-size:13px;color:#9a3412;">'+(d.getMonth()+1)+' 月 '+d.getDate()+' 日・星期'+ACT_WD[d.getDay()]+'</div><div style="font-size:22px;font-weight:900;color:#7c2d12;">今天只做最重要的 3 件事</div></div>'
+    +'<span style="flex:1;"></span><div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:#dc2626;">'+mustDone+' / '+Math.max(must.length,0)+'</div><div style="font-size:12px;color:#9a3412;">必做完成</div></div>'
+    +'</div></div>';
+  // 必做
+  let inner='<div style="display:flex;flex-direction:column;gap:8px;">'+must.map(t=>actTaskRow(t)).join('')+'</div>';
+  if(must.length===0)inner='<div class="tm" style="padding:12px 14px;background:#fef2f2;border-radius:12px;font-size:14px;">還沒排今天的必做。問自己：<b>今天做完哪 3 件事，就算沒白過？</b></div>';
+  else if(must.length<3)inner+='<div class="tm" style="font-size:12px;margin-top:6px;">還可以再加 '+(3-must.length)+' 件必做</div>';
+  h+=actSection('🔥 今天必做（最多 3 件）','#dc2626',inner);
+  h+=actAddBar(td,'must');
+  // 今天要傳的訊息
+  const msgs=actCustomerMsgs();
+  if(msgs.length){
+    let mi='<div style="display:flex;flex-direction:column;gap:8px;">'+msgs.map(m=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #fbcfe8;border-radius:12px;flex-wrap:wrap;"><div style="flex:1;min-width:160px;"><div style="font-size:15px;font-weight:800;color:#9d174d;">'+m.who+'　<span style="font-size:12px;font-weight:600;color:#db2777;">'+m.title+'</span></div><div class="tm" style="font-size:12px;">'+m.sub+'</div></div><div style="display:flex;gap:6px;">'+m.btn+'</div></div>').join('')+'</div>';
+    h+=actSection('💌 今天要傳給客人的訊息（'+msgs.length+'）','#db2777',mi);
+  }
+  // 等待成果追蹤
+  const fu=actFollowUps();
+  if(fu.length){
+    h+=actSection('🌱 該回來看成果了（'+fu.length+'）','#d97706','<div class="tm" style="font-size:12px;margin-bottom:6px;">這些事之前做了、在等結果，現在可以回來補上成果了</div><div style="display:flex;flex-direction:column;gap:8px;">'+fu.map(t=>actTaskRow(t,{showDate:true,extra:'<button class="btn btn-sm" style="background:#d97706;color:#fff;flex-shrink:0;" onclick="openM(\'actReview\',\''+t.id+'\')">補上成果</button>'})).join('')+'</div>');
+  }
+  // 有空再做
+  if(extra.length)h+=actSection('⏳ 有空再做（'+extra.length+'）','#6b7280','<div style="display:flex;flex-direction:column;gap:8px;">'+extra.map(t=>actTaskRow(t,{extra:t.status!=='done'&&must.length<3?'<button class="btn btn-s btn-sm" style="flex-shrink:0;" onclick="actSetPri(\''+t.id+'\',\'must\')">🔥 升必做</button>':''})).join('')+'</div>');
+  // 之前沒做完
+  const od=actOverdue();
+  if(od.length)h+=actSection('⚠️ 之前沒做完（'+od.length+'）','#b45309','<div class="tm" style="font-size:12px;margin-bottom:6px;">每件都要決定：今天做、改天做，還是不做了</div><div style="display:flex;flex-direction:column;gap:8px;">'+od.map(t=>actTaskRow(t,{showDate:true,extra:'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;"><button class="btn btn-s btn-sm" onclick="actMoveToday(\''+t.id+'\')">移到今天</button><button class="btn btn-s btn-sm" onclick="openM(\'actTask\',\''+t.id+'\')">改日期</button><button class="btn btn-s btn-sm" style="color:#9ca3af;" onclick="actDrop(\''+t.id+'\')">不做了</button></div>'})).join('')+'</div>');
+  return h;
+}
+function actWeekView(){
+  const td=today();
+  const ws=S.actWeek||actWeekStart(td);
+  const days=[0,1,2,3,4,5,6].map(i=>actAddDays(ws,i));
+  const we=days[6];
+  const tasks=actTasks().filter(t=>t.date>=ws&&t.date<=we);
+  const done=tasks.filter(t=>t.status==='done');
+  const wins=done.filter(t=>t.result==='win').length;
+  let h='<div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'
+    +'<button class="btn btn-s btn-sm" onclick="S.actWeek=\''+actAddDays(ws,-7)+'\';actRefresh()">‹ 上週</button>'
+    +'<b style="font-size:16px;">'+ws.slice(5).replace('-','/')+' – '+we.slice(5).replace('-','/')+'</b>'
+    +'<button class="btn btn-s btn-sm" onclick="S.actWeek=\''+actAddDays(ws,7)+'\';actRefresh()">下週 ›</button>'
+    +(ws!==actWeekStart(td)?'<button class="btn btn-s btn-sm" onclick="S.actWeek=null;actRefresh()">回本週</button>':'')
+    +'<span style="flex:1;"></span><span class="tm" style="font-size:13px;">完成 <b>'+done.length+'</b> / '+tasks.length+'　·　✅ 有成果 <b style="color:#16a34a;">'+wins+'</b></span></div>';
+  // 新增
+  const goals=actGoals(ws.slice(0,7));
+  h+='<div class="card" style="margin-top:10px;"><div class="card-bd"><div style="font-weight:800;margin-bottom:6px;">＋ 安排這週的行動</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'
+    +'<input type="text" id="act_wk_title" placeholder="例如：發 2 篇霧眉作品到 IG" style="flex:1;min-width:180px;font-size:15px;">'
+    +'<select id="act_wk_day">'+days.map(ds=>'<option value="'+ds+'"'+(ds===td?' selected':'')+'>週'+ACT_WD[new Date(ds+'T00:00:00').getDay()]+' '+ds.slice(5)+'</option>').join('')+'</select>'
+    +(goals.length?'<select id="act_wk_goal"><option value="">（不連結目標）</option>'+goals.map(g=>'<option value="'+g.id+'">🎯 '+g.title+'</option>').join('')+'</select>':'')
+    +'<button class="btn btn-p" style="background:#7c3aed;" onclick="actWeekAdd()">加入</button></div></div></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">';
+  days.forEach(ds=>{
+    const dt=tasks.filter(t=>t.date===ds).sort((a,b)=>(a.pri==='must'?0:1)-(b.pri==='must'?0:1));
+    const isT=ds===td;
+    h+='<div style="border-radius:14px;border:'+(isT?'2px solid #7c3aed':'1px solid #f1e7e3')+';background:'+(isT?'#faf5ff':'#fff')+';padding:10px 12px;">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(dt.length?'8':'0')+'px;"><b style="font-size:15px;color:'+(isT?'#7c3aed':'var(--txt)')+';">週'+ACT_WD[new Date(ds+'T00:00:00').getDay()]+'</b><span class="tm" style="font-size:12px;">'+ds.slice(5).replace('-','/')+(isT?'・今天':'')+'</span><span style="flex:1;"></span><span class="tm" style="font-size:12px;">'+(dt.length?dt.filter(t=>t.status==='done').length+'/'+dt.length:'沒有安排')+'</span></div>'
+      +'<div style="display:flex;flex-direction:column;gap:6px;">'+dt.map(t=>actTaskRow(t,{extra:t.pri==='must'?'<span style="font-size:11px;color:#dc2626;flex-shrink:0;">🔥必做</span>':''})).join('')+'</div></div>';
+  });
+  h+='</div>';
+  return h;
+}
+function actMonthView(){
+  const month=S.actMonth||today().slice(0,7);
+  const [y,mo]=month.split('-').map(Number);
+  const prev=(mo===1?(y-1)+'-12':y+'-'+String(mo-1).padStart(2,'0')),next=(mo===12?(y+1)+'-01':y+'-'+String(mo+1).padStart(2,'0'));
+  const goals=actGoals(month);
+  let h='<div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'
+    +'<button class="btn btn-s btn-sm" onclick="S.actMonth=\''+prev+'\';actRefresh()">‹ 上個月</button>'
+    +'<b style="font-size:17px;">'+y+' 年 '+mo+' 月</b>'
+    +'<button class="btn btn-s btn-sm" onclick="S.actMonth=\''+next+'\';actRefresh()">下個月 ›</button>'
+    +(month!==today().slice(0,7)?'<button class="btn btn-s btn-sm" onclick="S.actMonth=null;actRefresh()">回本月</button>':'')+'</div>';
+  h+='<div class="tm" style="font-size:13px;margin:10px 0;line-height:1.7;">一個月<b>最多 3 個目標</b>。目標要寫得出「怎樣算做到」，每週的行動都從這 3 個目標拆出來。</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">';
+  goals.forEach((g,i)=>{
+    const tk=actTasks().filter(t=>t.goalId===g.id);
+    const dn=tk.filter(t=>t.status==='done'),wn=dn.filter(t=>t.result==='win').length;
+    let prog='';
+    if(g.kind==='revenue'&&toN(g.target)>0){
+      const act=actMonthRevenue(month),pct=Math.min(100,Math.round(act/toN(g.target)*100));
+      prog='<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;font-size:13px;"><span>實際營收 <b>$'+fmt(act)+'</b></span><span>目標 $'+fmt(g.target)+'</span></div><div style="height:12px;background:#f3f4f6;border-radius:6px;margin-top:4px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#16a34a':'#7c3aed')+';"></div></div><div style="text-align:right;font-size:12px;font-weight:800;color:'+(pct>=100?'#16a34a':'#7c3aed')+';margin-top:2px;">'+pct+'%</div></div>';
+    }
+    const rv=g.review?{hit:['🏆','達成','#16a34a'],part:['🌗','部分達成','#d97706'],miss:['⛔','沒達成','#dc2626']}[g.review]:null;
+    h+='<div style="background:#fff;border-radius:16px;border:1px solid #ede9fe;border-top:6px solid #7c3aed;padding:14px 16px;">'
+      +'<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:22px;font-weight:900;color:#c4b5fd;">'+(i+1)+'</span><div style="flex:1;"><div style="font-size:17px;font-weight:900;color:#4c1d95;line-height:1.4;">'+g.title+'</div>'+(g.measure?'<div style="font-size:13px;color:#6b7280;margin-top:3px;">怎樣算做到：'+g.measure+'</div>':'')+'</div>'
+      +'<button class="btn btn-s btn-sm" onclick="openM(\'actGoal\',\''+g.id+'\')">✏️</button></div>'
+      +prog
+      +'<div style="font-size:13px;margin-top:10px;color:#4b5563;">相關行動 <b>'+tk.length+'</b>　完成 <b>'+dn.length+'</b>　✅ 有成果 <b style="color:#16a34a;">'+wn+'</b></div>'
+      +(rv?'<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#f9fafb;"><b style="color:'+rv[2]+';">'+rv[0]+' 月底復盤：'+rv[1]+'</b>'+(g.reviewNote?'<div style="font-size:13px;color:#4b5563;margin-top:3px;line-height:1.6;">'+g.reviewNote+'</div>':'')+'</div>'
+        :'<button class="btn btn-s btn-sm" style="margin-top:10px;" onclick="openM(\'actGoal\',\''+g.id+'\');S.modal.focusReview=true;">📝 月底復盤</button>')
+      +'</div>';
+  });
+  if(goals.length<3)h+='<div onclick="openM(\'actGoal\',\'__new__\');S.modal.month=\''+month+'\';" style="cursor:pointer;border:2px dashed #c4b5fd;border-radius:16px;min-height:140px;display:flex;align-items:center;justify-content:center;color:#7c3aed;font-size:16px;font-weight:800;">＋ 新增目標（還能加 '+(3-goals.length)+' 個）</div>';
+  h+='</div>';
+  return h;
+}
+function actReviewView(){
+  const f=S.actReviewF||'all',range=S.actReviewR||'month';
+  const mon=today().slice(0,7);
+  let list=actTasks().filter(t=>t.status==='done'&&(range==='all'||(t.date||'').slice(0,7)===mon));
+  const cnt=k=>list.filter(t=>t.result===k).length;
+  const total=list.length;
+  let h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">'
+    +[['month','本月'],['all','全部']].map(([k,l])=>'<button class="btn btn-sm '+(range===k?'btn-p':'btn-s')+'" onclick="S.actReviewR=\''+k+'\';actRefresh()">'+l+'</button>').join('')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;">'
+    +[['all','📋','完成',total,'#4b5563','#f9fafb'],['win','✅','有成果',cnt('win'),'#16a34a','#f0fdf4'],['wait','🌱','等結果',cnt('wait'),'#d97706','#fffbeb'],['none','❌','沒效果',cnt('none'),'#dc2626','#fef2f2']].map(([k,ic,l,n,c,bg])=>'<div onclick="S.actReviewF=\''+k+'\';actRefresh()" style="cursor:pointer;text-align:center;padding:10px 4px;border-radius:12px;background:'+bg+';border:2px solid '+(f===k?c:'transparent')+';"><div style="font-size:22px;font-weight:900;color:'+c+';">'+n+'</div><div style="font-size:12px;color:'+c+';">'+ic+' '+l+'</div></div>').join('')+'</div>';
+  if(total>0)h+='<div class="tm" style="font-size:13px;margin-top:8px;">有成果的比例：<b style="color:#16a34a;">'+Math.round(cnt('win')/total*100)+'%</b>。多做 ✅ 那種事、少做 ❌ 那種事。</div>';
+  if(f!=='all')list=list.filter(t=>t.result===f);
+  list.sort((a,b)=>(b.doneAt||b.date||'').localeCompare(a.doneAt||a.date||''));
+  if(list.length===0)return h+'<div class="empty" style="padding:30px;"><p>還沒有紀錄。完成一件事時，記得寫下成果喔</p></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">';
+  list.forEach(t=>{
+    const r=ACT_RESULTS[t.result]||{ico:'📋',lbl:'未填成果',c:'#6b7280',bg:'#f9fafb'};
+    const g=t.goalId?actGoalById(t.goalId):null;
+    h+='<div onclick="openM(\'actReview\',\''+t.id+'\')" style="cursor:pointer;background:#fff;border-radius:14px;border-left:6px solid '+r.c+';padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04);">'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:15px;">'+t.title+'</b><span style="font-size:12px;background:'+r.bg+';color:'+r.c+';padding:1px 8px;border-radius:8px;font-weight:700;">'+r.ico+' '+r.lbl+'</span><span style="flex:1;"></span><span class="tm" style="font-size:12px;">'+(t.date||'')+'</span></div>'
+      +(g?'<div style="font-size:12px;color:#7c3aed;margin-top:3px;">🎯 '+g.title+'</div>':'')
+      +(t.resultNote?'<div style="font-size:14px;margin-top:6px;line-height:1.7;"><b>成果：</b>'+t.resultNote+'</div>':'')
+      +(t.adjust?'<div style="font-size:14px;margin-top:2px;line-height:1.7;color:#7c3aed;"><b>下次調整：</b>'+t.adjust+'</div>':'')
+      +'</div>';
+  });
+  return h+'</div>';
+}
+
+// ── 動作 ──
+async function actSave(item){await setSub('actionItems',item.id,item);}
+window.actQuickAdd=async function(ds,pri){
+  const el=document.getElementById('act_quick');const title=(el&&el.value||'').trim();
+  if(!title){toast('先打上要做的事');return;}
+  if(pri==='must'&&actMustToday(ds).length>=3){pri='extra';toast('今天必做已經 3 件了，先放進「有空再做」');}
+  const ge=document.getElementById('act_quick_goal');
+  await actSave({id:'act_'+uid(),type:'task',title,date:ds,pri,goalId:ge?ge.value:'',status:'todo',createdAt:nowLocal()});
+  actRefresh();
+  setTimeout(()=>{const e=document.getElementById('act_quick');if(e)e.focus();},50);
+};
+window.actWeekAdd=async function(){
+  const title=(document.getElementById('act_wk_title')||{}).value||'';
+  if(!title.trim()){toast('先打上要做的事');return;}
+  const ds=document.getElementById('act_wk_day').value;
+  const ge=document.getElementById('act_wk_goal');
+  const pri=actMustToday(ds).length<3?'must':'extra';
+  await actSave({id:'act_'+uid(),type:'task',title:title.trim(),date:ds,pri,goalId:ge?ge.value:'',status:'todo',createdAt:nowLocal()});
+  if(pri==='extra')toast('那天必做已滿 3 件，這件放在「有空再做」');
+  actRefresh();
+};
+window.actToggle=async function(id){
+  const t=actTasks().find(x=>x.id===id);if(!t)return;
+  if(t.status==='done'){
+    if(!confirm('改回「還沒做完」？'))return;
+    await actSave(Object.assign({},t,{status:'todo',doneAt:'',result:'',followUpDate:''}));actRefresh();
+    return;
+  }
+  openM('actReview',id);
+};
+window.actSetPri=async function(id,pri){
+  const t=actTasks().find(x=>x.id===id);if(!t)return;
+  if(pri==='must'&&actMustToday(t.date).filter(x=>x.id!==id).length>=3){toast('那天必做已經 3 件了');return;}
+  await actSave(Object.assign({},t,{pri}));actRefresh();
+};
+window.actMoveToday=async function(id){
+  const t=actTasks().find(x=>x.id===id);if(!t)return;
+  const td=today();
+  const pri=actMustToday(td).length<3?'must':'extra';
+  await actSave(Object.assign({},t,{date:td,pri}));
+  toast(pri==='must'?'已移到今天必做':'今天必做已滿，先放「有空再做」');actRefresh();
+};
+window.actDrop=async function(id){
+  const t=actTasks().find(x=>x.id===id);if(!t)return;
+  if(!confirm('確定「'+t.title+'」不做了？（會刪除這件事）'))return;
+  await delSub('actionItems',id);actRefresh();
+};
+window.actPickResult=function(k){S.modal.actRes=k;const inn=document.getElementById('modal-inner');if(inn){const keep={n:(document.getElementById('act_rnote')||{}).value,a:(document.getElementById('act_radj')||{}).value};inn.innerHTML=renderModal();if(keep.n!=null&&document.getElementById('act_rnote'))document.getElementById('act_rnote').value=keep.n;if(keep.a!=null&&document.getElementById('act_radj'))document.getElementById('act_radj').value=keep.a;}};
+window.actSaveReview=async function(id,later){
+  const t=actTasks().find(x=>x.id===id);if(!t)return;
+  let res=S.modal.actRes||t.result||'';
+  if(later){res='wait';}
+  if(!res){toast('選一個：有成果／還在等結果／沒效果');return;}
+  const fd=(document.getElementById('act_rfu')||{}).value;
+  const days=later?1:toN(fd||3);
+  const upd=Object.assign({},t,{status:'done',doneAt:t.doneAt||nowLocal(),result:res,
+    resultNote:(document.getElementById('act_rnote')||{}).value||t.resultNote||'',
+    adjust:(document.getElementById('act_radj')||{}).value||t.adjust||'',
+    followUpDate:res==='wait'?actAddDays(today(),days):''});
+  await actSave(upd);
+  closeMod();
+  toast(res==='win'?'✅ 讚！記下有效的做法':res==='wait'?'🌱 '+days+' 天後提醒你回來看成果':'❌ 記下來，下次調整');
+  actRefresh();
+};
+window.actSaveTask=async function(id){
+  const isNew=id==='__new__';
+  const old=isNew?{id:'act_'+uid(),type:'task',status:'todo',createdAt:nowLocal()}:actTasks().find(x=>x.id===id);
+  if(!old)return;
+  const title=(document.getElementById('act_t_title').value||'').trim();
+  if(!title){alert('請填要做的事');return;}
+  const date=document.getElementById('act_t_date').value||today();
+  let pri=document.getElementById('act_t_pri').value;
+  if(pri==='must'&&actMustToday(date).filter(x=>x.id!==old.id).length>=3){pri='extra';toast('那天必做已滿 3 件，改放「有空再做」');}
+  await actSave(Object.assign({},old,{title,date,pri,timebox:document.getElementById('act_t_box').value.trim(),goalId:(document.getElementById('act_t_goal')||{}).value||'',note:document.getElementById('act_t_note').value}));
+  closeMod();actRefresh();
+};
+window.actDelTask=async function(id){if(!confirm('刪除這件事？'))return;await delSub('actionItems',id);closeMod();actRefresh();};
+window.actSaveGoal=async function(id){
+  const isNew=id==='__new__';
+  const month=isNew?(S.modal.month||today().slice(0,7)):(actGoalById(id)||{}).month;
+  if(isNew&&actGoals(month).length>=3){alert('一個月最多 3 個目標');return;}
+  const old=isNew?{id:'goal_'+uid(),type:'goal',month,createdAt:nowLocal()}:actGoalById(id);
+  const title=(document.getElementById('act_g_title').value||'').trim();
+  if(!title){alert('請填目標');return;}
+  const kind=document.getElementById('act_g_kind').value;
+  const rv=document.querySelector('input[name=act_g_rv]:checked');
+  await actSave(Object.assign({},old,{title,kind,measure:document.getElementById('act_g_measure').value.trim(),target:kind==='revenue'?toN(document.getElementById('act_g_target').value):0,
+    review:rv?rv.value:(old.review||''),reviewNote:(document.getElementById('act_g_rnote')||{}).value||''}));
+  closeMod();actRefresh();
+};
+window.actDelGoal=async function(id){if(!confirm('刪除這個目標？（相關行動會保留）'))return;await delSub('actionItems',id);closeMod();actRefresh();};
+
+// 總覽最上方：今天的 3 件事
+function actOverviewCard(){
+  const td=today();
+  const must=actMustToday(td);
+  const msgs=actCustomerMsgs().length,fu=actFollowUps().length,od=actOverdue().length;
+  let h='<div class="card" style="margin:0 0 16px;border:2px solid #fca5a5;background:linear-gradient(135deg,#fff,#fff7ed);"><div class="card-bd">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><b style="font-size:17px;color:#b91c1c;">🔥 今天的 3 件事</b><span class="tm" style="font-size:12px;">'+must.filter(t=>t.status==='done').length+' / '+must.length+' 完成</span><span style="flex:1;"></span><button class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="S.actTab=\'today\';setP(\'action\')">🎯 行動計畫 ›</button></div>';
+  h+=must.length?'<div style="display:flex;flex-direction:column;gap:6px;">'+must.map(t=>actTaskRow(t)).join('')+'</div>'
+    :'<div class="tm" style="font-size:14px;">今天還沒排。<a href="javascript:void(0)" onclick="S.actTab=\'today\';setP(\'action\')" style="color:#dc2626;font-weight:800;">去選今天最重要的 3 件事 ›</a></div>';
+  const chips=[];
+  if(msgs)chips.push('💌 要傳 '+msgs+' 則客人訊息');
+  if(fu)chips.push('🌱 '+fu+' 件該回來看成果');
+  if(od)chips.push('⚠️ '+od+' 件之前沒做完');
+  if(chips.length)h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">'+chips.map(c=>'<span onclick="S.actTab=\'today\';setP(\'action\')" style="cursor:pointer;font-size:13px;background:#fff;border:1px solid #fecaca;color:#9f1239;padding:4px 10px;border-radius:14px;font-weight:700;">'+c+' ›</span>').join('')+'</div>';
+  return h+'</div></div>';
+}
+
 function pgOverview(){
   const rev=getRevTotal();
   const exp=getExpTotal();
@@ -1925,6 +2240,7 @@ function pgOverview(){
   const thisQReviewed=reviews.find(r=>r.year===yr()&&r.quarter===curQ);
 
   return`
+  ${actOverviewCard()}
   ${cardoneCompass(rev,exp,profit)}
   <div class="pg-ttl">📊 工作室總覽</div>
   <div class="pg-sub">${yr()}年 ${MOS[S.month-1]}　第 ${curQ} 季</div>
@@ -4747,7 +5063,7 @@ window.delPmuRecordDirect=async function(id){
 };
 
 // 只計算「真正存進主文件」的欄位大小（排除照片等子集合，它們是分開存的獨立文件，不算主文件 1MB）
-const SUBCOLLECTION_KEYS=['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases'];
+const SUBCOLLECTION_KEYS=['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases','actionItems'];
 function mainDocSize(){
   try{
     var obj={};
@@ -11256,6 +11572,50 @@ function renderModal(){
 
   // 自訂 HTML 報告類型（給 depositHealthReport 等）
   if(m.html)return m.html;
+
+  // 🎯 行動計畫：編輯一件事
+  if(m.t==='actTask'){
+    const isNew=m.x==='__new__';
+    const t=isNew?{date:today(),pri:'must'}:(actTasks().find(x=>x.id===m.x)||{});
+    const goals=actGoals((t.date||today()).slice(0,7));
+    const r=t.result?ACT_RESULTS[t.result]:null;
+    c='<div class="mttl">'+(isNew?'＋ 新增行動':'✏️ 這件事')+'</div>'
+      +'<div class="fgrp"><label>要做的事 *</label><input type="text" id="act_t_title" value="'+((t.title||'').replace(/"/g,'&quot;'))+'" style="font-size:16px;font-weight:700;"></div>'
+      +'<div class="fg fg2" style="margin-top:10px;"><div class="fgrp"><label>哪一天做</label><input type="date" id="act_t_date" value="'+(t.date||today())+'"></div>'
+      +'<div class="fgrp"><label>重要程度</label><select id="act_t_pri"><option value="must"'+(t.pri==='must'?' selected':'')+'>🔥 必做（每天最多 3 件）</option><option value="extra"'+(t.pri!=='must'?' selected':'')+'>⏳ 有空再做</option></select></div></div>'
+      +'<div class="fg fg2" style="margin-top:10px;"><div class="fgrp"><label>⏱ 給自己的時間限制</label><input type="text" id="act_t_box" value="'+((t.timebox||'').replace(/"/g,'&quot;'))+'" placeholder="例如：30 分鐘、下午 2–3 點" list="act_box_list"><datalist id="act_box_list"><option value="15 分鐘"><option value="30 分鐘"><option value="1 小時"><option value="上午"><option value="下午"><option value="晚上"></datalist></div>'
+      +'<div class="fgrp"><label>🎯 連結本月目標</label><select id="act_t_goal"><option value="">（不連結）</option>'+goals.map(g=>'<option value="'+g.id+'"'+(t.goalId===g.id?' selected':'')+'>'+g.title+'</option>').join('')+'</select></div></div>'
+      +'<div class="fgrp" style="margin-top:10px;"><label>備註</label><textarea id="act_t_note" rows="2">'+((t.note||'').replace(/</g,'&lt;'))+'</textarea></div>'
+      +(r?'<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:'+r.bg+';"><b style="color:'+r.c+';">'+r.ico+' '+r.lbl+'</b>'+(t.resultNote?'<div style="font-size:13px;margin-top:4px;">成果：'+t.resultNote+'</div>':'')+(t.adjust?'<div style="font-size:13px;">下次調整：'+t.adjust+'</div>':'')+'<button class="btn btn-s btn-sm" style="margin-top:6px;" onclick="openM(\'actReview\',\''+m.x+'\')">修改成果</button></div>':'')
+      +'<div class="mbtns">'+(!isNew?'<button class="bdel" style="padding:8px 14px;border-radius:8px;" onclick="actDelTask(\''+m.x+'\')">🗑️ 刪除</button>':'')+'<button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#7c3aed;" onclick="actSaveTask(\''+m.x+'\')">✓ 儲存</button></div>';
+  }
+  // 🎯 行動計畫：做完了，成果如何？
+  if(m.t==='actReview'){
+    const t=actTasks().find(x=>x.id===m.x)||{};
+    if(m.actRes===undefined)m.actRes=t.result||'';
+    const sel=m.actRes;
+    c='<div class="mttl">🎉 做完了！成果如何？</div>'
+      +'<div style="font-size:16px;font-weight:800;margin-bottom:12px;">'+(t.title||'')+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+Object.keys(ACT_RESULTS).map(k=>{const r=ACT_RESULTS[k],on=sel===k;return '<button type="button" onclick="actPickResult(\''+k+'\')" style="padding:14px 6px;border-radius:14px;border:2px solid '+(on?r.c:'#e5e7eb')+';background:'+(on?r.bg:'#fff')+';cursor:pointer;"><div style="font-size:26px;">'+r.ico+'</div><div style="font-size:14px;font-weight:800;color:'+r.c+';">'+r.lbl+'</div></button>';}).join('')+'</div>'
+      +'<div class="fgrp" style="margin-top:14px;"><label>實際結果是什麼？（越具體越好）</label><textarea id="act_rnote" rows="2" placeholder="例如：發了 2 篇 IG，來了 1 位詢問、預約 1 位">'+((t.resultNote||'').replace(/</g,'&lt;'))+'</textarea></div>'
+      +'<div class="fgrp" style="margin-top:10px;"><label>下次要怎麼調整？</label><textarea id="act_radj" rows="2" placeholder="例如：改在晚上 8 點發文、加上前後對比照">'+((t.adjust||'').replace(/</g,'&lt;'))+'</textarea></div>'
+      +(sel==='wait'?'<div class="fgrp" style="margin-top:10px;"><label>🌱 幾天後回來看成果？</label><select id="act_rfu"><option value="1">1 天後</option><option value="3" selected>3 天後</option><option value="7">7 天後</option><option value="14">14 天後</option><option value="30">30 天後</option></select></div>':'')
+      +'<div class="mbtns"><button class="btn btn-s" onclick="actSaveReview(\''+m.x+'\',true)">先打勾，晚點再寫</button><button class="btn btn-p" style="background:#16a34a;" onclick="actSaveReview(\''+m.x+'\',false)">✓ 記下成果</button></div>';
+  }
+  // 🎯 行動計畫：本月目標
+  if(m.t==='actGoal'){
+    const isNew=m.x==='__new__';
+    const g=isNew?{kind:'custom'}:(actGoalById(m.x)||{});
+    c='<div class="mttl">'+(isNew?'＋ 新增本月目標':'🎯 本月目標')+'</div>'
+      +'<div class="fgrp"><label>目標 *</label><input type="text" id="act_g_title" value="'+((g.title||'').replace(/"/g,'&quot;'))+'" placeholder="例如：霧眉作品集拍滿 10 組" style="font-size:16px;font-weight:700;"></div>'
+      +'<div class="fg fg2" style="margin-top:10px;"><div class="fgrp"><label>類型</label><select id="act_g_kind" onchange="document.getElementById(\'act_g_tgt_wrap\').style.display=this.value===\'revenue\'?\'block\':\'none\'"><option value="custom"'+(g.kind!=='revenue'?' selected':'')+'>一般目標</option><option value="revenue"'+(g.kind==='revenue'?' selected':'')+'>💰 營收目標（系統自動算）</option></select></div>'
+      +'<div class="fgrp" id="act_g_tgt_wrap" style="display:'+(g.kind==='revenue'?'block':'none')+';"><label>營收目標金額</label><input type="number" id="act_g_target" value="'+(g.target||'')+'" placeholder="150000"></div></div>'
+      +'<div class="fgrp" style="margin-top:10px;"><label>怎樣算做到？</label><input type="text" id="act_g_measure" value="'+((g.measure||'').replace(/"/g,'&quot;'))+'" placeholder="例如：拍滿 10 組前後對比、上傳到 IG"></div>'
+      +(!isNew?'<div style="margin-top:14px;padding:12px;border-radius:12px;background:#faf5ff;'+(m.focusReview?'border:2px solid #7c3aed;':'')+'"><b style="color:#7c3aed;">📝 月底復盤</b><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:14px;">'
+        +[['hit','🏆 達成'],['part','🌗 部分達成'],['miss','⛔ 沒達成']].map(([v,l])=>'<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="act_g_rv" value="'+v+'"'+(g.review===v?' checked':'')+'> '+l+'</label>').join('')+'</div>'
+        +'<textarea id="act_g_rnote" rows="3" style="margin-top:8px;" placeholder="做得好的、卡住的、下個月怎麼調整">'+((g.reviewNote||'').replace(/</g,'&lt;'))+'</textarea></div>':'')
+      +'<div class="mbtns">'+(!isNew?'<button class="bdel" style="padding:8px 14px;border-radius:8px;" onclick="actDelGoal(\''+m.x+'\')">🗑️ 刪除</button>':'')+'<button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#7c3aed;" onclick="actSaveGoal(\''+m.x+'\')">✓ 儲存</button></div>';
+  }
 
   // 🔍 全站搜尋
   if(m.t==='globalSearch'){
