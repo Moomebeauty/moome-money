@@ -9574,15 +9574,27 @@ window.switchNoteMode=function(mode){
 };
 
 function renderMindNotes(){
-  var roots=S.data.mindNotes||[];
+  var allRoots=S.data.mindNotes||[];
+  var folders=S.data.noteFolders||[];
+  var mf=S.mindFolder||'all';
+  if(mf!=='all'&&mf!=='none'&&!folders.find(function(f){return f.id===mf;}))mf='all';
+  var roots=mf==='all'?allRoots:allRoots.filter(function(r){return mf==='none'?!r.folderId||!folders.find(function(f){return f.id===r.folderId;}):r.folderId===mf;});
+  var unfiled=allRoots.filter(function(r){return !r.folderId||!folders.find(function(f){return f.id===r.folderId;});}).length;
+  var tab=function(id,label,cnt,color){var on=mf===id;return '<button class="btn btn-sm '+(on?'btn-p':'btn-s')+'" onclick="S.mindFolder=\''+id+'\';var c=document.getElementById(\'pg-content\');if(c)c.innerHTML=renderPage();" style="'+(on?'background:#0891b2;':(color?'background:'+color+';':''))+'">'+label+'（'+cnt+'）</button>';};
+  var folderBar='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">'
+    +tab('all','📚 全部',allRoots.length)
+    +folders.map(function(f){return tab(f.id,(f.icon||'📁')+' '+f.name,allRoots.filter(function(r){return r.folderId===f.id;}).length,f.color);}).join('')
+    +(unfiled>0?tab('none','📂 未分類',unfiled):'')
+    +'</div>';
   var html='<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">'
     +'<button class="btn btn-p" style="background:#0891b2;" onclick="mindAddRoot()">＋ 新主題</button>'
     +'<button class="btn btn-s btn-sm" onclick="mindExpandAll(true)">全部展開</button>'
     +'<button class="btn btn-s btn-sm" onclick="mindExpandAll(false)">全部收合</button>'
-    +'</div>'
+    +'<button class="btn btn-s btn-sm" onclick="openM(\'manageFolders\')">📁 管理資料夾</button>'
+    +'</div>'+folderBar
     +'<div class="notice" style="background:#ecfeff;border-left-color:#0891b2;color:#0e7490;font-size:12px;">💡 一個關鍵字底下可以再加關鍵字，一直往內挖。點關鍵字看細節，點 ＋內 往裡加一層。</div>';
   if(roots.length===0){
-    html+='<div class="empty" style="padding:40px;"><div class="empty-ico">🌳</div><p>還沒有聯想筆記</p><div class="tm" style="font-size:13px;margin-top:6px;">點「＋ 新主題」開始，例如「霧眉」，再往內加「眉型設計」...</div></div>';
+    html+='<div class="empty" style="padding:40px;"><div class="empty-ico">🌳</div><p>'+(allRoots.length?'這個資料夾還沒有主題':'還沒有聯想筆記')+'</p><div class="tm" style="font-size:13px;margin-top:6px;">點「＋ 新主題」開始，例如「霧眉」，再往內加「眉型設計」...</div></div>';
   }else{
     html+='<div style="margin-top:14px;">';
     for(var i=0;i<roots.length;i++){html+=renderMindNode(roots[i],0);}
@@ -9642,7 +9654,8 @@ window.pmuMindColor=function(color){
 
 window.mindAddRoot=function(){
   var roots=(S.data.mindNotes||[]).slice();
-  var n={id:uid(),keyword:'',detail:'',color:'blue',expanded:true,children:[]};
+  var mf=S.mindFolder;
+  var n={id:uid(),keyword:'',detail:'',color:'blue',expanded:true,children:[],folderId:(mf&&mf!=='all'&&mf!=='none')?mf:''};
   roots.push(n);
   S.data.mindNotes=roots;
   saveMain({mindNotes:roots});
@@ -9709,6 +9722,8 @@ window.saveMindNode=async function(id){
   var node=mindFind(roots,id);
   if(!node){closeMod();return;}
   node.keyword=kw;node.detail=detail;node.color=color;
+  var fdEl=document.getElementById('mind_folder');
+  if(fdEl)node.folderId=fdEl.value;
   S.data.mindNotes=roots;
   await saveMain({mindNotes:roots});
   toast('✅ 已儲存');
@@ -13350,8 +13365,11 @@ function renderModal(){
     const node=mindFind(S.data.mindNotes||[],m.x)||{};
     if(S.modal.mindColor===undefined)S.modal.mindColor=node.color||'blue';
     const curColor=S.modal.mindColor;
+    const isRootMind=(S.data.mindNotes||[]).some(r=>r.id===m.x);
+    const mFolders=S.data.noteFolders||[];
     c=`<div class="mttl">✏️ 編輯關鍵字</div>
-    <div class="fgrp"><label>🔑 關鍵字 *</label>
+    ${isRootMind?`<div class="fgrp"><label>📁 資料夾（主題才需要分類）</label><select id="mind_folder"><option value="">（未分類）</option>${mFolders.map(f=>`<option value="${f.id}"${node.folderId===f.id?' selected':''}>${f.icon||'📁'} ${f.name}</option>`).join('')}</select></div>`:''}
+    <div class="fgrp" style="margin-top:${isRootMind?'10':'0'}px;"><label>🔑 關鍵字 *</label>
       <input type="text" id="mind_keyword" value="${(node.keyword||'').replace(/"/g,'&quot;')}" placeholder="如：黃金比例、下針深度" style="font-size:17px;font-weight:700;">
     </div>
     <div class="fgrp" style="margin-top:12px;"><label>📝 細節／備注／聯想（點開才看得到）</label>
