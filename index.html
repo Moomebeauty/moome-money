@@ -902,6 +902,7 @@ let S={
     advisorChats:[],
     learnGoals:[],
     actionItems:[],
+    skinSolutions:[],
     appointments:[],
     trialPacks:[],
     passContracts:[],
@@ -965,6 +966,7 @@ function startSync(){
     S.data.studyNotes=d.studyNotes||[];
     S.data.noteFolders=d.noteFolders||[];
     S.data.mindNotes=d.mindNotes||[];
+    S.data.skinSolutions=d.skinSolutions||[];
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -9546,6 +9548,173 @@ function renderNoteText(text){
 }
 
 
+// ═══════════ 🧪 成分標籤（產品 ↔ 膚況對策 配對用）═══════════
+// 同一種成分的不同叫法，配對時當成同一個（第一個是顯示名稱）
+const ING_SYNONYMS=[
+  ['菸鹼醯胺','維他命B3','維生素B3','煙醯胺','Niacinamide'],
+  ['玻尿酸','透明質酸','玻尿酸鈉','Hyaluronic Acid','Sodium Hyaluronate'],
+  ['傳明酸','凝血酸','Tranexamic Acid'],
+  ['維他命C','維生素C','抗壞血酸','Vitamin C','Ascorbic Acid'],
+  ['A醇','視黃醇','Retinol'],
+  ['水楊酸','BHA','Salicylic Acid'],
+  ['果酸','AHA'],
+  ['杏仁酸','Mandelic Acid'],
+  ['神經醯胺','Ceramide'],
+  ['積雪草','CICA','Centella Asiatica'],
+  ['泛醇','維他命B5','維生素B5','B5','Panthenol'],
+  ['胜肽','Peptide'],
+  ['熊果素','Arbutin'],
+  ['角鯊烷','Squalane'],
+  ['壬二酸','杜鵑花酸','Azelaic Acid'],
+  ['尿囊素','Allantoin'],
+  ['茶樹','茶樹精油','Tea Tree']
+];
+function ingNorm(s){return String(s||'').toLowerCase().replace(/[\s　·・\-_]/g,'');}
+function ingCanon(s){
+  const k=ingNorm(s);if(!k)return '';
+  const g=ING_SYNONYMS.find(gr=>gr.some(x=>ingNorm(x)===k));
+  return g?g[0]:String(s).trim();
+}
+function ingKey(s){return ingNorm(ingCanon(s));}
+function ingAllKnown(){
+  const set=new Set(ING_SYNONYMS.map(g=>g[0]));
+  (S.data.products||[]).forEach(p=>(p.ingredients||[]).forEach(i=>set.add(ingCanon(i))));
+  (S.data.skinSolutions||[]).forEach(s=>(s.want||[]).concat(s.avoid||[]).forEach(i=>set.add(ingCanon(i))));
+  return [...set].filter(Boolean).sort();
+}
+window._ing=window._ing||{};
+function ingInit(key,list){window._ing[key]=(list||[]).map(ingCanon).filter(Boolean);return '';}
+function ingEditorInner(key,color,ph){
+  const list=window._ing[key]||[];
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 6px;">'
+    +(list.length?list.map((x,i)=>'<span style="display:inline-flex;align-items:center;gap:4px;background:'+color+';color:#fff;padding:4px 6px 4px 11px;border-radius:14px;font-size:13px;font-weight:700;">'+x+'<button type="button" onclick="ingRemove(\''+key+'\','+i+',\''+color+'\',\''+(ph||'').replace(/'/g,'')+'\')" style="border:none;background:rgba(255,255,255,.3);color:#fff;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:12px;line-height:1;">×</button></span>').join('')
+      :'<span class="tm" style="font-size:12px;">還沒有成分</span>')
+    +'</div><div style="display:flex;gap:6px;"><input type="text" id="ing_in_'+key+'" list="ing_dl" placeholder="'+(ph||'輸入成分，例如：菸鹼醯胺')+'" style="flex:1;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ingAdd(\''+key+'\',\''+color+'\',\''+(ph||'').replace(/'/g,'')+'\');}">'
+    +'<button type="button" class="btn btn-s" onclick="ingAdd(\''+key+'\',\''+color+'\',\''+(ph||'').replace(/'/g,'')+'\')">＋ 加入</button></div>';
+}
+function ingEditorHtml(key,color,ph){
+  return '<datalist id="ing_dl">'+ingAllKnown().map(x=>'<option value="'+x+'">').join('')+'</datalist><div id="ing_wrap_'+key+'">'+ingEditorInner(key,color,ph)+'</div>';
+}
+window.ingAdd=function(key,color,ph){
+  const el=document.getElementById('ing_in_'+key);if(!el)return;
+  const parts=el.value.split(/[,，、;；\/]/).map(ingCanon).filter(Boolean);
+  if(!parts.length)return;
+  const cur=window._ing[key]||[];
+  parts.forEach(x=>{if(!cur.some(c=>ingKey(c)===ingKey(x)))cur.push(x);});
+  window._ing[key]=cur;
+  const w=document.getElementById('ing_wrap_'+key);if(w)w.innerHTML=ingEditorInner(key,color,ph);
+  const n=document.getElementById('ing_in_'+key);if(n)n.focus();
+};
+window.ingRemove=function(key,i,color,ph){
+  (window._ing[key]||[]).splice(i,1);
+  const w=document.getElementById('ing_wrap_'+key);if(w)w.innerHTML=ingEditorInner(key,color,ph);
+};
+function ingChips(list,color,bg,hiKeys){
+  return (list||[]).map(x=>{const hi=hiKeys&&hiKeys.has(ingKey(x));return '<span style="display:inline-block;margin:2px;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:700;background:'+(hi?color:bg)+';color:'+(hi?'#fff':color)+';">'+ingCanon(x)+'</span>';}).join('');
+}
+// 依膚況對策，找出店裡可用的產品
+function skinMatchProducts(sol){
+  const want=new Set((sol.want||[]).map(ingKey)),avoid=new Set((sol.avoid||[]).map(ingKey));
+  const out=[];
+  (S.data.products||[]).forEach(p=>{
+    const keys=(p.ingredients||[]).map(ingKey);
+    const hit=keys.filter(k=>want.has(k)),bad=keys.filter(k=>avoid.has(k));
+    if(hit.length)out.push({p,hit:new Set(hit),bad:new Set(bad),score:hit.length});
+  });
+  out.sort((a,b)=>(a.bad.size?1:0)-(b.bad.size?1:0)||b.score-a.score||(a.p.name||'').localeCompare(b.p.name||''));
+  return out;
+}
+// 反查：這個產品能處理哪些膚況
+function productSolutions(p){
+  const keys=new Set((p.ingredients||[]).map(ingKey));
+  return (S.data.skinSolutions||[]).filter(s=>(s.want||[]).some(w=>keys.has(ingKey(w))));
+}
+
+// ═══════════ 🧴 膚況對策（備課筆記第三種）═══════════
+function renderSkinNotes(){
+  const folders=S.data.noteFolders||[];
+  const all=S.data.skinSolutions||[];
+  if(S.skinView){const sv=all.find(s=>s.id===S.skinView);if(sv)return renderSkinDetail(sv,folders);S.skinView=null;}
+  const sf=S.skinFolder||'all';
+  const q=(S.skinSearch||'').trim().toLowerCase();
+  let list=sf==='all'?all:all.filter(s=>sf==='none'?!s.folderId:s.folderId===sf);
+  if(q){
+    const qn=ingNorm(q);
+    const ingHit=i=>{const g=ING_SYNONYMS.find(gr=>gr.some(x=>ingNorm(x)===ingKey(i)||ingNorm(x)===ingNorm(i)));return (g||[i]).concat([i]).some(x=>ingNorm(x).includes(qn));};
+    list=list.filter(s=>(s.title||'').toLowerCase().includes(q)||(s.want||[]).concat(s.avoid||[]).some(ingHit)||(s.note||'').toLowerCase().includes(q)||skinMatchProducts(s).some(m=>ingNorm(m.p.name).includes(qn)));
+  }
+  const noIng=(S.data.products||[]).filter(p=>!(p.ingredients||[]).length).length;
+  const tab=(id,label,cnt)=>'<button class="btn btn-sm '+(sf===id?'btn-p':'btn-s')+'" style="'+(sf===id?'background:#0d9488;':'')+'" onclick="S.skinFolder=\''+id+'\';noteRefresh()">'+label+'（'+cnt+'）</button>';
+  let h='<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;">'
+    +'<input type="text" placeholder="🔍 搜尋膚況或成分，例如：痘印、菸鹼醯胺" value="'+(S.skinSearch||'').replace(/"/g,'&quot;')+'" oninput="S.skinSearch=this.value;clearTimeout(window._skt);window._skt=setTimeout(function(){noteRefresh();var e=document.getElementById(\'skin_q\');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length);}},250)" id="skin_q" style="flex:1;min-width:180px;">'
+    +'<button class="btn btn-p" style="background:#0d9488;" onclick="openM(\'editSkin\',\'__new__\')">＋ 新增膚況對策</button>'
+    +'<button class="btn btn-s" onclick="openM(\'manageFolders\')">📁 管理資料夾</button></div>';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">'+tab('all','📚 全部',all.length)+folders.map(f=>tab(f.id,(f.icon||'📁')+' '+f.name,all.filter(s=>s.folderId===f.id).length)).join('')+(all.some(s=>!s.folderId)?tab('none','📂 未分類',all.filter(s=>!s.folderId).length):'')+'</div>';
+  if(noIng>0&&(S.data.products||[]).length)h+='<div class="notice" style="background:#f0fdfa;border-left-color:#0d9488;color:#115e59;font-size:13px;">🧪 還有 <b>'+noIng+'</b> 個產品沒填成分，配對不到。到「庫存盤點」編輯產品，在「🧪 主要成分」加上去就會自動配對。</div>';
+  if(!list.length)return h+'<div class="empty" style="padding:40px;"><div class="empty-ico">🧴</div><p>'+(all.length?'找不到符合的膚況對策':'還沒有膚況對策')+'</p><div class="tm" style="font-size:13px;margin-top:6px;">例如：「消紅痘印」→ 建議成分：菸鹼醯胺、傳明酸 → 系統自動找出店裡有這些成分的產品</div></div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">';
+  list.slice().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')).forEach(s=>{
+    const n=skinMatchProducts(s).filter(m=>!m.bad.size).length;
+    const folder=folders.find(f=>f.id===s.folderId);
+    h+='<div onclick="S.skinView=\''+s.id+'\';noteRefresh();window.scrollTo(0,0);" style="cursor:pointer;background:#fff;border:1px solid #ccfbf1;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(13,148,136,.07);display:flex;flex-direction:column;min-height:140px;">'
+      +'<div style="height:6px;background:#0d9488;"></div><div style="padding:12px 13px;display:flex;flex-direction:column;gap:6px;flex:1;">'
+      +(folder?'<div style="font-size:11px;color:#8b7d77;">'+(folder.icon||'📁')+' '+folder.name+'</div>':'')
+      +'<div style="font-size:16px;font-weight:800;line-height:1.4;">'+(s.title||'（未命名）')+'</div>'
+      +'<div>'+ingChips((s.want||[]).slice(0,3),'#0d9488','#ccfbf1')+((s.want||[]).length>3?'<span class="tm" style="font-size:11px;">+'+((s.want||[]).length-3)+'</span>':'')+'</div>'
+      +'<div style="margin-top:auto;text-align:right;font-size:12px;color:'+(n?'#0d9488':'#9ca3af')+';font-weight:700;">'+(n?'🧴 '+n+' 款產品可用 ›':'還沒有對應產品 ›')+'</div>'
+      +'</div></div>';
+  });
+  return h+'</div>';
+}
+function renderSkinDetail(s,folders){
+  const folder=folders.find(f=>f.id===s.folderId);
+  const matches=skinMatchProducts(s);
+  const good=matches.filter(m=>!m.bad.size),warn=matches.filter(m=>m.bad.size);
+  const wantKeys=new Set((s.want||[]).map(ingKey)),avoidKeys=new Set((s.avoid||[]).map(ingKey));
+  const prodCard=(m,isWarn)=>{
+    const p=m.p,inv=getInv(p.id),qty=toN(inv.qty);
+    return '<div style="background:#fff;border-radius:14px;border:1px solid '+(isWarn?'#fecaca':'#ccfbf1')+';border-left:6px solid '+(isWarn?'#dc2626':'#0d9488')+';padding:12px 14px;">'
+      +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;"><b style="font-size:16px;">'+(p.name||'')+'</b>'+(p.series?'<span class="tm" style="font-size:12px;">'+p.series+'</span>':'')+'<span style="flex:1;"></span>'
+      +(toN(p.price)?'<b style="color:#0f766e;">$'+fmt(p.price)+'</b>':'')+'</div>'
+      +'<div style="margin-top:4px;">'+(p.ingredients||[]).map(i=>{const k=ingKey(i);const c=avoidKeys.has(k)?['#dc2626','#fee2e2']:wantKeys.has(k)?['#0d9488','#ccfbf1']:['#6b7280','#f3f4f6'];const on=avoidKeys.has(k)||wantKeys.has(k);return '<span style="display:inline-block;margin:2px;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:700;background:'+(on?c[0]:c[1])+';color:'+(on?'#fff':c[0])+';">'+(avoidKeys.has(k)?'⚠️ ':'')+ingCanon(i)+'</span>';}).join('')+'</div>'
+      +'<div style="display:flex;gap:10px;align-items:center;margin-top:6px;font-size:12px;"><span style="color:'+(qty<=0?'#dc2626':qty<toN(inv.minQty||1)?'#d97706':'#16a34a')+';font-weight:700;">📦 庫存 '+qty+(qty<=0?'（缺貨）':'')+'</span><span style="flex:1;"></span><button class="btn btn-s btn-sm" onclick="openM(\'editProduct\',\''+p.id+'\')">✏️ 產品</button></div>'
+      +(isWarn?'<div style="font-size:12px;color:#b91c1c;margin-top:4px;">含有你標記要避開的成分，推薦前請再確認</div>':'')
+      +'</div>';
+  };
+  let h='<div style="margin:12px 0;"><button class="btn btn-s btn-sm" onclick="S.skinView=null;noteRefresh();window.scrollTo(0,0);">← 返回膚況對策</button></div>';
+  h+='<div class="card" style="border-top:6px solid #0d9488;"><div class="card-bd">'
+    +(folder?'<div style="font-size:12px;color:#8b7d77;">'+(folder.icon||'📁')+' '+folder.name+'</div>':'')
+    +'<div style="display:flex;align-items:flex-start;gap:8px;"><div style="flex:1;font-size:22px;font-weight:900;line-height:1.4;margin-top:4px;">'+(s.title||'')+'</div><button class="btn btn-s btn-sm" onclick="openM(\'editSkin\',\''+s.id+'\')">✏️ 編輯</button></div>'
+    +'<div style="margin-top:12px;"><div style="font-size:13px;font-weight:800;color:#0d9488;">✅ 建議成分</div><div style="margin-top:4px;">'+((s.want||[]).length?ingChips(s.want,'#0d9488','#ccfbf1',new Set((s.want||[]).map(ingKey))):'<span class="tm" style="font-size:12px;">還沒填</span>')+'</div></div>'
+    +((s.avoid||[]).length?'<div style="margin-top:10px;"><div style="font-size:13px;font-weight:800;color:#dc2626;">⛔ 要避開的成分</div><div style="margin-top:4px;">'+ingChips(s.avoid,'#dc2626','#fee2e2',new Set((s.avoid||[]).map(ingKey)))+'</div></div>':'')
+    +(s.note?'<div style="margin-top:14px;font-size:16px;line-height:1.9;white-space:pre-wrap;background:#f0fdfa;border-radius:12px;padding:14px 16px;">'+renderNoteText(s.note)+'</div>':'')
+    +'</div></div>';
+  h+='<div style="margin:18px 0 8px;font-size:17px;font-weight:900;color:#0f766e;">🧴 店裡可以用的產品（'+good.length+'）</div>';
+  h+=good.length?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">'+good.map(m=>prodCard(m,false)).join('')+'</div>'
+    :'<div class="tm" style="padding:12px 14px;background:#f0fdfa;border-radius:12px;font-size:13px;">店裡還沒有含這些成分的產品。'+((S.data.products||[]).some(p=>!(p.ingredients||[]).length)?'也可能是產品還沒填成分。':'')+'</div>';
+  if(warn.length)h+='<div style="margin:18px 0 8px;font-size:15px;font-weight:900;color:#b91c1c;">⚠️ 有建議成分，但也含要避開的成分（'+warn.length+'）</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">'+warn.map(m=>prodCard(m,true)).join('')+'</div>';
+  return h;
+}
+window.saveSkin=async function(id){
+  const isNew=id==='__new__';
+  const title=(document.getElementById('skin_title').value||'').trim();
+  if(!title){alert('請填膚況問題');return;}
+  const old=isNew?{id:'skin_'+uid(),createdAt:nowLocal()}:((S.data.skinSolutions||[]).find(x=>x.id===id)||{id});
+  const item=Object.assign({},old,{title,folderId:document.getElementById('skin_folder').value,want:(window._ing.want||[]).slice(),avoid:(window._ing.avoid||[]).slice(),note:document.getElementById('skin_note').value,updatedAt:nowLocal()});
+  let list=(S.data.skinSolutions||[]).slice();
+  if(isNew)list.push(item);else list=list.map(x=>x.id===id?item:x);
+  S.data.skinSolutions=list;
+  await saveMain({skinSolutions:list});
+  closeMod();toast('✅ 已儲存');
+  S.skinView=item.id;noteRefresh();
+};
+window.delSkin=async function(id){
+  if(!confirm('刪除這則膚況對策？'))return;
+  const list=(S.data.skinSolutions||[]).filter(x=>x.id!==id);
+  S.data.skinSolutions=list;await saveMain({skinSolutions:list});
+  closeMod();S.skinView=null;noteRefresh();
+};
+
 function pgNotes(){
   const folders=S.data.noteFolders||[];
   // 首次沒資料夾 → 自動建預設（背景執行，不阻塞）
@@ -9558,9 +9727,10 @@ function pgNotes(){
   <div style="display:flex;gap:8px;margin:14px 0;">
     <button class="btn ${(S.noteMode||'list')==='list'?'btn-p':'btn-s'}" style="flex:1;${(S.noteMode||'list')==='list'?'background:#9333ea;':''}" onclick="switchNoteMode('list')">📝 條列筆記</button>
     <button class="btn ${S.noteMode==='mind'?'btn-p':'btn-s'}" style="flex:1;${S.noteMode==='mind'?'background:#0891b2;':''}" onclick="switchNoteMode('mind')">🌳 聯想筆記</button>
+    <button class="btn ${S.noteMode==='skin'?'btn-p':'btn-s'}" style="flex:1;${S.noteMode==='skin'?'background:#0d9488;':''}" onclick="switchNoteMode('skin')">🧴 膚況對策</button>
   </div>
 
-  ${S.noteMode==='mind'?renderMindNotes():renderListNotes()}
+  ${S.noteMode==='mind'?renderMindNotes():S.noteMode==='skin'?renderSkinNotes():renderListNotes()}
   `;
 }
 
@@ -9957,6 +10127,7 @@ function renderNoteCard(n,folders,o){
   </div>`;
 }
 function noteRefresh(){const c=document.getElementById('pg-content');if(c)c.innerHTML=renderPage();}
+window.noteRefresh=noteRefresh;
 window.noteToggleOpen=function(id){S.noteOpen=S.noteOpen||{};S.noteOpen[id]=!S.noteOpen[id];noteRefresh();};
 window.noteTierShutToggle=function(k){S.noteTierShut=S.noteTierShut||{};S.noteTierShut[k]=!S.noteTierShut[k];noteRefresh();};
 window.noteSetTier=async function(id,tier){
@@ -11630,6 +11801,23 @@ function renderModal(){
         +[['hit','🏆 達成'],['part','🌗 部分達成'],['miss','⛔ 沒達成']].map(([v,l])=>'<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="act_g_rv" value="'+v+'"'+(g.review===v?' checked':'')+'> '+l+'</label>').join('')+'</div>'
         +'<textarea id="act_g_rnote" rows="3" style="margin-top:8px;" placeholder="做得好的、卡住的、下個月怎麼調整">'+((g.reviewNote||'').replace(/</g,'&lt;'))+'</textarea></div>':'')
       +'<div class="mbtns">'+(!isNew?'<button class="bdel" style="padding:8px 14px;border-radius:8px;" onclick="actDelGoal(\''+m.x+'\')">🗑️ 刪除</button>':'')+'<button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#7c3aed;" onclick="actSaveGoal(\''+m.x+'\')">✓ 儲存</button></div>';
+  }
+
+  // 🧴 膚況對策：新增／編輯
+  if(m.t==='editSkin'){
+    const isNew=m.x==='__new__';
+    const s=isNew?{folderId:(S.skinFolder&&S.skinFolder!=='all'&&S.skinFolder!=='none')?S.skinFolder:''}:((S.data.skinSolutions||[]).find(x=>x.id===m.x)||{});
+    if(!m._ingInit){ingInit('want',s.want);ingInit('avoid',s.avoid);m._ingInit=true;}
+    const fds=S.data.noteFolders||[];
+    c='<div class="mttl">'+(isNew?'＋ 新增膚況對策':'✏️ 編輯膚況對策')+'</div><div style="max-height:68vh;overflow-y:auto;padding-right:4px;">'
+      +'<div class="fgrp"><label>膚況問題 *</label><input type="text" id="skin_title" value="'+((s.title||'').replace(/"/g,'&quot;'))+'" placeholder="例如：消紅痘印、粉刺、乾燥脫皮" style="font-size:16px;font-weight:700;"></div>'
+      +'<div class="fgrp" style="margin-top:10px;"><label>📁 資料夾</label><select id="skin_folder"><option value="">（未分類）</option>'+fds.map(f=>'<option value="'+f.id+'"'+(s.folderId===f.id?' selected':'')+'>'+(f.icon||'📁')+' '+f.name+'</option>').join('')+'</select></div>'
+      +'<div class="fgrp" style="margin-top:12px;background:#f0fdfa;padding:10px 12px;border-radius:10px;"><label style="color:#0d9488;font-weight:800;">✅ 建議成分（產品含這些就會出現）</label>'+ingEditorHtml('want','#0d9488','例如：菸鹼醯胺、傳明酸')+'</div>'
+      +'<div class="fgrp" style="margin-top:10px;background:#fef2f2;padding:10px 12px;border-radius:10px;"><label style="color:#dc2626;font-weight:800;">⛔ 要避開的成分（選填，含這些會跳警示）</label>'+ingEditorHtml('avoid','#dc2626','例如：酒精、香精')+'</div>'
+      +'<div class="fgrp" style="margin-top:12px;"><label>📝 說明／為什麼用這個成分／使用順序</label>'+noteFmtToolbar('skin_note')
+      +'<textarea id="skin_note" rows="6" style="font-size:15px;line-height:1.8;" placeholder="例如：菸鹼醯胺可以抑制黑色素轉移、淡化痘印，也能幫助穩定發炎…" oninput="var pv=document.getElementById(\'skin_pv\');if(pv)pv.innerHTML=renderNoteText(this.value)||\'\';">'+((s.note||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'))+'</textarea>'+notePreviewBox('skin_pv',s.note)+'</div>'
+      +'</div><div class="mbtns">'+(!isNew?'<button class="bdel" style="padding:8px 14px;border-radius:8px;" onclick="delSkin(\''+m.x+'\')">🗑️ 刪除</button>':'')+'<button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#0d9488;" onclick="saveSkin(\''+m.x+'\')">✓ 儲存</button></div>';
+    S.modal.lg=true;
   }
 
   // 🔍 全站搜尋
@@ -14151,6 +14339,10 @@ function renderModal(){
       <div class="fgrp"><label>初始庫存</label><input type="number" id="m_pr4" placeholder="0"></div>
       <div class="fgrp"><label>最低庫存警示</label><input type="number" id="m_pr5" placeholder="1" value="1"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註（選填）</label><input type="text" id="m_pr6" placeholder="如：適合敏感肌、規格 50ml"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:#f0fdfa;padding:10px 12px;border-radius:8px;border-left:3px solid #0d9488;">${(!m._ingInit?(ingInit('prod',[]),m._ingInit=true,''):'')}
+        <label style="color:#0d9488;font-weight:800;">🧪 主要成分（用來配對「膚況對策」）</label>
+        ${ingEditorHtml('prod','#0d9488','例如：菸鹼醯胺、玻尿酸（可一次用頓號分隔）')}
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveProduct()">✓ 新增</button></div>`;
     setTimeout(()=>{const s=$('m_prSup');if(s)s.onchange=()=>{$('m_prSupC').style.display=s.value==='__custom__'?'block':'none';};},50);
@@ -14258,6 +14450,11 @@ function renderModal(){
         <button type="button" class="btn btn-s btn-sm" onclick="addSpecRow()">＋ 新增規格</button>
       </div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_pr6" value="${pr.note||''}"></div>
+      <div class="fgrp" style="grid-column:1/-1;background:#f0fdfa;padding:10px 12px;border-radius:8px;border-left:3px solid #0d9488;">${(!m._ingInit?(ingInit('prod',pr.ingredients),m._ingInit=true,''):'')}
+        <label style="color:#0d9488;font-weight:800;">🧪 主要成分（用來配對「膚況對策」）</label>
+        ${ingEditorHtml('prod','#0d9488','例如：菸鹼醯胺、玻尿酸（可一次用頓號分隔）')}
+        ${(()=>{const sols=productSolutions(pr);return sols.length?`<div style="margin-top:8px;font-size:13px;"><b style="color:#0f766e;">🩺 這瓶可以處理：</b>${sols.map(s=>`<span onclick="closeMod();S.page='notes';S.noteMode='skin';S.skinView='${s.id}';render();" style="cursor:pointer;display:inline-block;margin:2px;padding:2px 10px;border-radius:12px;background:#ccfbf1;color:#0f766e;font-weight:700;font-size:12px;">${s.title} ›</span>`).join('')}</div>`:'';})()}
+      </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updProduct('${pr.id}')">✓ 更新</button></div>`;
     setTimeout(()=>{const s=$('m_prSup');if(s)s.onchange=()=>{$('m_prSupC').style.display=s.value==='__custom__'?'block':'none';};},50);
@@ -19974,6 +20171,7 @@ window.saveProduct=async()=>{
     cost,
     supplier,series,
     capacity,capacityUnit,
+    ingredients:(window._ing.prod||[]).slice(),
     note:$('m_pr6')?.value||''
   }];
   const newInv=[...S.data.inventory.filter(i=>i.productId!==pid),{productId:pid,qty,minQty,avgCost:cost}];
@@ -20035,6 +20233,7 @@ window.updProduct=async(id)=>{
     supplier,series,
     capacity,capacityUnit,
     specs,
+    ingredients:(window._ing.prod||[]).slice(),
     note:$('m_pr6')?.value||''
   }:p);
   const oldInv=getInv(id);
