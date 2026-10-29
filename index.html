@@ -188,7 +188,7 @@ tr:hover td{background:var(--bg);}
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getFirestore,doc,collection,onSnapshot,setDoc,addDoc,deleteDoc,getDocs,query,where,orderBy,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged,setPersistence,browserLocalPersistence,browserSessionPersistence}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const FCFG={
   apiKey:"AIzaSyAvA1LlEVc6s2PUqVpsrQ54G6ujfzRovhc",
@@ -203,10 +203,9 @@ const db=getFirestore(app);
 const auth=getAuth(app);
 const FID='mumei_studio';
 
-// ── 系統密碼設定 ──────────────────────────────────────────
-const SYSTEM_PASSWORD='815391';
+// ── 登入設定 ──────────────────────────────────────────
+// 安全性：程式裡不放任何密碼。登入時由使用者輸入 Firebase 帳號的密碼。
 const BACKEND_EMAIL='moome5391@gmail.com';
-const BACKEND_PASSWORD='820228';
 
 // ── CONSTANTS ──────────────────────────────────────────────
 // 試用包 GPT 生圖指令預設模板（可在系統內修改）
@@ -978,7 +977,9 @@ function startSync(){
     if(!d.initialized){
       await initDefaults();
     }
+    hydrateMainImages();
     setSyncing('synced');render();
+    setTimeout(migrateMainImages,3000);
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
 
@@ -989,6 +990,14 @@ function startSync(){
     });
     _unsubList.push(unsub);
   });
+  // 簽名／大圖的獨立空間：載入後把主資料裡的編號接回圖片
+  const unsubSigs=onSnapshot(collection(db,'studios',FID,'sigs'),snap=>{
+    snap.docs.forEach(d=>{const x=d.data();if(x&&x.img)_imgMap[d.id]=x.img;});
+    _sigsLoaded=true;
+    hydrateMainImages();render();
+    setTimeout(migrateMainImages,3000);
+  });
+  _unsubList.push(unsubSigs);
 }
 
 // 停止同步（登出時用，清掉所有監聽器）
@@ -1009,6 +1018,47 @@ async function initDefaults(){
   await saveMain({services,suppliers,initialized:true});
 }
 
+// ═══ 圖片搬家：簽名等大圖不放主文件（主文件上限 1MB），改存 sigs 子集合，主文件只留「sig:編號」═══
+const _imgMap={};          // 編號 → 圖片
+let _sigsLoaded=false,_imgMigrated=false;
+function imgHash(s){let h1=0x811c9dc5,h2=0x01000193;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,16777619)>>>0;h2=Math.imul(h2^c,2246822519)>>>0;}return h1.toString(36)+h2.toString(36)+s.length.toString(36);}
+function isBigImg(v){return typeof v==='string'&&v.length>4000&&v.slice(0,11)==='data:image/';}
+// 存檔前：把大圖搬到子集合，回傳替換後的資料
+async function offloadImages(v){
+  if(isBigImg(v)){
+    const id='img_'+imgHash(v);
+    if(!_imgMap[id]){
+      try{await setDoc(doc(db,'studios',FID,'sigs',id),{img:v,_at:Date.now()});_imgMap[id]=v;}
+      catch(e){console.error('圖片搬家失敗，先保留原圖',e);return v;}
+    }
+    return 'sig:'+id;
+  }
+  if(Array.isArray(v)){const out=[];for(const x of v)out.push(await offloadImages(x));return out;}
+  if(v&&typeof v==='object'){const o={};for(const k of Object.keys(v))o[k]=await offloadImages(v[k]);return o;}
+  return v;
+}
+// 讀取後：把「sig:編號」接回圖片（畫面與下載都照常用）
+function hydrateImages(v){
+  if(typeof v==='string'&&v.slice(0,8)==='sig:img_'){const im=_imgMap[v.slice(4)];return im||v;}
+  if(Array.isArray(v)){for(let i=0;i<v.length;i++)v[i]=hydrateImages(v[i]);return v;}
+  if(v&&typeof v==='object'){for(const k of Object.keys(v))v[k]=hydrateImages(v[k]);return v;}
+  return v;
+}
+const IMG_MAIN_KEYS=['pmuRecords','pmuDrafts','customers','passContracts','treatmentRecords','settings','studyNotes','mindNotes','skinSolutions','equipment','trialPacks'];
+function hydrateMainImages(){IMG_MAIN_KEYS.forEach(k=>{if(S.data[k])hydrateImages(S.data[k]);});}
+// 一次性：把舊資料裡的大圖搬出主文件
+async function migrateMainImages(){
+  if(_imgMigrated||!_sigsLoaded||!S.auth)return;
+  _imgMigrated=true;
+  const upd={};let n=0;
+  IMG_MAIN_KEYS.forEach(k=>{const v=S.data[k];if(v&&JSON.stringify(v).indexOf('data:image/')>=0){const cnt=(JSON.stringify(v).match(/data:image\//g)||[]).length;if(cnt){upd[k]=v;n+=cnt;}}});
+  if(!n)return;
+  const before=mainDocSize();
+  const ok=await saveMainSilent(upd);
+  if(ok){setTimeout(()=>{const after=mainDocSize();console.log('圖片搬家完成',before,'→',after);},1500);toast('🧹 已把 '+n+' 張簽名／圖片搬到獨立空間，主資料更輕了');}
+  else _imgMigrated=false;
+}
+
 // Firebase 不接受 undefined：存檔前遞迴清掉（物件欄位刪除、陣列元素改 null）
 function fsClean(v){
   if(v===undefined)return undefined;
@@ -1016,9 +1066,9 @@ function fsClean(v){
   if(Array.isArray(v))return v.map(function(x){var c=fsClean(x);return c===undefined?null:c;});
   var o={};Object.keys(v).forEach(function(k){var c=fsClean(v[k]);if(c!==undefined)o[k]=c;});return o;
 }
-async function saveMain(data){data=fsClean(data);setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');return true;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗：'+(e.message||e));return false;}}
+async function saveMain(data){data=await offloadImages(fsClean(data));setSyncing('syncing');try{await setDoc(doc(db,'studios',FID),data,{merge:true});setSyncing('synced');return true;}catch(e){console.error(e);setSyncing('error');toast('儲存失敗：'+(e.message||e));return false;}}
 // 靜默版：自動存檔用，失敗不跳訊息（避免每次下一步都打擾使用者）
-async function saveMainSilent(data){data=fsClean(data);try{await setDoc(doc(db,'studios',FID),data,{merge:true});return true;}catch(e){return false;}}
+async function saveMainSilent(data){data=await offloadImages(fsClean(data));try{await setDoc(doc(db,'studios',FID),data,{merge:true});return true;}catch(e){return false;}}
 async function addSub(col,data){
   // 不在這裡 push 本地，因為 onSnapshot 的 pendingWrites 已經會更新 S.data[col]
   setSyncing('syncing');
@@ -1054,22 +1104,20 @@ async function delSub(col,id){
 }
 
 // ── AUTH ───────────────────────────────────────────────────
+// 登入狀態由 Firebase 管理：這台裝置登入過（且勾了記住），打開就直接進入
+S.authChecking=true;
 onAuthStateChanged(auth,user=>{
+  S.authChecking=false;
   if(user){
-    if(sessionStorage.getItem('mumei_unlock')==='1'){
-      S.auth=true;
-      if(S.sync==='idle')startSync();
-    }
+    S.auth=true;
+    if(S.sync==='idle')startSync();
   }else{
-    signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD).catch(err=>{
-      console.error('Firebase 登入失敗',err);
-    });
+    S.auth=false;
+    if(typeof stopSync==='function')stopSync();
+    S.sync='idle';
   }
+  render();
 });
-
-if(sessionStorage.getItem('mumei_unlock')==='1'){
-  S.auth=true;
-}
 
 // ── RENDER ─────────────────────────────────────────────────
 function render(){
@@ -1103,12 +1151,14 @@ function loginHTML(){return`
   <div style="background:var(--card);border-radius:20px;padding:44px;width:380px;box-shadow:var(--shadow2);text-align:center;">
     <div style="font-size:54px;margin-bottom:10px;">🌸</div>
     <div style="font-family:'Noto Serif TC',serif;font-size:22px;font-weight:900;color:var(--roseDk);margin-bottom:32px;letter-spacing:0.08em;">沐蜜美學💰財務系統</div>
+    ${S.authChecking?'<div class="tm" style="font-size:14px;">連線中…</div>':`
     <div class="fgrp" style="margin-bottom:8px;text-align:left;">
       <label>請輸入密碼</label>
       <input type="password" id="m_pw" placeholder="••••••" autofocus onkeydown="if(event.key==='Enter')doLogin()" style="font-size:18px;padding:13px 16px;letter-spacing:0.2em;">
     </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mut);margin:6px 0 4px;cursor:pointer;text-align:left;"><input type="checkbox" id="m_remember" checked style="transform:scale(1.2);"> 記住這台裝置（自己的手機／電腦再勾）</label>
     <div class="pw-err" id="pw_err"></div>
-    <button class="btn btn-p" style="width:100%;padding:14px;margin-top:10px;font-size:17px;" onclick="doLogin()">進入系統</button>
+    <button class="btn btn-p" id="m_login_btn" style="width:100%;padding:14px;margin-top:10px;font-size:17px;" onclick="doLogin()">進入系統</button>`}
   </div>
 </div>`;}
 
@@ -1141,16 +1191,10 @@ function customerBookingHTML(){
 }
 
 function bindCustomerBookingEvents(){
-  // 先確認 Firebase 連線可用，再進入預約流程
+  // （已停用的舊預約頁）不再自動用密碼登入
   if(!auth.currentUser){
-    signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD).then(()=>{
-      startSync();
-      setTimeout(()=>renderCustomerBookingStep(),1500);
-    }).catch(err=>{
-      console.error('客戶預約頁連線失敗',err);
-      const cb=$('cb_content');
-      if(cb)cb.innerHTML='<div style="text-align:center;color:var(--red);">連線失敗，請稍後再試</div>';
-    });
+    const cb=$('cb_content');
+    if(cb)cb.innerHTML='<div style="text-align:center;color:var(--red);">請改用 LINE 預約</div>';
   }else{
     setTimeout(()=>renderCustomerBookingStep(),500);
   }
@@ -5069,8 +5113,9 @@ const SUBCOLLECTION_KEYS=['sales','expenses','purchases','courses','courseStuden
 function mainDocSize(){
   try{
     var obj={};
-    Object.keys(S.data||{}).forEach(function(k){if(SUBCOLLECTION_KEYS.indexOf(k)<0)obj[k]=S.data[k];});
-    return JSON.stringify(obj).length;
+    Object.keys(S.data||{}).forEach(function(k){if(SUBCOLLECTION_KEYS.indexOf(k)<0&&k!=='sigs')obj[k]=S.data[k];});
+    // 大圖片實際存在獨立空間（sigs），主文件只佔一個短編號
+    return JSON.stringify(obj,function(key,val){return isBigImg(val)?'sig:img_xxxxxxxxxxxxxxxxxx':val;}).length;
   }catch(e){return 0;}
 }
 
@@ -21895,27 +21940,31 @@ window.delChat=async id=>{if(!confirm('確認刪除？'))return;await delSub('ad
 window.doLogin=async()=>{
   const pw=$('m_pw')?.value||'';
   const errEl=$('pw_err');
-  if(pw!==SYSTEM_PASSWORD){
-    if(errEl)errEl.textContent='❌ 密碼錯誤，請重新輸入';
+  if(!pw){if(errEl)errEl.textContent='請輸入密碼';return;}
+  const btn=$('m_login_btn');if(btn){btn.disabled=true;btn.textContent='登入中…';}
+  try{
+    await setPersistence(auth,$('m_remember')?.checked?browserLocalPersistence:browserSessionPersistence);
+    await signInWithEmailAndPassword(auth,BACKEND_EMAIL,pw);
+    // onAuthStateChanged 會接手：開始同步並進入系統
+    toast('✅ 歡迎進入沐蜜系統');
+  }catch(e){
+    console.error('登入失敗',e);
+    const code=(e&&e.code)||'';
+    let msg='❌ 登入失敗，請再試一次';
+    if(/wrong-password|invalid-credential|invalid-login|user-not-found/.test(code))msg='❌ 密碼錯誤，請重新輸入';
+    else if(/too-many-requests/.test(code))msg='⏳ 嘗試太多次，請稍等幾分鐘再試';
+    else if(/network/.test(code))msg='📶 網路連不上，請確認網路後再試';
+    if(errEl)errEl.textContent=msg;
     if($('m_pw')){$('m_pw').value='';$('m_pw').focus();}
-    return;
+    if(btn){btn.disabled=false;btn.textContent='進入系統';}
   }
-  sessionStorage.setItem('mumei_unlock','1');
-  S.auth=true;
-  if(!auth.currentUser){
-    try{
-      await signInWithEmailAndPassword(auth,BACKEND_EMAIL,BACKEND_PASSWORD);
-    }catch(e){console.error('Firebase 連線失敗',e);}
-  }
-  if(S.sync==='idle')startSync();
-  render();
-  toast('✅ 歡迎進入沐蜜系統');
 };
 window.doOut=async()=>{
-  sessionStorage.removeItem('mumei_unlock');
+  if(!confirm('確定登出？下次打開要重新輸入密碼。'))return;
   stopSync();
   S.auth=false;
   S.sync='idle';
+  try{await signOut(auth);}catch(e){}
   render();
 };
 
