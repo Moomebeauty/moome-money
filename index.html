@@ -6226,7 +6226,8 @@ function eqFund(e){
   const uses=sales.length;
   const accrued=uses*per;
   const spent=(e.fundSpends||[]).reduce((a,x)=>a+toN(x.amount),0);
-  const balance=accrued-spent;
+  const added=(e.fundAdds||[]).reduce((a,x)=>a+toN(x.amount),0);
+  const balance=accrued+added-spent;
   const last30=sales.filter(s=>s.date>=d30).length;
   const monthUses=sales.filter(s=>s.date.slice(0,7)===mon).length;
   const pace=last30*per; // 每月大約可存
@@ -6241,7 +6242,7 @@ function eqFundCardHtml(e){
   if(!e.fundOn){
     return '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff;border:1px dashed #d97706;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
       +'<span style="font-size:13px;color:#92400e;">💰 還沒開「設備重置基金」：每次服務撥一點，機器自己存維修和換新的錢</span><span style="flex:1;"></span>'
-      +'<button class="btn btn-sm" style="background:#d97706;color:#fff;" onclick="openM(\'eqFund\',\''+e.id+'\')">開啟</button></div>';
+      +'<button class="btn btn-sm" style="background:#d97706;color:#fff;" onclick="openM(\'eqFundCheck\',\''+e.id+'\')">🩺 先評估再開啟</button></div>'+eqEvalLine(e);
   }
   const f=eqFund(e);
   const pct=f.target>0?Math.min(100,Math.round(Math.max(0,f.balance)/f.target*100)):0;
@@ -6262,10 +6263,20 @@ function eqFundCardHtml(e){
   h+='<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;color:#92400e;"><span>換新目標 $'+fmt(f.target)+'</span><b>'+pct+'%</b></div><div style="height:10px;background:#fef3c7;border-radius:6px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#16a34a':'#f59e0b')+';"></div></div></div>';
   h+='<div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:13px;line-height:1.6;">'
     +(f.goldenDate?'<div>🌟 行銷黃金期到 <b>'+f.goldenDate.slice(0,7)+'</b>'+(goldenPassed?'　<span style="color:#7c3aed;font-weight:700;">已過，可以開始物色下一代新機</span>':'')+'</div>':'')
-    +(f.replaceDate?'<div>🔧 預估汰換 <b>'+f.replaceDate.slice(0,7)+'</b>'+(replacePassed?'　<span style="color:#dc2626;font-weight:700;">已到汰換期</span>':'（還有 '+f.monthsLeft+' 個月）')+'</div>':'')
-    +(f.replaceDate&&!replacePassed?'<div>📈 照目前速度，到汰換時基金約 <b>$'+fmt(f.projected)+'</b>　'+(enough?'<span style="color:#16a34a;font-weight:700;">✅ 夠換新，不用自己掏錢</span>':'<span style="color:#dc2626;font-weight:700;">⚠️ 還差約 $'+fmt(f.target-f.projected)+'，可提高每次撥款或延長使用</span>')+'</div>':'')
-    +'</div></div>';
+    +(f.replaceDate?'<div>🩺 換機評估時間 <b>'+f.replaceDate.slice(0,7)+'</b>'+(replacePassed?'　<span style="color:#dc2626;font-weight:700;">已到，該做換機評估了</span>':'（還有 '+f.monthsLeft+' 個月）')+'</div>':'')
+    +(f.replaceDate&&!replacePassed?'<div>📈 照目前速度，到評估時基金約 <b>$'+fmt(f.projected)+'</b>　'+(enough?'<span style="color:#16a34a;font-weight:700;">✅ 夠換新，不用自己掏錢</span>':'<span style="color:#dc2626;font-weight:700;">⚠️ 還差約 $'+fmt(f.target-f.projected)+'，可提高每次撥款或延長使用</span>')+'</div>':'')
+    +'<div class="tm" style="font-size:12px;">到時候不一定要買新機：看機器現況、客人反應、店內財務再決定。</div>'
+    +'</div>'+eqEvalLine(e)+'</div>';
   return h;
+}
+function eqEvalLine(e){
+  const last=(e.evaluations||[]).slice(-1)[0];
+  const td=today();
+  const due=(e.purchaseDate&&e.goldenYears!==undefined&&eqAddYears(e.purchaseDate,e.goldenYears||2)<=td)||(e.purchaseDate&&e.years&&eqAddYears(e.purchaseDate,e.years)<=td);
+  return '<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:10px;background:'+(due&&!last?'#eff6ff':'#fff')+';border:1px solid '+(due&&!last?'#93c5fd':'#e5e7eb')+';">'
+    +(last?'<span style="font-size:13px;">上次評估 '+last.date+'：<b style="color:'+EQ_STRATS[last.chosen].c+';">'+EQ_STRATS[last.chosen].ico+' 策略 '+last.chosen+' '+EQ_STRATS[last.chosen].t+'</b></span>'
+      :'<span style="font-size:13px;color:'+(due?'#1d4ed8':'#6b7280')+';'+(due?'font-weight:800;':'')+'">'+(due?'🔔 到了該評估的時間':'🩺 換機評估：看機器現況、客人反應、操作效率決定換不換')+'</span>')
+    +'<span style="flex:1;"></span><button class="btn btn-sm" style="background:#2563eb;color:#fff;" onclick="openM(\'eqEval\',\''+e.id+'\')">🩺 做換機評估</button></div>';
 }
 window.eqFundTransfer=async function(id){
   const eqs=(S.data.equipment||[]).map(e=>Object.assign({},e));
@@ -6302,6 +6313,58 @@ window.eqFundSpendDel=async function(id,sid){
   if(!confirm('刪除這筆動用紀錄？'))return;
   const eqs=(S.data.equipment||[]).map(e=>e.id===id?Object.assign({},e,{fundSpends:(e.fundSpends||[]).filter(x=>x.id!==sid)}):e);
   S.data.equipment=eqs;await saveMain({equipment:eqs});openM('eqFundSpend',id);render();
+};
+// ── 開基金前：適合度評估 ──
+const EQ_FIT_QS=[
+  {k:'freq',q:'這台一週用 5 次以上嗎？',hint:'高頻率使用＝老化、磨損、故障風險高'},
+  {k:'core',q:'它是課程的核心步驟，壞了課程會大受影響嗎？',hint:'核心生財器具才需要預先存好換新的錢'},
+  {k:'wear',q:'它會有零件磨損、電池老化，或技術更新換代嗎？',hint:'例如探頭、馬達、充電電池；或兩年後就有新一代機種'}
+];
+// ── 換機評估：三個指標 × 續留/換新訊號 ──
+const EQ_EVAL=[
+  {k:'phy',t:'① 機器物理現況',keep:'操作順暢、電力正常、機身乾淨無刮傷',sig:[['fail','經常故障'],['battery','蓄電量變很差'],['button','按鍵不靈敏'],['old','外觀顯舊']]},
+  {k:'mkt',t:'② 客人與市場反應',keep:'客人覺得效果依然很好、市場上沒有更新更爆炸性的替代技術',sig:[['ask','客人開始詢問有沒有更新的項目'],['peer','附近同業都引進了更厲害的二代、三代機']]},
+  {k:'eff',t:'③ 你的操作效率',keep:'舊機依然能幫你省時省力',sig:[['fast','新機可以把時間大幅縮短（例：20 分鐘 → 10 分鐘）'],['double','新機效果能翻倍']]}
+];
+const EQ_STRATS={
+  A:{ico:'🅰️',t:'繼續用（最省成本）',c:'#16a34a',d:'機器狀況很好、客人也喜歡，就繼續用。時間到了它已經完全折舊完畢，資產價值歸零，之後每做一位客人，機器成本都是 0 元，賺到的是最純、最高的毛利。'},
+  B:{ico:'🅱️',t:'無痛升級換新（提升競爭力）',c:'#2563eb',d:'市場上出現效果更好、更省時的新機種時，動用設備重置基金買新機。舊機可以當備用機，萬一新機壞了還能替換；或在美業社團賣給剛創業的新手，回收資產殘值。'},
+  C:{ico:'🅲',t:'引進新機、舊機降級（擴大客群）',c:'#7c3aed',d:'買一台功能更強的新機，當作高階奢華療程的主力並調高收費；舊機降級到基礎平價保養課程。舊機繼續發揮效用，還能做出課程的高低價區隔，吸引不同預算的客人。'}
+};
+function eqEvalRecommend(sel,e){
+  const cnt=k=>EQ_EVAL.find(x=>x.k===k).sig.filter(s=>sel[s[0]]).length;
+  const phy=cnt('phy'),mkt=cnt('mkt'),eff=cnt('eff'),total=phy+mkt+eff;
+  let rec='A',why='';
+  if(total<=1){rec='A';why='換新訊號很少，機器還在好好幫你賺錢，繼續用最划算。';}
+  else if(mkt+eff>=1&&phy<=1){rec='C';why='機器本身還好，但市場或效率有更好的選擇：新機做高階療程，舊機降級做平價課程，兩台一起賺。';}
+  else{rec='B';why=phy>=2?'機器本身已經明顯老化，用基金換新，舊機留作備用或轉售回收殘值。':'市場與效率都在提醒你該升級了，用基金換新提升競爭力。';}
+  return {rec,why,phy,mkt,eff,total};
+}
+function eqDepreciated(e){if(!e.purchaseDate||!e.years)return false;return eqMonthsBetween(e.purchaseDate,today())>=toN(e.years)*12;}
+window.eqFitAnswer=function(k,v){S.modal.fit=S.modal.fit||{};S.modal.fit[k]=v;const inn=document.getElementById('modal-inner');if(inn)inn.innerHTML=renderModal();};
+window.eqFitGo=async function(id){
+  const fit=S.modal.fit||{};
+  const eqs=(S.data.equipment||[]).map(e=>e.id===id?Object.assign({},e,{fundCheck:{date:today(),answers:fit}}):e);
+  S.data.equipment=eqs;await saveMain({equipment:eqs});
+  openM('eqFund',id);
+};
+window.eqEvalToggle=function(k){S.modal.ev=S.modal.ev||{};S.modal.ev[k]=!S.modal.ev[k];const inn=document.getElementById('modal-inner');const sc=inn?inn.querySelector('div[style*="overflow-y"]'):null;const top=sc?sc.scrollTop:0;if(inn)inn.innerHTML=renderModal();const sc2=inn?inn.querySelector('div[style*="overflow-y"]'):null;if(sc2)sc2.scrollTop=top;};
+window.eqEvalPick=function(s){S.modal.evPick=s;const inn=document.getElementById('modal-inner');const sc=inn?inn.querySelector('div[style*="overflow-y"]'):null;const top=sc?sc.scrollTop:0;const keep={n:(document.getElementById('eqe_note')||{}).value,r:(document.getElementById('eqe_res')||{}).value};if(inn)inn.innerHTML=renderModal();if(document.getElementById('eqe_note'))document.getElementById('eqe_note').value=keep.n||'';if(document.getElementById('eqe_res')&&keep.r)document.getElementById('eqe_res').value=keep.r;const sc2=inn?inn.querySelector('div[style*="overflow-y"]'):null;if(sc2)sc2.scrollTop=top;};
+window.eqEvalSave=async function(id){
+  const sel=S.modal.ev||{};
+  const e0=(S.data.equipment||[]).find(x=>x.id===id)||{};
+  const r=eqEvalRecommend(sel,e0);
+  const chosen=S.modal.evPick||r.rec;
+  const res=toN((document.getElementById('eqe_res')||{}).value);
+  const rec={id:uid(),date:today(),signals:Object.keys(sel).filter(k=>sel[k]),recommended:r.rec,chosen,note:(document.getElementById('eqe_note')||{}).value||'',residual:chosen==='B'?res:0};
+  const eqs=(S.data.equipment||[]).map(e=>{
+    if(e.id!==id)return e;
+    const n=Object.assign({},e,{evaluations:(e.evaluations||[]).concat([rec])});
+    if(rec.residual>0)n.fundAdds=(e.fundAdds||[]).concat([{id:uid(),date:today(),amount:rec.residual,note:'舊機殘值回收'}]);
+    return n;
+  });
+  S.data.equipment=eqs;await saveMain({equipment:eqs});
+  closeMod();toast('✅ 已記下這次的換機評估：'+EQ_STRATS[chosen].t);render();
 };
 
 function pgEquipment(){
@@ -11953,6 +12016,47 @@ function renderModal(){
       +'<div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>';
   }
 
+  // 💰 開基金前：適合度評估
+  if(m.t==='eqFundCheck'){
+    const e=(S.data.equipment||[]).find(x=>x.id===m.x)||{};
+    if(!m.fit){m.fit=Object.assign({},(e.fundCheck&&e.fundCheck.answers)||{});if(m.fit.freq===undefined&&e.usesPerWeek!==undefined)m.fit.freq=e.usesPerWeek>=5;}
+    const yes=EQ_FIT_QS.filter(q=>m.fit[q.k]===true).length,answered=EQ_FIT_QS.filter(q=>m.fit[q.k]!==undefined).length;
+    c='<div class="mttl">🩺 先評估：「'+(e.name||'')+'」適合存重置基金嗎？</div>'
+      +'<div class="tm" style="font-size:13px;margin-bottom:10px;line-height:1.7;">重置基金是給<b>天天在用、壞了會影響課程</b>的核心生財器具準備的。偶爾才用的設備，用折舊管理就夠了。</div>'
+      +EQ_FIT_QS.map((q,i)=>{const v=m.fit[q.k];return '<div style="padding:12px 14px;border-radius:12px;background:#f8fafc;margin-bottom:8px;"><div style="font-size:15px;font-weight:800;">'+(i+1)+'. '+q.q+'</div><div class="tm" style="font-size:12px;margin:2px 0 8px;">'+q.hint+'</div><div style="display:flex;gap:8px;">'
+        +'<button type="button" onclick="eqFitAnswer(\''+q.k+'\',true)" style="flex:1;padding:8px;border-radius:10px;border:2px solid '+(v===true?'#16a34a':'#e5e7eb')+';background:'+(v===true?'#f0fdf4':'#fff')+';color:#16a34a;font-weight:800;cursor:pointer;">是</button>'
+        +'<button type="button" onclick="eqFitAnswer(\''+q.k+'\',false)" style="flex:1;padding:8px;border-radius:10px;border:2px solid '+(v===false?'#9ca3af':'#e5e7eb')+';background:'+(v===false?'#f3f4f6':'#fff')+';color:#6b7280;font-weight:800;cursor:pointer;">否</button></div></div>';}).join('')
+      +(answered===3?(yes>=2?'<div style="padding:12px 14px;border-radius:12px;background:#f0fdf4;border:2px solid #16a34a;color:#166534;font-weight:800;line-height:1.7;">✅ 適合開啟（'+yes+'/3）：這是核心生財器具，建議每次服務撥一點，讓機器自己存維修和換新的錢。</div>'
+        :'<div style="padding:12px 14px;border-radius:12px;background:#f8fafc;border:2px solid #9ca3af;color:#4b5563;font-weight:700;line-height:1.7;">🤔 不太需要（'+yes+'/3）：這台用得不夠頻繁或不是核心設備，用折舊管理就好，不用另外存基金。真的想開還是可以開。</div>'):'<div class="tm" style="font-size:13px;">回答完 3 題就會告訴你適不適合</div>')
+      +'<div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button>'+(answered===3?'<button class="btn btn-p" style="background:'+(yes>=2?'#d97706':'#9ca3af')+';" onclick="eqFitGo(\''+m.x+'\')">'+(yes>=2?'✓ 適合，開啟並設定':'仍要開啟')+'</button>':'')+'</div>';
+  }
+  // 🩺 換機評估：三個指標 → 三種策略
+  if(m.t==='eqEval'){
+    const e=(S.data.equipment||[]).find(x=>x.id===m.x)||{};
+    m.ev=m.ev||{};
+    const r=eqEvalRecommend(m.ev,e);
+    const pick=m.evPick||r.rec;
+    const f=e.fundOn?eqFund(e):null;
+    const dep=eqDepreciated(e);
+    c='<div class="mttl">🩺 換機評估：'+(e.name||'')+'</div><div style="max-height:68vh;overflow-y:auto;padding-right:4px;">'
+      +'<div class="notice" style="background:#eff6ff;border-left-color:#2563eb;color:#1e40af;font-size:13px;line-height:1.7;">時間到了不是看行事曆去買新機，而是看<b>機器現況、顧客反應、店內財務</b>來做決定。勾出現在出現的「該換新」訊號，<b>勾得越多，才越需要買新機。</b></div>'
+      +EQ_EVAL.map(d=>'<div style="margin-top:12px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;"><div style="font-size:15px;font-weight:900;">'+d.t+'</div>'
+        +'<div style="font-size:12px;color:#16a34a;margin:4px 0 8px;">🟢 續留舊機的訊號：'+d.keep+'</div>'
+        +'<div style="font-size:12px;color:#dc2626;font-weight:700;margin-bottom:4px;">🔴 該換新機的訊號（有的話勾起來）：</div>'
+        +d.sig.map(s=>'<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;cursor:pointer;font-size:14px;"><input type="checkbox" '+(m.ev[s[0]]?'checked':'')+' onchange="eqEvalToggle(\''+s[0]+'\')" style="transform:scale(1.3);"> '+s[1]+'</label>').join('')+'</div>').join('')
+      +'<div style="margin-top:12px;padding:12px 14px;border-radius:12px;background:#f8fafc;"><div style="font-size:15px;font-weight:900;">💵 店內財務</div><div style="font-size:13px;line-height:1.8;margin-top:4px;">'
+        +(f?'設備重置基金餘額 <b style="color:#b45309;">$'+fmt(f.balance)+'</b>／換新目標 $'+fmt(f.target)+'　'+(f.balance>=f.target?'<b style="color:#16a34a;">✅ 夠換新</b>':'<b style="color:#dc2626;">還差 $'+fmt(f.target-f.balance)+'</b>'):'這台沒有開重置基金')
+        +'<br>'+(dep?'這台<b>已完全折舊</b>，帳面價值 0，繼續用的每一次都是純毛利。':'這台還在折舊中。')+'</div></div>'
+      +'<div style="margin-top:14px;padding:12px 14px;border-radius:12px;background:#fdf4ff;border:2px solid '+EQ_STRATS[r.rec].c+';"><div style="font-size:13px;color:#6b7280;">勾了 '+r.total+' 個換新訊號（現況 '+r.phy+'、市場 '+r.mkt+'、效率 '+r.eff+'）</div><div style="font-size:17px;font-weight:900;color:'+EQ_STRATS[r.rec].c+';margin-top:2px;">👉 建議：'+EQ_STRATS[r.rec].ico+' 策略 '+r.rec+'　'+EQ_STRATS[r.rec].t+'</div><div style="font-size:13px;line-height:1.7;margin-top:4px;">'+r.why+'</div></div>'
+      +'<div style="font-size:14px;font-weight:800;margin:14px 0 6px;">你這次決定採用：</div>'
+      +Object.keys(EQ_STRATS).map(k=>{const s=EQ_STRATS[k],on=pick===k;return '<div onclick="eqEvalPick(\''+k+'\')" style="cursor:pointer;padding:12px 14px;border-radius:12px;margin-bottom:8px;border:2px solid '+(on?s.c:'#e5e7eb')+';background:'+(on?'#fafafa':'#fff')+';"><div style="font-size:15px;font-weight:900;color:'+s.c+';">'+(on?'✓ ':'')+s.ico+' 策略 '+k+'：'+s.t+(k===r.rec?'　<span style="font-size:11px;background:'+s.c+';color:#fff;padding:1px 7px;border-radius:8px;">建議</span>':'')+'</div><div style="font-size:13px;line-height:1.7;color:#4b5563;margin-top:4px;">'+s.d+'</div></div>';}).join('')
+      +(pick==='B'?'<div class="fgrp" style="margin-top:6px;"><label>舊機轉售預估可回收多少（殘值，選填，會加回基金）</label><input type="number" id="eqe_res" placeholder="例如：2000"></div>':'')
+      +'<div class="fgrp" style="margin-top:8px;"><label>備註</label><textarea id="eqe_note" rows="2" placeholder="例如：客人很滿意、先繼續用一年再評估"></textarea></div>'
+      +((e.evaluations||[]).length?'<div style="margin-top:12px;"><b style="font-size:13px;">過去的評估</b>'+(e.evaluations||[]).slice().reverse().map(x=>'<div style="font-size:13px;padding:6px 0;border-bottom:1px solid #f1f1f1;">'+x.date+'　'+EQ_STRATS[x.chosen].ico+' 策略 '+x.chosen+'：'+EQ_STRATS[x.chosen].t+(x.note?'<div class="tm" style="font-size:12px;">'+x.note+'</div>':'')+'</div>').join('')+'</div>':'')
+      +'</div><div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#2563eb;" onclick="eqEvalSave(\''+m.x+'\')">✓ 記下這次決定</button></div>';
+    S.modal.lg=true;
+  }
+
   // 🔍 全站搜尋
   if(m.t==='globalSearch'){
     const q=(S.searchQuery||'').trim().toLowerCase();
@@ -12745,15 +12849,7 @@ function renderModal(){
           <input type="checkbox" id="m_eqExp" checked> 同時記入「支出記帳」（類別：設備購置）
         </label>
       </div>
-      <div class="fgrp" style="grid-column:1/-1;background:#fffbeb;padding:10px;border-radius:8px;border-left:3px solid #d97706;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;color:#b45309;">
-          <input type="checkbox" id="m_eqFund" onchange="document.getElementById('m_eqFundBox').style.display=this.checked?'grid':'none'"> 💰 開啟「設備重置基金」（每次服務撥一點，存維修和換新的錢）
-        </label>
-        <div id="m_eqFundBox" class="fg fg2" style="display:none;margin-top:8px;">
-          <div class="fgrp"><label>每次撥多少</label><input type="number" id="m_eqFundPer" value="30"></div>
-          <div class="fgrp"><label>用到它的服務（關鍵字）</label><input type="text" id="m_eqFundKw" placeholder="例如：做臉"></div>
-        </div>
-      </div>
+      <div class="tm" style="grid-column:1/-1;font-size:12px;color:#b45309;">💰 新增後，可以在設備卡片按「🩺 先評估再開啟」，判斷要不要為它存重置基金。</div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveEquipment()">✓ 新增</button></div>`;}
 
