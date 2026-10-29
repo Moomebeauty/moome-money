@@ -6213,7 +6213,97 @@ function pgStockOut(){
   </div>`;
 }
 
-// ─── 設備折舊 ─────────────────────────────────────────────
+// ─── 設備折舊 ─────────────────────────────────────────────// ═══════════ 💰 設備重置基金（機器自己幫自己存「退休金＋繼承者基金」）═══════════
+function eqAddYears(ds,y){if(!ds)return '';const d=new Date(ds+'T00:00:00');d.setMonth(d.getMonth()+Math.round(toN(y)*12));return actYmd(d);}
+function eqMonthsBetween(a,b){const d1=new Date(a+'T00:00:00'),d2=new Date(b+'T00:00:00');return (d2.getFullYear()-d1.getFullYear())*12+(d2.getMonth()-d1.getMonth());}
+function eqFund(e){
+  const per=toN(e.fundPerUse)||30;
+  const kws=String(e.fundKeyword||'').split(/[,，、\s]+/).map(s=>s.trim()).filter(Boolean);
+  const start=e.fundStart||e.purchaseDate||'';
+  const td=today(),d30=actAddDays(td,-30),mon=td.slice(0,7);
+  const hit=s=>kws.length&&kws.some(k=>((s.item||'')+(s.subNote||'')).includes(k));
+  const sales=(S.data.sales||[]).filter(s=>s.date&&(!start||s.date>=start)&&hit(s));
+  const uses=sales.length;
+  const accrued=uses*per;
+  const spent=(e.fundSpends||[]).reduce((a,x)=>a+toN(x.amount),0);
+  const balance=accrued-spent;
+  const last30=sales.filter(s=>s.date>=d30).length;
+  const monthUses=sales.filter(s=>s.date.slice(0,7)===mon).length;
+  const pace=last30*per; // 每月大約可存
+  const replaceDate=eqAddYears(e.purchaseDate,e.years||3);
+  const goldenDate=eqAddYears(e.purchaseDate,e.goldenYears||2);
+  const monthsLeft=replaceDate?Math.max(0,eqMonthsBetween(td,replaceDate)):0;
+  const projected=balance+pace*monthsLeft;
+  const target=toN(e.fundTarget)||toN(e.cost);
+  return {per,kws,start,uses,accrued,spent,balance,last30,monthUses,monthAmt:monthUses*per,pace,replaceDate,goldenDate,monthsLeft,projected,target,mon};
+}
+function eqFundCardHtml(e){
+  if(!e.fundOn){
+    return '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#fff;border:1px dashed #d97706;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span style="font-size:13px;color:#92400e;">💰 還沒開「設備重置基金」：每次服務撥一點，機器自己存維修和換新的錢</span><span style="flex:1;"></span>'
+      +'<button class="btn btn-sm" style="background:#d97706;color:#fff;" onclick="openM(\'eqFund\',\''+e.id+'\')">開啟</button></div>';
+  }
+  const f=eqFund(e);
+  const pct=f.target>0?Math.min(100,Math.round(Math.max(0,f.balance)/f.target*100)):0;
+  const td=today();
+  const goldenPassed=f.goldenDate&&f.goldenDate<=td,replacePassed=f.replaceDate&&f.replaceDate<=td;
+  const enough=f.projected>=f.target;
+  const transferred=!!(e.fundTransfers||{})[f.mon];
+  let h='<div style="margin-top:10px;padding:12px 14px;border-radius:12px;background:linear-gradient(135deg,#fffbeb,#fff);border:1px solid #fde68a;">'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><b style="color:#b45309;font-size:15px;">💰 設備重置基金</b><span class="tm" style="font-size:12px;">每次「'+(f.kws.join('、')||'未設定')+'」撥 $'+fmt(f.per)+'</span><span style="flex:1;"></span>'
+    +'<button class="btn btn-s btn-sm" onclick="openM(\'eqFund\',\''+e.id+'\')">⚙️ 設定</button><button class="btn btn-s btn-sm" onclick="openM(\'eqFundSpend\',\''+e.id+'\')">💸 動用</button></div>';
+  if(!f.kws.length)return h+'<div style="font-size:13px;color:#b45309;margin-top:8px;">請按「⚙️ 設定」填上用到這台機器的服務名稱（例如：做臉），系統才能自動計算次數。</div></div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;text-align:center;">'
+    +'<div><div style="font-size:11px;color:#92400e;">基金餘額</div><div style="font-size:22px;font-weight:900;color:#b45309;">$'+fmt(f.balance)+'</div><div style="font-size:11px;color:#9ca3af;">累計 '+f.uses+' 次'+(f.spent?'・已動用 $'+fmt(f.spent):'')+'</div></div>'
+    +'<div><div style="font-size:11px;color:#92400e;">本月應轉入</div><div style="font-size:22px;font-weight:900;color:'+(transferred?'#16a34a':'#dc2626')+';">$'+fmt(f.monthAmt)+'</div><div style="font-size:11px;color:#9ca3af;">本月 '+f.monthUses+' 次</div></div>'
+    +'<div><div style="font-size:11px;color:#92400e;">每月大約可存</div><div style="font-size:22px;font-weight:900;color:#0f766e;">$'+fmt(f.pace)+'</div><div style="font-size:11px;color:#9ca3af;">近 30 天 '+f.last30+' 次</div></div></div>';
+  h+='<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+    +(f.monthAmt>0?'<button class="btn btn-sm" style="background:'+(transferred?'#16a34a':'#dc2626')+';color:#fff;" onclick="eqFundTransfer(\''+e.id+'\')">'+(transferred?'✓ 本月已轉入獨立帳戶':'🏦 本月 $'+fmt(f.monthAmt)+' 已轉入獨立帳戶？點我打勾')+'</button>':'')+'</div>';
+  h+='<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;color:#92400e;"><span>換新目標 $'+fmt(f.target)+'</span><b>'+pct+'%</b></div><div style="height:10px;background:#fef3c7;border-radius:6px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#16a34a':'#f59e0b')+';"></div></div></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:13px;line-height:1.6;">'
+    +(f.goldenDate?'<div>🌟 行銷黃金期到 <b>'+f.goldenDate.slice(0,7)+'</b>'+(goldenPassed?'　<span style="color:#7c3aed;font-weight:700;">已過，可以開始物色下一代新機</span>':'')+'</div>':'')
+    +(f.replaceDate?'<div>🔧 預估汰換 <b>'+f.replaceDate.slice(0,7)+'</b>'+(replacePassed?'　<span style="color:#dc2626;font-weight:700;">已到汰換期</span>':'（還有 '+f.monthsLeft+' 個月）')+'</div>':'')
+    +(f.replaceDate&&!replacePassed?'<div>📈 照目前速度，到汰換時基金約 <b>$'+fmt(f.projected)+'</b>　'+(enough?'<span style="color:#16a34a;font-weight:700;">✅ 夠換新，不用自己掏錢</span>':'<span style="color:#dc2626;font-weight:700;">⚠️ 還差約 $'+fmt(f.target-f.projected)+'，可提高每次撥款或延長使用</span>')+'</div>':'')
+    +'</div></div>';
+  return h;
+}
+window.eqFundTransfer=async function(id){
+  const eqs=(S.data.equipment||[]).map(e=>Object.assign({},e));
+  const e=eqs.find(x=>x.id===id);if(!e)return;
+  const mon=today().slice(0,7);
+  e.fundTransfers=Object.assign({},e.fundTransfers||{});
+  if(e.fundTransfers[mon])delete e.fundTransfers[mon];else e.fundTransfers[mon]=today();
+  S.data.equipment=eqs;await saveMain({equipment:eqs});render();
+};
+window.eqFundSave=async function(id){
+  const eqs=(S.data.equipment||[]).map(e=>e.id===id?Object.assign({},e,{
+    fundOn:true,
+    fundPerUse:toN(document.getElementById('eqf_per').value)||30,
+    fundKeyword:document.getElementById('eqf_kw').value.trim(),
+    fundStart:document.getElementById('eqf_start').value||e.purchaseDate||'',
+    fundTarget:toN(document.getElementById('eqf_target').value)||0,
+    years:toN(document.getElementById('eqf_years').value)||e.years||3,
+    goldenYears:toN(document.getElementById('eqf_golden').value)||2
+  }):e);
+  S.data.equipment=eqs;await saveMain({equipment:eqs});closeMod();toast('✅ 重置基金已設定');render();
+};
+window.eqFundOff=async function(id){
+  if(!confirm('關閉這台的重置基金？（設定與動用紀錄會保留）'))return;
+  const eqs=(S.data.equipment||[]).map(e=>e.id===id?Object.assign({},e,{fundOn:false}):e);
+  S.data.equipment=eqs;await saveMain({equipment:eqs});closeMod();render();
+};
+window.eqFundSpendAdd=async function(id){
+  const amt=toN(document.getElementById('eqs_amt').value);
+  if(amt<=0){alert('請填金額');return;}
+  const eqs=(S.data.equipment||[]).map(e=>e.id===id?Object.assign({},e,{fundSpends:(e.fundSpends||[]).concat([{id:uid(),date:document.getElementById('eqs_date').value||today(),amount:amt,note:document.getElementById('eqs_note').value.trim()}])}):e);
+  S.data.equipment=eqs;await saveMain({equipment:eqs});toast('已記錄動用 $'+fmt(amt));openM('eqFundSpend',id);render();
+};
+window.eqFundSpendDel=async function(id,sid){
+  if(!confirm('刪除這筆動用紀錄？'))return;
+  const eqs=(S.data.equipment||[]).map(e=>e.id===id?Object.assign({},e,{fundSpends:(e.fundSpends||[]).filter(x=>x.id!==sid)}):e);
+  S.data.equipment=eqs;await saveMain({equipment:eqs});openM('eqFundSpend',id);render();
+};
+
 function pgEquipment(){
   const eqs=S.data.equipment||[];
   // 計算當期折舊（按月線性折舊）
@@ -6250,6 +6340,14 @@ function pgEquipment(){
     html+='<div class="notice" style="background:#faf5ff;border-left-color:#9333ea;color:#7e22ce;font-size:13px;">💡 <b>資產不是看多貴，是看能不能生錢。</b>高稼動率=真資產；閒置卻一直折舊=偽裝的負債。幫每台填「一週用幾次」就會診斷。</div>';
 
     // 統計：折舊 + 健檢
+    const fundEqs=eqs.filter(function(e){return e.fundOn;});
+    if(fundEqs.length){
+      var fb=0,fm=0,fmDone=0;fundEqs.forEach(function(e){var f=eqFund(e);fb+=f.balance;fm+=f.monthAmt;if((e.fundTransfers||{})[f.mon])fmDone+=f.monthAmt;});
+      html+='<div class="card" style="margin-top:12px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:none;"><div class="card-bd" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">'
+        +'<div><div style="font-size:13px;color:#92400e;">💰 設備重置基金 總餘額</div><div style="font-size:28px;font-weight:900;color:#b45309;">$'+fmt(fb)+'</div><div style="font-size:12px;color:#92400e;">'+fundEqs.length+' 台機器在幫自己存錢</div></div>'
+        +'<span style="flex:1;"></span><div style="text-align:right;"><div style="font-size:13px;color:#92400e;">本月應轉入獨立帳戶</div><div style="font-size:22px;font-weight:900;color:'+(fm>0&&fmDone>=fm?'#16a34a':'#dc2626')+';">$'+fmt(fm)+'</div><div style="font-size:12px;color:#92400e;">'+(fm>0&&fmDone>=fm?'✓ 都轉好了':'已轉 $'+fmt(fmDone))+'</div></div>'
+        +'</div></div>';
+    }
     html+='<div class="sg sg3" style="margin-top:12px;">';
     html+='<div class="sc gold"><div class="sl">設備總原值</div><div class="sv gold sm">$'+fmt(totalCost)+'</div><div class="ss">'+eqs.length+' 項・每月折舊 $'+fmt(totalMonthly)+'</div></div>';
     html+='<div class="sc" style="border:2px solid #16a34a;"><div class="sl">✅ 真資產</div><div class="sv sm" style="color:#16a34a;">'+realAsset+' 台</div><div class="ss">高稼動，在生錢</div></div>';
@@ -6293,6 +6391,7 @@ function pgEquipment(){
       html+='</div>';
       html+='<div style="font-size:12px;color:'+vColor+';margin-top:8px;">👉 '+advice+'</div>';
       if(e.note)html+='<div class="tm" style="font-size:11px;margin-top:4px;">備註：'+e.note+'</div>';
+      html+=eqFundCardHtml(e);
       html+='</div></div>';
     });
     html+='</div>';
@@ -11820,6 +11919,40 @@ function renderModal(){
     S.modal.lg=true;
   }
 
+  // 💰 設備重置基金：設定
+  if(m.t==='eqFund'){
+    const e=(S.data.equipment||[]).find(x=>x.id===m.x)||{};
+    c='<div class="mttl">💰 '+(e.name||'')+' 的重置基金</div><div style="max-height:68vh;overflow-y:auto;padding-right:4px;">'
+      +'<div class="notice" style="background:#fffbeb;border-left-color:#d97706;color:#92400e;font-size:13px;line-height:1.7;">每次服務從收入撥一點，存成這台機器的「維修與換新基金」。以後送原廠保養、換零件、甚至升級下一代機種，都不用再從自己口袋掏錢，<b>機器自己天天幫自己賺退休金和繼承者基金。</b></div>'
+      +'<div class="fg fg2" style="margin-top:10px;">'
+      +'<div class="fgrp"><label>每次服務撥多少</label><input type="number" id="eqf_per" value="'+(e.fundPerUse||30)+'"></div>'
+      +'<div class="fgrp"><label>哪些服務會用到它（名稱關鍵字）</label><input type="text" id="eqf_kw" value="'+((e.fundKeyword||'').replace(/"/g,'&quot;'))+'" placeholder="例如：做臉、清粉刺"><div class="tm" style="font-size:11px;">收入記帳的項目名稱含這些字，就算用一次；多個用頓號分開</div></div>'
+      +'<div class="fgrp"><label>從哪天開始存</label><input type="date" id="eqf_start" value="'+(e.fundStart||e.purchaseDate||today())+'"></div>'
+      +'<div class="fgrp"><label>換新目標金額</label><input type="number" id="eqf_target" value="'+(e.fundTarget||e.cost||'')+'" placeholder="下一代機種預算"><div class="tm" style="font-size:11px;">預設是原價；想升級更貴的機種可以填高一點</div></div>'
+      +'</div>'
+      +'<div style="margin-top:12px;padding:12px;border-radius:12px;background:#f8fafc;"><b style="font-size:14px;">⏳ 這台機器能用多久？</b>'
+      +'<div class="fg fg2" style="margin-top:8px;"><div class="fgrp"><label>🔧 使用年限（汰換）</label><input type="number" id="eqf_years" value="'+(e.years||3)+'" min="1" step="0.5"></div>'
+      +'<div class="fgrp"><label>🌟 行銷黃金期（年）</label><input type="number" id="eqf_golden" value="'+(e.goldenYears||2)+'" min="0.5" step="0.5"></div></div>'
+      +'<div style="font-size:12px;color:#475569;line-height:1.8;margin-top:6px;">高頻率、每個客人都用的核心生財器具，<b>建議使用年限估 3 年</b>，從三個角度綜合判斷：<br>'
+      +'・<b>稅務與財務</b>：美容器具法定耐用年數多為 3～5 年，內部管理用 3 年（36 個月）攤提最保守。<br>'
+      +'・<b>物理壽命</b>：天天開機，馬達、接線、電池約 2 年後效能下滑；外殼按鍵約 3 年就有明顯使用痕跡，影響客人的尊榮感。<br>'
+      +'・<b>行銷與技術</b>：儀器 2 年就可能變市場標配。<b>行銷黃金期設 2 年</b>，到期就開始物色下一代，舊機轉備用或轉售同行。</div></div>'
+      +'</div><div class="mbtns">'+(e.fundOn?'<button class="btn btn-s" style="color:#9ca3af;" onclick="eqFundOff(\''+m.x+'\')">關閉基金</button>':'')+'<button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" style="background:#d97706;" onclick="eqFundSave(\''+m.x+'\')">✓ 儲存</button></div>';
+    S.modal.lg=true;
+  }
+  // 💸 設備重置基金：動用紀錄
+  if(m.t==='eqFundSpend'){
+    const e=(S.data.equipment||[]).find(x=>x.id===m.x)||{};
+    const f=eqFund(e);
+    c='<div class="mttl">💸 動用「'+(e.name||'')+'」重置基金</div>'
+      +'<div style="font-size:14px;margin-bottom:10px;">目前餘額 <b style="color:#b45309;font-size:18px;">$'+fmt(f.balance)+'</b></div>'
+      +'<div class="fg fg2"><div class="fgrp"><label>日期</label><input type="date" id="eqs_date" value="'+today()+'"></div><div class="fgrp"><label>金額</label><input type="number" id="eqs_amt" placeholder="0"></div>'
+      +'<div class="fgrp" style="grid-column:1/-1"><label>用途</label><input type="text" id="eqs_note" placeholder="例如：探頭更換、原廠大保養、升級新機"></div></div>'
+      +'<button class="btn btn-p" style="background:#d97706;margin-top:8px;" onclick="eqFundSpendAdd(\''+m.x+'\')">＋ 記錄這筆動用</button>'
+      +((e.fundSpends||[]).length?'<div style="margin-top:14px;"><b style="font-size:13px;">動用紀錄</b>'+(e.fundSpends||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>'<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f1f1;font-size:13px;"><span class="tm">'+x.date+'</span><span style="flex:1;">'+(x.note||'')+'</span><b style="color:#dc2626;">-$'+fmt(x.amount)+'</b><button class="bdel" onclick="eqFundSpendDel(\''+m.x+'\',\''+x.id+'\')">×</button></div>').join('')+'</div>':'')
+      +'<div class="mbtns"><button class="btn btn-s" onclick="closeMod()">關閉</button></div>';
+  }
+
   // 🔍 全站搜尋
   if(m.t==='globalSearch'){
     const q=(S.searchQuery||'').trim().toLowerCase();
@@ -12604,13 +12737,22 @@ function renderModal(){
       </div>
       <div class="fgrp"><label>購入日期 *</label><input type="date" id="m_eq2" value="${today()}"></div>
       <div class="fgrp"><label>原值（購入金額）*</label><input type="number" id="m_eq3" placeholder="0"></div>
-      <div class="fgrp"><label>使用年限 *</label><input type="number" id="m_eq4" value="5" min="1"><div class="tm" style="font-size:11px;">家具 5 年、3C 3 年、機械設備 8 年</div></div>
+      <div class="fgrp"><label>使用年限 *</label><input type="number" id="m_eq4" value="5" min="1" step="0.5"><div class="tm" style="font-size:11px;">家具 5 年、3C 3 年；<b>天天用的核心美容儀器建議 3 年</b></div></div>
       <div class="fgrp"><label>付款方式</label><select id="m_eq5"><option>轉帳</option><option>現金</option><option>信用卡</option></select></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_eq6" placeholder="如：放在二樓做臉房"></div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
           <input type="checkbox" id="m_eqExp" checked> 同時記入「支出記帳」（類別：設備購置）
         </label>
+      </div>
+      <div class="fgrp" style="grid-column:1/-1;background:#fffbeb;padding:10px;border-radius:8px;border-left:3px solid #d97706;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;color:#b45309;">
+          <input type="checkbox" id="m_eqFund" onchange="document.getElementById('m_eqFundBox').style.display=this.checked?'grid':'none'"> 💰 開啟「設備重置基金」（每次服務撥一點，存維修和換新的錢）
+        </label>
+        <div id="m_eqFundBox" class="fg fg2" style="display:none;margin-top:8px;">
+          <div class="fgrp"><label>每次撥多少</label><input type="number" id="m_eqFundPer" value="30"></div>
+          <div class="fgrp"><label>用到它的服務（關鍵字）</label><input type="text" id="m_eqFundKw" placeholder="例如：做臉"></div>
+        </div>
       </div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveEquipment()">✓ 新增</button></div>`;}
@@ -12625,7 +12767,7 @@ function renderModal(){
       </div>
       <div class="fgrp"><label>購入日期</label><input type="date" id="m_eq2" value="${e.purchaseDate||today()}"></div>
       <div class="fgrp"><label>原值</label><input type="number" id="m_eq3" value="${e.cost||0}"></div>
-      <div class="fgrp"><label>使用年限</label><input type="number" id="m_eq4" value="${e.years||5}" min="1"></div>
+      <div class="fgrp"><label>使用年限</label><input type="number" id="m_eq4" value="${e.years||5}" min="1" step="0.5"></div>
       <div class="fgrp" style="grid-column:1/-1"><label>備註</label><input type="text" id="m_eq6" value="${e.note||''}"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="updEquipment('${e.id}')">✓ 更新</button></div>`;}
@@ -15964,7 +16106,11 @@ window.saveEquipment=async()=>{
       category:$('m_eq1')?.value||'其他',
       purchaseDate,cost,years,
       payMethod:$('m_eq5')?.value||'轉帳',
-      note:$('m_eq6')?.value||''
+      note:$('m_eq6')?.value||'',
+      fundOn:!!$('m_eqFund')?.checked,
+      fundPerUse:toN($('m_eqFundPer')?.value)||30,
+      fundKeyword:($('m_eqFundKw')?.value||'').trim(),
+      fundStart:purchaseDate,goldenYears:2
     }];
     await saveMain({equipment:eqs});
     // 同步寫支出
