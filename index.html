@@ -12501,14 +12501,14 @@ function renderModal(){
     <div class="fg fg2">
       <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${today()}"></div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;border-left:3px solid var(--gold);">
-        <label style="color:var(--goldDk);font-weight:700;">🔍 選擇現有產品（避免重複建立）</label>
-        <select id="m_pPick" onchange="onPurchaseProdSelect(this)" style="width:100%;margin-top:4px;">
+        <label style="color:var(--goldDk);font-weight:700;">🔍 產品名稱（打關鍵字，會跳出現有產品讓你選）</label>
+        <input type="text" id="m_p2" placeholder="例如：打「玻尿酸」或「安瓶」" autocomplete="off" style="margin-top:4px;font-size:16px;" oninput="prodAc(this,'single')" onfocus="prodAc(this,'single')" onkeydown="prodAcKey(event,this,'single')" onblur="prodAcBlur(this,'single')">
+        <select id="m_pPick" onchange="onPurchaseProdSelect(this)" style="display:none;">
           <option value="">＋ 新增產品（手動輸入下方）</option>
           ${allProds.map(p=>`<option value="${p.id}" data-cat="${p.category||''}" data-name="${p.name||''}" data-price="${p.price||0}" data-supplier="${p.supplier||''}">${p.name}（${p.category||''}）${p.supplier?' · '+p.supplier:''}</option>`).join('')}
         </select>
       </div>
       <div class="fgrp"><label>產品類別</label><select id="m_pCat">${PRODUCT_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
-      <div class="fgrp"><label>產品名稱</label><input type="text" id="m_p2" placeholder="如：玻尿酸精華液"></div>
       <div class="fgrp"><label>產品系列（選填）</label><input type="text" id="m_pSeries" placeholder="如：保濕系列"></div>
       <div class="fgrp"><label>進貨數量</label><input type="number" id="m_p3" placeholder="0" min="1" onchange="calcPTotal()"></div>
       <div class="fgrp"><label>進貨單價</label><input type="number" id="m_p4" placeholder="0" onchange="calcPTotal()"></div>
@@ -15358,13 +15358,13 @@ function batchRowHTML(r,i,isGroup){
   const productOptions=allProds.map(p=>`<option value="${p.id}"${r.productId===p.id?' selected':''} data-cat="${p.category||''}" data-name="${p.name||''}">${p.name}（${p.category||''}）</option>`).join('');
   if(isGroup){
     return`<div class="batch-row" data-idx="${i}">
-      <div class="fgrp" style="grid-column:1/-1"><label>選擇現有產品（避免重複建立）</label>
-        <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="width:100%;">
-          <option value="">＋ 新增此產品（手動輸入下方）</option>
+      <div class="fgrp" style="grid-column:1/-1"><label>🔍 產品名稱（打關鍵字，會跳出現有產品）</label>
+        <input type="text" class="bp_name" placeholder="例如：打「玻尿酸」" value="${(r.name||'').replace(/"/g,'&quot;')}" autocomplete="off" style="font-size:15px;" oninput="prodAc(this,'batch')" onfocus="prodAc(this,'batch')" onkeydown="prodAcKey(event,this,'batch')" onblur="prodAcBlur(this,'batch')">
+        <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="display:none;">
+          <option value="">＋ 新增此產品</option>
           ${productOptions}
         </select>
       </div>
-      <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
       <div class="fgrp"><label>類別</label>
         <select class="bp_cat">
           ${PRODUCT_CATS.map(c=>`<option${c===(r.cat||PRODUCT_CATS[0])?' selected':''}>${c}</option>`).join('')}
@@ -15377,13 +15377,13 @@ function batchRowHTML(r,i,isGroup){
     </div>`;
   }
   return`<div class="batch-row" data-idx="${i}">
-    <div class="fgrp" style="grid-column:1/-1"><label>選擇現有產品（避免重複建立）</label>
-      <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="width:100%;">
-        <option value="">＋ 新增此產品（手動輸入下方）</option>
+    <div class="fgrp" style="grid-column:1/-1"><label>🔍 產品名稱（打關鍵字，會跳出現有產品）</label>
+      <input type="text" class="bp_name" placeholder="例如：打「玻尿酸」" value="${(r.name||'').replace(/"/g,'&quot;')}" autocomplete="off" style="font-size:15px;" oninput="prodAc(this,'batch')" onfocus="prodAc(this,'batch')" onkeydown="prodAcKey(event,this,'batch')" onblur="prodAcBlur(this,'batch')">
+      <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="display:none;">
+        <option value="">＋ 新增此產品</option>
         ${productOptions}
       </select>
     </div>
-    <div class="fgrp"><label>產品名稱</label><input type="text" class="bp_name" placeholder="產品名稱" value="${r.name||''}"></div>
     <div class="fgrp"><label>類別</label>
       <select class="bp_cat">
         ${PRODUCT_CATS.map(c=>`<option${c===(r.cat||PRODUCT_CATS[0])?' selected':''}>${c}</option>`).join('')}
@@ -18652,6 +18652,101 @@ window.unpayPurchase=async(id)=>{
 
 // ── Purchase 批次 ──
 // 單筆進貨：選擇現有產品 → 自動填入名稱/類別/廠商/售價
+// ═══ 產品名稱：打關鍵字自動跳出現有產品（進貨單筆／批次共用）═══
+function prodAcNorm(s){return String(s||'').toLowerCase().replace(/[\s　·・\-_()（）]/g,'');}
+function prodAcMatches(q){
+  const prods=(S.data.products||[]);
+  const qn=prodAcNorm(q);
+  if(!qn)return prods.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).slice(0,60);
+  const scored=[];
+  prods.forEach(p=>{
+    const name=prodAcNorm(p.name),other=prodAcNorm([p.series,p.supplier,p.category,(p.ingredients||[]).join('')].join(''));
+    let s=-1;
+    if(name.startsWith(qn))s=3;else if(name.includes(qn))s=2;else if(other.includes(qn))s=1;
+    else{let i=0;for(const ch of qn){i=name.indexOf(ch,i);if(i<0)break;i++;}if(i>0)s=0.5;} // 跳字也能找到，例如「玻精」→ 玻尿酸精華
+    if(s>=0)scored.push({p,s});
+  });
+  return scored.sort((a,b)=>b.s-a.s||(a.p.name||'').localeCompare(b.p.name||'')).slice(0,12).map(x=>x.p);
+}
+function prodAcHi(name,q){
+  const n=String(name||''),qq=String(q||'').trim();
+  if(!qq)return n.replace(/</g,'&lt;');
+  const i=n.toLowerCase().indexOf(qq.toLowerCase());
+  if(i<0)return n.replace(/</g,'&lt;');
+  return n.slice(0,i).replace(/</g,'&lt;')+'<b style="background:#fde047;">'+n.slice(i,i+qq.length).replace(/</g,'&lt;')+'</b>'+n.slice(i+qq.length).replace(/</g,'&lt;');
+}
+function prodAcBox(inp){
+  let box=inp.parentNode.querySelector('.prodac-box');
+  if(!box){box=document.createElement('div');box.className='prodac-box';box.style.cssText='position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:280px;overflow-y:auto;margin-top:2px;';inp.parentNode.style.position='relative';inp.parentNode.appendChild(box);}
+  return box;
+}
+window.prodAc=function(inp,mode){
+  // 改了名字 → 取消原本選定的產品（變成新產品，除非再從清單選）
+  const sel=prodAcSelect(inp,mode);
+  if(sel&&sel.value){const cur=(S.data.products||[]).find(p=>p.id===sel.value);if(!cur||cur.name!==inp.value)sel.value='';}
+  prodAcBadge(inp,mode);
+  const list=prodAcMatches(inp.value);
+  const box=prodAcBox(inp);
+  inp._acIdx=-1;inp._acList=list;
+  const q=inp.value.trim();
+  if(!list.length){box.innerHTML='<div style="padding:10px 12px;font-size:13px;color:#6b7280;">沒有符合的產品，會建立成<b>新產品</b>「'+q.replace(/</g,'&lt;')+'」</div>';box.style.display='block';return;}
+  box.innerHTML=(q?'':'<div style="padding:6px 12px;font-size:11px;color:#9ca3af;">全部產品（也可以直接打關鍵字）</div>')+list.map((p,i)=>{const inv=getInv(p.id);return '<div data-i="'+i+'" onmousedown="event.preventDefault();prodAcPick(this.closest(\'.fgrp\').querySelector(\'input\'),\''+mode+'\','+i+')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;gap:8px;align-items:center;" onmouseover="this.style.background=\'#faf5ff\'" onmouseout="this.style.background=\'\'"><div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;">'+prodAcHi(p.name,q)+'</div><div style="font-size:11px;color:#9ca3af;">'+[p.category,p.series,p.supplier].filter(Boolean).join('・')+'</div></div><div style="font-size:11px;color:#6b7280;text-align:right;white-space:nowrap;">庫存 '+toN(inv.qty)+(toN(p.cost)?'<br>成本 $'+fmt(p.cost):'')+'</div></div>';}).join('');
+  box.style.display='block';
+};
+function prodAcSelect(inp,mode){return mode==='single'?document.getElementById('m_pPick'):(inp.closest('.batch-row')||document).querySelector('.bp_prod');}
+function prodAcBadge(inp,mode){
+  const sel=prodAcSelect(inp,mode);
+  let b=inp.parentNode.querySelector('.prodac-badge');
+  if(!b){b=document.createElement('div');b.className='prodac-badge';b.style.cssText='font-size:12px;margin-top:4px;';inp.parentNode.insertBefore(b,inp.nextSibling);}
+  const picked=sel&&sel.value;
+  b.innerHTML=!inp.value.trim()?'':(picked?'<span style="color:#16a34a;font-weight:700;">✓ 已選現有產品，庫存會加到這個產品</span>':'<span style="color:#d97706;">＋ 會建立成新產品</span>');
+}
+window.prodAcPick=function(inp,mode,i,noFocus){
+  const p=(inp._acList||[])[i];if(!p)return;
+  const sel=prodAcSelect(inp,mode);
+  inp.value=p.name||'';
+  if(sel){
+    if(![...sel.options].some(o=>o.value===p.id)){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;sel.appendChild(o);}
+    sel.value=p.id;
+    if(mode==='single')onPurchaseProdSelect(sel);
+    else{const row=inp.closest('.batch-row');onBatchProdSelect(sel,row?toN(row.getAttribute('data-idx')):0);}
+  }
+  const box=inp.parentNode.querySelector('.prodac-box');if(box)box.style.display='none';
+  prodAcBadge(inp,mode);
+  // 帶入上次的進貨成本（空的才填）
+  const costEl=mode==='single'?document.getElementById('m_p4'):(inp.closest('.batch-row')||document).querySelector('.bp_unit');
+  const lastCost=Math.round(toN(getAvgCost(p.id))||toN(p.cost));
+  if(costEl&&!costEl.readOnly&&!toN(costEl.value)&&lastCost>0){costEl.value=lastCost;costEl.dispatchEvent(new Event('input',{bubbles:true}));costEl.dispatchEvent(new Event('change',{bubbles:true}));}
+  // 從清單點選時，自動跳到數量欄
+  if(!noFocus){const next=mode==='single'?document.getElementById('m_p3'):(inp.closest('.batch-row')||document).querySelector('.bp_qty');if(next)setTimeout(()=>next.focus(),30);}
+};
+window.prodAcKey=function(e,inp,mode){
+  const box=inp.parentNode.querySelector('.prodac-box');
+  if(!box||box.style.display==='none'||!inp._acList||!inp._acList.length)return;
+  const items=box.querySelectorAll('[data-i]');
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    inp._acIdx=Math.max(0,Math.min(items.length-1,(inp._acIdx??-1)+(e.key==='ArrowDown'?1:-1)));
+    items.forEach((el,i)=>el.style.background=i===inp._acIdx?'#ede9fe':'');
+    items[inp._acIdx]&&items[inp._acIdx].scrollIntoView({block:'nearest'});
+  }else if(e.key==='Enter'){
+    e.preventDefault();
+    prodAcPick(inp,mode,inp._acIdx>=0?inp._acIdx:0);
+  }else if(e.key==='Escape'){box.style.display='none';}
+};
+window.prodAcBlur=function(inp,mode){
+  setTimeout(()=>{
+    const box=inp.parentNode.querySelector('.prodac-box');if(box)box.style.display='none';
+    // 名稱剛好和現有產品一樣 → 自動當成那個產品，避免重複建立
+    const sel=prodAcSelect(inp,mode);
+    if(sel&&!sel.value&&inp.value.trim()){
+      const p=(S.data.products||[]).find(x=>prodAcNorm(x.name)===prodAcNorm(inp.value));
+      if(p){inp._acList=[p];prodAcPick(inp,mode,0,true);return;}
+    }
+    prodAcBadge(inp,mode);
+  },150);
+};
+
 window.onPurchaseProdSelect=(sel)=>{
   if(!sel||!sel.value)return;
   const opt=sel.selectedOptions?.[0];
