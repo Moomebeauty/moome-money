@@ -12502,7 +12502,7 @@ function renderModal(){
       <div class="fgrp"><label>日期</label><input type="date" id="m_p0" value="${today()}"></div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--goldL);padding:10px;border-radius:8px;border-left:3px solid var(--gold);">
         <label style="color:var(--goldDk);font-weight:700;">🔍 產品名稱（打關鍵字，會跳出現有產品讓你選）</label>
-        <input type="text" id="m_p2" placeholder="例如：打「玻尿酸」或「安瓶」" autocomplete="off" style="margin-top:4px;font-size:16px;" oninput="prodAc(this,'single')" onfocus="prodAc(this,'single')" onkeydown="prodAcKey(event,this,'single')" onblur="prodAcBlur(this,'single')">
+        <input type="text" id="m_p2" placeholder="例如：打「玻尿酸」或「安瓶」" autocomplete="off" style="margin-top:4px;font-size:16px;" oninput="prodAc(this,'single')" onfocus="prodAc(this,'single')" onkeydown="prodAcKey(event,this,'single')" oncompositionstart="this._composing=true" oncompositionend="var t=this;setTimeout(function(){t._composing=false;},0);prodAc(this,'single')" onblur="prodAcBlur(this,'single')">
         <select id="m_pPick" onchange="onPurchaseProdSelect(this)" style="display:none;">
           <option value="">＋ 新增產品（手動輸入下方）</option>
           ${allProds.map(p=>`<option value="${p.id}" data-cat="${p.category||''}" data-name="${p.name||''}" data-price="${p.price||0}" data-supplier="${p.supplier||''}">${p.name}（${p.category||''}）${p.supplier?' · '+p.supplier:''}</option>`).join('')}
@@ -15359,7 +15359,7 @@ function batchRowHTML(r,i,isGroup){
   if(isGroup){
     return`<div class="batch-row" data-idx="${i}">
       <div class="fgrp" style="grid-column:1/-1"><label>🔍 產品名稱（打關鍵字，會跳出現有產品）</label>
-        <input type="text" class="bp_name" placeholder="例如：打「玻尿酸」" value="${(r.name||'').replace(/"/g,'&quot;')}" autocomplete="off" style="font-size:15px;" oninput="prodAc(this,'batch')" onfocus="prodAc(this,'batch')" onkeydown="prodAcKey(event,this,'batch')" onblur="prodAcBlur(this,'batch')">
+        <input type="text" class="bp_name" placeholder="例如：打「玻尿酸」" value="${(r.name||'').replace(/"/g,'&quot;')}" autocomplete="off" style="font-size:15px;" oninput="prodAc(this,'batch')" onfocus="prodAc(this,'batch')" onkeydown="prodAcKey(event,this,'batch')" oncompositionstart="this._composing=true" oncompositionend="var t=this;setTimeout(function(){t._composing=false;},0);prodAc(this,'batch')" onblur="prodAcBlur(this,'batch')">
         <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="display:none;">
           <option value="">＋ 新增此產品</option>
           ${productOptions}
@@ -15378,7 +15378,7 @@ function batchRowHTML(r,i,isGroup){
   }
   return`<div class="batch-row" data-idx="${i}">
     <div class="fgrp" style="grid-column:1/-1"><label>🔍 產品名稱（打關鍵字，會跳出現有產品）</label>
-      <input type="text" class="bp_name" placeholder="例如：打「玻尿酸」" value="${(r.name||'').replace(/"/g,'&quot;')}" autocomplete="off" style="font-size:15px;" oninput="prodAc(this,'batch')" onfocus="prodAc(this,'batch')" onkeydown="prodAcKey(event,this,'batch')" onblur="prodAcBlur(this,'batch')">
+      <input type="text" class="bp_name" placeholder="例如：打「玻尿酸」" value="${(r.name||'').replace(/"/g,'&quot;')}" autocomplete="off" style="font-size:15px;" oninput="prodAc(this,'batch')" onfocus="prodAc(this,'batch')" onkeydown="prodAcKey(event,this,'batch')" oncompositionstart="this._composing=true" oncompositionend="var t=this;setTimeout(function(){t._composing=false;},0);prodAc(this,'batch')" onblur="prodAcBlur(this,'batch')">
       <select class="bp_prod" onchange="onBatchProdSelect(this,${i})" style="display:none;">
         <option value="">＋ 新增此產品</option>
         ${productOptions}
@@ -18721,6 +18721,8 @@ window.prodAcPick=function(inp,mode,i,noFocus){
   if(!noFocus){const next=mode==='single'?document.getElementById('m_p3'):(inp.closest('.batch-row')||document).querySelector('.bp_qty');if(next)setTimeout(()=>next.focus(),30);}
 };
 window.prodAcKey=function(e,inp,mode){
+  // 中文輸入法（注音、拼音、手寫）選字時按的 Enter 不算數，避免誤選別的產品
+  if(e.isComposing||e.keyCode===229||inp._composing)return;
   const box=inp.parentNode.querySelector('.prodac-box');
   if(!box||box.style.display==='none'||!inp._acList||!inp._acList.length)return;
   const items=box.querySelectorAll('[data-i]');
@@ -18731,7 +18733,9 @@ window.prodAcKey=function(e,inp,mode){
     items[inp._acIdx]&&items[inp._acIdx].scrollIntoView({block:'nearest'});
   }else if(e.key==='Enter'){
     e.preventDefault();
-    prodAcPick(inp,mode,inp._acIdx>=0?inp._acIdx:0);
+    // 只有用方向鍵明確選到某一項才算選取；否則只收起清單、保留你打的字
+    if(inp._acIdx>=0)prodAcPick(inp,mode,inp._acIdx);
+    else{box.style.display='none';prodAcBadge(inp,mode);}
   }else if(e.key==='Escape'){box.style.display='none';}
 };
 window.prodAcBlur=function(inp,mode){
