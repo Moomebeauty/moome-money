@@ -1169,7 +1169,7 @@ function appHTML(){
     {id:'action',ico:'🎯',lbl:'行動計畫'},
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
     {id:'myfinance',ico:'👑',lbl:'我的理財'},
-    {id:'profit',ico:'💎',lbl:'季度年度分析'},
+    {id:'reports',ico:'📈',lbl:'經營報表',group:'report'},
     {id:'advisor',ico:'🧠',lbl:'財務建議'},
 
     {id:'customers',ico:'👤',lbl:'客戶管理'},
@@ -1187,17 +1187,16 @@ function appHTML(){
     {id:'notes',ico:'📒',lbl:'備課筆記'},
     {id:'cases',ico:'📚',lbl:'案例研究室'},
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
-    {id:'reports',ico:'📈',lbl:'月報年報'},
-    {id:'refund',ico:'⚖️',lbl:'退費計算機'},
-    {id:'settings',ico:'⚙️',lbl:'基本設定'},
+    {id:'settings',ico:'⚙️',lbl:'基本設定',group:'settings'},
   ];
-  const curPage=PAGES.find(p=>p.id===S.page)||PAGES[0];
+  const curGroup=navGroupOf(S.page);
+  const curPage=PAGES.find(p=>p.id===S.page)||(curGroup&&PAGES.find(p=>p.group===curGroup))||PAGES[0];
   // 判斷是否為客戶簽名模式（隱藏側邊欄與頂部欄，全螢幕沉浸體驗）
   const isCustomerMode=S.page==='treatment'&&S.treatment&&(S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'||S.treatment.mode==='depositCustomer'||S.treatment.mode==='guestIntake'||S.treatment.mode==='depositSign'||S.treatment.mode==='passSign'||S.treatment.mode==='pmu');
   return`
 <div class="app${isCustomerMode?' customer-mode':''}">
   ${isCustomerMode?'':`<nav class="sidebar">
-    ${PAGES.map(p=>`<div class="sb-item${S.page===p.id?' active':''}" onclick="setP('${p.id}')">
+    ${PAGES.map(p=>`<div class="sb-item${(S.page===p.id||(p.group&&p.group===curGroup))?' active':''}" onclick="setP('${p.id}')">
       <span class="ico">${p.ico}</span><span>${p.lbl}</span>
     </div>`).join('')}
   </nav>`}
@@ -1219,13 +1218,25 @@ function appHTML(){
 </div>`;
 }
 
+// ── 選單合併：一個入口，進去用分頁切換（原本的頁面內容不變）──
+const NAV_GROUPS={
+  report:{tabs:[['reports','📅 月報年報'],['profit','💎 季度年度分析']]},
+  settings:{tabs:[['settings','⚙️ 基本設定'],['refund','⚖️ 退費計算機']]}
+};
+function navGroupOf(page){for(const g in NAV_GROUPS){if(NAV_GROUPS[g].tabs.some(t=>t[0]===page))return g;}return null;}
+function navGroupTabs(page){
+  const g=navGroupOf(page);if(!g)return '';
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--bdr);">'
+    +NAV_GROUPS[g].tabs.map(([id,lbl])=>{const on=id===page;return '<button type="button" onclick="setP(\''+id+'\')" style="padding:9px 16px;border-radius:22px;border:1px solid '+(on?'var(--roseDk,#9f1239)':'var(--bdr)')+';background:'+(on?'var(--roseDk,#9f1239)':'var(--card)')+';color:'+(on?'#fff':'var(--txt)')+';font-size:14px;font-weight:800;cursor:pointer;">'+lbl+'</button>';}).join('')
+    +'</div>';
+}
 // 包一層：紋繡同意書頁重繪時，保住畫到一半的簽名，重繪後自動重新綁定簽名板
 function renderPage(){
   var _pmuSign=S.page==='treatment'&&S.treatment&&S.treatment.mode==='pmu'&&!S.treatment.pmuSubmitted&&S.treatment.pmuStage==='consent';
   if(_pmuSign){
     try{var oc=document.getElementById('t_guest_sign_canvas');if(oc&&_sigCanvas===oc&&_sigHasContent&&!S.treatment.consentSignature)S.treatment._sigTemp=oc.toDataURL('image/png');}catch(e){}
   }
-  var out=_renderPageInner();
+  var out=navGroupTabs(S.page)+_renderPageInner();
   if(_pmuSign)setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},60);
   return out;
 }
