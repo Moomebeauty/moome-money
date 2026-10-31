@@ -29,7 +29,7 @@ h1,h2,h3{font-family:'Noto Serif TC',serif;letter-spacing:0.08em;}
 .sb-item.active{background:rgba(255,255,255,0.18);color:#fff;border-left-color:var(--gold);font-weight:700;}
 .sb-item .ico{font-size:20px;width:26px;text-align:center;}
 
-.main{margin-left:220px;flex:1;display:flex;flex-direction:column;}
+.main{margin-left:220px;flex:1;min-width:0;display:flex;flex-direction:column;}
 /* 客戶簽名沉浸式模式：隱藏側邊欄、頂部欄，全螢幕展示 */
 .app.customer-mode{background:linear-gradient(135deg,#fff5e6 0%,#fef3f4 100%);min-height:100vh;}
 .main-full{margin-left:0;}
@@ -1128,7 +1128,7 @@ function appHTML(){
 
 // ── 選單合併：一個入口，進去用分頁切換（原本的頁面內容不變）──
 const NAV_GROUPS={
-  report:{tabs:[['advisor','🩺 白話健檢'],['reports','📅 月報年報'],['profit','💎 季度年度分析']]},
+  report:{tabs:[['advisor','🩺 白話健檢'],['monthReview','🔍 月底復盤'],['reports','📅 月報年報'],['profit','💎 季度年度分析']]},
   settings:{tabs:[['settings','⚙️ 基本設定'],['refund','⚖️ 退費計算機']]}
 };
 function navGroupOf(page){for(const g in NAV_GROUPS){if(NAV_GROUPS[g].tabs.some(t=>t[0]===page))return g;}return null;}
@@ -1153,6 +1153,7 @@ function _renderPageInner(){
     case'overview':  return pgOverview();
     case'profit':    return pgProfit();
     case'advisor':   return pgAdvisor();
+    case'monthReview': return pgMonthReview();
     case'appointments': return pgOverview(); // 舊預約頁已移除
     case'pricelist': return pgPriceList();
     case'customers': return pgCustomers();
@@ -2628,6 +2629,151 @@ window.advAddAction=async function(title){
 // ─── 財務建議（情緒踩剎車＋買房目標＋季檢視）────────────────
 function pgAdvisor(){
   return '<div class="pg-ttl">🩺 白話財務健檢</div><div class="pg-sub">用一般人聽得懂的話，告訴你這個月店裡的經營狀況</div>'+moSel()+renderOperationsReport();
+}
+
+
+// ═══════════ 🔍 月底復盤（利潤結構＋客戶行為）═══════════
+function monthReviewData(m,y){
+  const NM=normalizeName;
+  const all=S.data.sales||[];
+  const ym=(mm,yy)=>yy+'-'+String(mm).padStart(2,'0');
+  const cur=ym(m,y);
+  const lm=m===1?12:m-1,ly=m===1?y-1:y,last=ym(lm,ly);
+  const sales=all.filter(s=>s.month===m&&s.year===y);
+  const revenue=sales.reduce((a,s)=>a+toN(s.amount),0);
+  const exp=(S.data.expenses||[]).filter(e=>e.month===m&&e.year===y).reduce((a,e)=>a+toN(e.amount),0);
+  const profit=revenue-exp;
+  // 每位客人第一次消費月份
+  const first={};
+  all.forEach(s=>{const c=NM(s.customer);if(!c||!s.date)return;if(!first[c]||s.date<first[c])first[c]=s.date;});
+  const custs=[...new Set(sales.map(s=>NM(s.customer)).filter(Boolean))];
+  const isNew=c=>(first[c]||'').startsWith(cur);
+  const newCusts=custs.filter(isNew),oldCusts=custs.filter(c=>!isNew(c));
+  const revOf=f=>sales.filter(f).reduce((a,s)=>a+toN(s.amount),0);
+  const newRev=revOf(s=>NM(s.customer)&&isNew(NM(s.customer)));
+  const oldRev=revOf(s=>NM(s.customer)&&!isNew(NM(s.customer)));
+  const anonRev=revenue-newRev-oldRev;
+  // 服務人次、客單價
+  const svc=sales.filter(s=>s.type!=='product'&&s.type!=='course');
+  const visits=new Set(sales.map(s=>(NM(s.customer)||('_'+s.id))+'|'+s.date)).size;
+  const days=new Set(svc.map(s=>s.date)).size;
+  const avgTicket=visits?revenue/visits:0;
+  // 上月新客回訪
+  const lastNew=[...new Set(all.filter(s=>(s.date||'').startsWith(last)).map(s=>NM(s.customer)).filter(c=>c&&(first[c]||'').startsWith(last)))];
+  const curSet=new Set(custs);
+  const backList=lastNew.filter(c=>curSet.has(c)),lostList=lastNew.filter(c=>!curSet.has(c));
+  const retention=lastNew.length?Math.round(backList.length/lastNew.length*100):null;
+  // 項目時薪
+  const cards=S.data.serviceCosts||[];
+  const findCard=item=>cards.find(c=>c.name===item)||cards.find(c=>c.name&&item&&(item.includes(c.name)||c.name.includes(item)));
+  const byItem={};
+  svc.forEach(s=>{const k=s.item||'（未填項目）';(byItem[k]=byItem[k]||{item:k,n:0,rev:0}).n++;byItem[k].rev+=toN(s.amount);});
+  const items=Object.values(byItem).map(x=>{const c=findCard(x.item);const avg=x.rev/x.n;const dur=c?toN(c.duration):0;return Object.assign(x,{avg,dur,hourly:dur>0?avg/(dur/60):null,hours:dur>0?dur*x.n/60:null});})
+    .sort((a,b)=>(b.hourly==null?-1:b.hourly)-(a.hourly==null?-1:a.hourly)||b.rev-a.rev);
+  // 零售
+  const retail=revOf(s=>s.type==='product');
+  // 儲值
+  const depNew=(S.data.deposits||[]).filter(d=>d.month===m&&d.year===y).reduce((a,d)=>a+toN(d.amount),0);
+  const depUsed=sales.filter(s=>s.payMethod==='儲值扣款').reduce((a,s)=>a+toN(s.depositFaceAmount||s.amount),0);
+  const liability=typeof getTotalDepositLiability==='function'?getTotalDepositLiability():0;
+  // 新客來源
+  const srcOf=c=>{const cu=(S.data.customers||[]).find(x=>NM(x.name)===c);if(cu&&cu.source)return cu.source;const r=(S.data.pmuRecords||[]).find(x=>NM(x.customerName||x.name||x.customer)===c&&x.source);return r?r.source:'';};
+  const norm=v=>{v=v||'';if(/介紹|朋友|老客|轉介/.test(v))return '朋友/舊客介紹';if(/IG|Instagram/i.test(v))return 'IG';if(/FB|Facebook/i.test(v))return 'Facebook';if(/Google|地圖|搜尋/i.test(v))return 'Google';if(/Thread|脆/i.test(v))return 'Threads 脆';if(/LINE/i.test(v))return 'LINE';if(/路過/.test(v))return '路過看到';return v?v:'沒填來源';};
+  const src={};
+  newCusts.forEach(c=>{const k=norm(srcOf(c));(src[k]=src[k]||{k,n:0,rev:0,back:0,lastN:0}).n++;src[k].rev+=revOf(s=>NM(s.customer)===c);});
+  lastNew.forEach(c=>{const k=norm(srcOf(c));(src[k]=src[k]||{k,n:0,rev:0,back:0,lastN:0}).lastN++;if(curSet.has(c))src[k].back++;});
+  const sources=Object.values(src).sort((a,b)=>(a.k==='沒填來源')-(b.k==='沒填來源')||(b.n+b.lastN)-(a.n+a.lastN));
+  return {m,y,lm,revenue,exp,profit,custs,newCusts,oldCusts,newRev,oldRev,anonRev,visits,days,avgTicket,lastNew,backList,lostList,retention,items,retail,depNew,depUsed,liability,sources};
+}
+function pgMonthReview(){
+  const r=monthReviewData(S.month,yr());
+  let h='<div class="pg-ttl">🔍 月底復盤</div><div class="pg-sub">不只看營收：看利潤結構和客人行為，找出下個月要調整的決策</div>'+moSel();
+  if(!r.revenue)return h+'<div class="card"><div class="card-bd"><div class="empty" style="padding:30px;"><div class="empty-ico">🔍</div><p>'+r.y+'年'+r.m+'月還沒有收入紀錄</p></div></div></div>';
+  const pct=(a,b)=>b>0?Math.round(a/b*100):0;
+  const box=(c,bg,inner)=>'<div style="background:'+bg+';border-left:5px solid '+c+';border-radius:12px;padding:12px 14px;">'+inner+'</div>';
+  const C={g:['#16a34a','#f0fdf4'],y:['#d97706','#fffbeb'],r:['#dc2626','#fef2f2'],b:['#2563eb','#eff6ff']};
+  const verdict=(k,ttl,ans,why)=>box(C[k][0],C[k][1],'<div style="font-size:13px;color:#6b7280;">'+ttl+'</div><div style="font-size:16px;font-weight:800;color:'+C[k][0]+';margin-top:2px;line-height:1.6;">'+({g:'🟢',y:'🟡',r:'🔴',b:'🔵'}[k])+' '+ans+'</div>'+(why?'<div style="font-size:13px;color:#4b5563;margin-top:4px;line-height:1.7;">💡 '+why+'</div>':''));
+  const step=(n,ico,ttl,sub,body)=>'<div class="card" style="margin-bottom:14px;"><div class="card-bd"><div style="font-size:18px;font-weight:900;">'+ico+' 第'+n+'步｜'+ttl+'</div><div class="tm" style="font-size:13px;margin:2px 0 12px;">'+sub+'</div>'+body+'</div></div>';
+  const grid='display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;';
+  const acts=[];
+  // ── 第一步
+  const margin=pct(r.profit,r.revenue);
+  let b1='<div style="'+grid+'">'
+    +verdict(r.profit<0?'r':margin<15?'y':'g','真正放進口袋的錢（淨利）',r.profit>=0?'淨賺 $'+fmt(r.profit)+'（每收 100 元留 '+margin+' 元）':'倒貼 $'+fmt(-r.profit),'營收 $'+fmt(r.revenue)+' − 所有支出 $'+fmt(r.exp)+'。'+(r.profit>=0&&margin<15?'營收不差但留下的少，要回頭看進貨和耗材有沒有買太多。':''))
+    +verdict('b','客單價（每位客人每次來平均花多少）','$'+fmt(Math.round(r.avgTicket)),'這個月共 '+r.visits+' 人次'+(r.days?'，開工 '+r.days+' 天、平均一天接 '+(Math.round(r.visits/r.days*10)/10)+' 位':'')+'。一天能接的客人有上限，客單價越高，同樣的累能賺越多。')
+    +'</div>';
+  if(r.profit>=0&&margin<15)acts.push({t:'檢查這個月的進貨和耗材',d:'淨利只有營收的 '+margin+'%，先看有沒有囤貨、或耗材用量偏高。'});
+  h+=step(1,'💰','真正賺多少','先別看營收，淨利和客單價才決定你能不能輕鬆賺錢',b1);
+  // ── 第二步
+  const named=r.newRev+r.oldRev;const oldP=pct(r.oldRev,named),newP=named?100-oldP:0;
+  let b2='<div style="font-size:14px;font-weight:800;margin-bottom:6px;">這個月的營收是誰貢獻的？</div>'
+    +'<div style="display:flex;height:28px;border-radius:14px;overflow:hidden;background:#f3f4f6;font-size:12px;font-weight:800;color:#fff;">'
+    +(r.oldRev?'<div style="width:'+oldP+'%;background:#0891b2;display:flex;align-items:center;justify-content:center;">'+(oldP>=12?'老客 '+oldP+'%':'')+'</div>':'')
+    +(r.newRev?'<div style="width:'+newP+'%;background:#f59e0b;display:flex;align-items:center;justify-content:center;">'+(newP>=12?'新客 '+newP+'%':'')+'</div>':'')+'</div>'
+    +'<div style="font-size:13px;color:#4b5563;margin:6px 0 12px;line-height:1.8;">🔵 老客 '+r.oldCusts.length+' 位，貢獻 $'+fmt(r.oldRev)+'　🟠 新客 '+r.newCusts.length+' 位，貢獻 $'+fmt(r.newRev)+(r.anonRev?'　⚪ 沒記客人名字 $'+fmt(r.anonRev):'')+'<br>健康比例：老客 60～70%、新客 30～40%。</div>';
+  let k2,a2,w2;
+  if(!named){k2='y';a2='收入都沒有記客人名字，沒辦法分析';w2='開單時記上客人名字，下個月就能看出新老客比例。';}
+  else if(oldP>80){k2='y';a2='幾乎都是老客（'+oldP+'%）';w2='老客穩定是好事，但新客太少會遇到成長瓶頸，一旦老客搬家或流失，業績就會往下掉。';acts.push({t:'這個月找 3 位新客人',d:'老客佔 '+oldP+'%，新客偏少。請熟客介紹朋友，或把行銷集中在最有效的管道。'});}
+  else if(oldP<50){k2='r';a2='新客多、老客少（老客只佔 '+oldP+'%）';w2='留不住人，行銷費等於白花。要檢查技術、服務體驗和售後關懷。';}
+  else{k2='g';a2='比例健康（老客 '+oldP+'%）';w2='新客是流水，老客是活水，這個比例很穩。';}
+  b2+='<div style="'+grid+'">'+verdict(k2,'新老客比例',a2,w2);
+  if(r.retention==null)b2+=verdict('b',r.lm+' 月新客，這個月有回來嗎？',r.lm+' 月沒有新客紀錄','');
+  else{
+    const k=r.retention>=30?'g':r.retention>=15?'y':'r';
+    b2+=verdict(k,r.lm+' 月新客，這個月有回來嗎？（回訪率）','回來 '+r.backList.length+' / '+r.lastNew.length+' 位，'+r.retention+'%','低於 30% 要檢查新客體驗：是不是推銷太用力、服務有落差，還是少了事後關心？');
+    if(r.retention<30&&r.lostList.length)acts.push({t:'傳關心訊息給 '+r.lm+' 月沒回來的 '+r.lostList.length+' 位新客',d:'回訪率 '+r.retention+'%，低於 30%。先關心使用狀況，再邀約下次時間。'});
+  }
+  b2+='</div>';
+  if(r.lostList.length)b2+='<div style="margin-top:10px;background:#fff7ed;border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.9;"><b>📋 '+r.lm+' 月來過、這個月還沒回來的新客：</b><br>'+r.lostList.map(c=>'<span onclick="setP(\'customers\');setTimeout(function(){S.selectedCustomer=\''+c.replace(/'/g,'')+'\';render();},100);" style="cursor:pointer;display:inline-block;margin:2px 4px 2px 0;padding:2px 10px;border-radius:12px;background:#fed7aa;color:#9a3412;font-weight:700;">'+c+'</span>').join('')+'</div>';
+  h+=step(2,'👥','營收是誰貢獻的','美業要賺錢，新客是流水，老客才是活水',b2);
+  // ── 第三步
+  const withDur=r.items.filter(x=>x.hourly!=null);
+  let b3='<div style="font-size:14px;font-weight:800;margin-bottom:6px;">⏱ 每個項目，你做 1 小時賺多少？</div>';
+  if(r.items.length){
+    const maxH=Math.max(1,...withDur.map(x=>x.hourly));
+    b3+='<div style="display:flex;flex-direction:column;gap:6px;">'+r.items.slice(0,10).map((x,i)=>{
+      const top=x.hourly!=null&&i===0&&withDur.length>1,low=x.hourly!=null&&withDur.length>1&&x===withDur[withDur.length-1];
+      return '<div style="background:#fff;border:1px solid #f1e7e3;border-radius:10px;padding:8px 12px;"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><b style="flex:1;min-width:120px;">'+(top?'👑 ':low?'🐢 ':'')+x.item+'</b><span class="tm" style="font-size:12px;">'+x.n+' 次・平均 $'+fmt(Math.round(x.avg))+(x.dur?'・'+x.dur+' 分鐘':'')+'</span>'
+        +'<b style="font-size:15px;color:'+(x.hourly==null?'#9ca3af':top?'#16a34a':low?'#dc2626':'#111')+';">'+(x.hourly==null?'沒填時長':'時薪 $'+fmt(Math.round(x.hourly)))+'</b></div>'
+        +(x.hourly!=null?'<div style="height:6px;border-radius:3px;background:#f3f4f6;margin-top:6px;"><div style="height:6px;border-radius:3px;width:'+Math.round(x.hourly/maxH*100)+'%;background:'+(top?'#16a34a':low?'#f87171':'#a78bfa')+';"></div></div>':'')+'</div>';}).join('')+'</div>';
+    if(r.items.some(x=>x.hourly==null))b3+='<div class="tm" style="font-size:12px;margin-top:6px;">「沒填時長」的項目，到 <a href="#" onclick="setP(\'serviceCost\');return false;">服務成本</a> 建一張成本卡、填上分鐘數就能算時薪（名稱要和開單的項目一樣）。</div>';
+    if(withDur.length>1){const t=withDur[0],l=withDur[withDur.length-1];
+      b3+='<div style="margin-top:10px;background:#f0fdf4;border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.8;">💬 <b>'+t.item+'</b> 每小時賺 $'+fmt(Math.round(t.hourly))+'，是 <b>'+l.item+'</b>（$'+fmt(Math.round(l.hourly))+'）的 '+(Math.round(t.hourly/l.hourly*10)/10)+' 倍。同樣一小時，排越多吸金王越划算。</div>';
+      if(t.hourly>l.hourly*1.5)acts.push({t:'多排「'+t.item+'」、檢討「'+l.item+'」的價格',d:t.item+' 時薪 $'+fmt(Math.round(t.hourly))+'，'+l.item+' 只有 $'+fmt(Math.round(l.hourly))+'。可以把'+l.item+'調價、縮短流程，或升級成套組。'});}
+  }else b3+='<div class="tm">這個月沒有服務紀錄</div>';
+  const rp=pct(r.retail,r.revenue);
+  b3+='<div style="'+grid+'margin-top:12px;">'
+    +verdict(rp>=10?'g':rp>=5?'y':'r','產品零售佔營收','$'+fmt(r.retail)+'，佔 '+rp+'%','一人工作室先以 5～10% 為目標，做到 15～20% 就很優秀。產品不花你的工時，是最輕鬆的利潤。');
+  if(rp<5)acts.push({t:'服務結束時推薦 1 樣居家保養品',d:'產品零售只佔 '+rp+'%。從客人最需要的居家保養開始，不用每位都推。'});
+  if(r.depNew||r.depUsed||r.liability){
+    const fast=r.depUsed>=r.depNew;
+    const mon=r.depUsed>0?Math.round(r.liability/r.depUsed*10)/10:null;
+    b3+=verdict(fast?'g':'y','儲值：收進來的 vs 用掉的','新收 $'+fmt(r.depNew)+'，扣掉 $'+fmt(r.depUsed),'儲值是「先收錢、還欠客人服務」，不是全部賺到。目前還欠客人 $'+fmt(r.liability)+' 的服務'+(mon!=null?'，照這個月的速度大約要 '+mon+' 個月做完':'')+'。'+(fast?'':'收得比用得快：現在現金多，但未來會有一段「很忙卻沒新現金」的時期，這筆錢先別花掉。'));
+  }
+  b3+='</div>';
+  h+=step(3,'🛍️','吸金王和時間小偷','不是每個項目都值得你花時間，找出時薪高、毛利高的黃金項目',b3);
+  // ── 第四步
+  let b4='';
+  if(!r.sources.length)b4='<div class="tm">這個月和上個月都沒有新客</div>';
+  else{
+    b4='<div class="tw"><table style="font-size:14px;"><thead><tr><th>來源</th><th>'+r.m+' 月新客</th><th>帶來營收</th><th>'+r.lm+' 月新客回訪</th></tr></thead><tbody>'
+      +r.sources.map(s=>'<tr><td><b>'+s.k+'</b></td><td>'+s.n+' 位</td><td>$'+fmt(s.rev)+'</td><td>'+(s.lastN?s.back+' / '+s.lastN+'（'+pct(s.back,s.lastN)+'%）':'—')+'</td></tr>').join('')+'</tbody></table></div>';
+    const filled=r.sources.filter(s=>s.k!=='沒填來源');
+    const none=r.sources.find(s=>s.k==='沒填來源');
+    if(filled.length){
+      const best=filled.slice().sort((a,b)=>(b.n+b.back*2)-(a.n+a.back*2))[0];
+      b4+='<div style="margin-top:10px;background:#eff6ff;border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.8;">💬 目前最有效的管道是 <b>'+best.k+'</b>：這兩個月共帶來 '+(best.n+best.lastN)+' 位新客'+(best.lastN?'，'+r.lm+' 月來的 '+best.lastN+' 位中有 '+best.back+' 位已經回來消費':'')+'。下個月的行銷時間和預算，優先放在這裡。</div>';
+      acts.push({t:'下個月行銷集中在「'+best.k+'」',d:'這是目前帶來最多、最穩定新客的管道。'});
+    }
+    if(none&&none.n+none.lastN>0)b4+='<div class="tm" style="font-size:12px;margin-top:6px;">有 '+(none.n+none.lastN)+' 位新客沒填來源。建客人時記得選「來源」，下個月這張表會更準。</div>';
+  }
+  h+=step(4,'📱','客人從哪裡來','把錢和力氣花在最有效的管道',b4);
+  // ── 調整
+  if(!acts.length)acts.push({t:'維持現在的做法，把多的利潤存起來',d:'這個月各項都在健康範圍內。'});
+  h+='<div class="card" style="border:2px solid #7c3aed;"><div class="card-bd"><div style="font-size:18px;font-weight:900;color:#6b21a8;">✅ 下個月要調整的 3 件事</div><div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">'
+    +acts.slice(0,3).map((a,i)=>'<div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;"><div style="flex:1;"><div style="font-size:15px;font-weight:800;">'+(i+1)+'. '+a.t+'</div><div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.6;">'+a.d+'</div></div><button class="btn btn-sm" style="background:#7c3aed;color:#fff;flex-shrink:0;" onclick="advAddAction(\''+a.t.replace(/'/g,'').replace(/"/g,'')+'\')">＋ 加到行動計畫</button></div>').join('')
+    +'</div></div></div>';
+  return h;
 }
 
 // ─── SALES ─────────────────────────────────────────────────
