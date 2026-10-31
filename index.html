@@ -2525,6 +2525,7 @@ function generateOperationsReport(mo,yrParam){
     salary:salaryRatio<45?'green':salaryRatio<55?'yellow':'red',
     marketing:marketingRatio>=5&&marketingRatio<=8?'green':marketingRatio<3?'yellow':marketingRatio>10?'yellow':'green',
     cashflow:totalCashIn>=totalExp?'green':totalCashIn>=totalExp*0.8?'yellow':'red',
+    rent:revenue<=0||fixedCosts/revenue*100<=20?'green':fixedCosts/revenue*100<=35?'yellow':'red',
   };
 
   // 9. 體質診斷
@@ -2581,11 +2582,12 @@ function renderOperationsReport(){
   // ③ 四個問題
   const q=(light,title,ans,why)=>{const c=light==='green'?'#16a34a':light==='yellow'?'#d97706':'#dc2626';const bg=light==='green'?'#f0fdf4':light==='yellow'?'#fffbeb':'#fef2f2';const e=light==='green'?'🟢':light==='yellow'?'🟡':'🔴';
     return '<div style="background:'+bg+';border-left:5px solid '+c+';border-radius:12px;padding:12px 14px;"><div style="font-size:13px;color:#6b7280;">'+title+'</div><div style="font-size:15px;font-weight:800;color:'+c+';margin-top:2px;line-height:1.6;">'+e+' '+ans+'</div><div style="font-size:12px;color:#6b7280;margin-top:4px;line-height:1.6;">💡 '+why+'</div></div>';};
-  h+='<div style="margin-top:18px;"><b style="font-size:15px;">🚦 四個問題，看店的體質</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:8px;">'
+  h+='<div style="margin-top:18px;"><b style="font-size:15px;">🚦 五個問題，看店的體質</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:8px;">'
     +q(r.lights.profit,'① 這個月有沒有賺錢？',good?'有，淨賺 $'+fmt(r.profit):'沒有，倒貼 $'+fmt(-r.profit),'收入扣掉所有支出，還有剩才是真的賺。')
     +q(r.lights.cashflow,'② 錢夠不夠周轉？',r.totalCashIn>=r.totalExp?'夠：實際收到 $'+fmt(r.totalCashIn)+'，付出去 $'+fmt(r.totalExp):'不太夠：實際收到 $'+fmt(r.totalCashIn)+'，但付出去 $'+fmt(r.totalExp),'用儲值扣款的服務，錢早就收過了，這個月不會再進帳；新收的儲值才是這個月真的進來的錢。'+(r.depositIn?'（這個月新收儲值 $'+fmt(r.depositIn)+'）':''))
     +q(r.lights.salary,'③ 老師薪水會不會太重？',r.salaryExp?'每收 100 元，付老師 '+per(r.salaryExp)+' 元':'這個月沒有記到老師薪水','一般在 35～45 元之間比較健康。超過 55 元，代表收入還撐不起現在的人力。')
     +q(r.lights.marketing,'④ 有沒有花錢找新客人？',r.marketingExp?'每收 100 元，花 '+per(r.marketingExp)+' 元在行銷':'這個月沒有花行銷費','一般建議 5～8 元。完全不花，新客人就只能靠運氣和介紹。')
+    +q(r.lights.rent,'⑤ 房租水電會不會太重？',r.fixedCosts?'每收 100 元，付房租水電 '+per(r.fixedCosts)+' 元':'這個月沒有記到房租水電',(r.lights.rent==='green'?'一般在 10～20 元之間。你在合理範圍內。':'一般在 10～20 元之間。房租是固定的，降不太下來，最有效的是把空檔時段排滿，讓同一份房租被更多營收「攤薄」。要壓到 20 元，每月營收大約要 $'+fmt(Math.round(r.fixedCosts/0.2))+'。'))
     +'</div></div>';
   // ④ 至少要做多少才不虧
   if(r.breakEven>0){
@@ -2599,6 +2601,7 @@ function renderOperationsReport(){
   if(r.profit<0)acts.push({t:'先把營收拉到 $'+fmt(Math.round(r.breakEven*1.1))+' 以上',d:'這是打平再多 10% 的安全距離。優先推高單價、高利潤的服務（例如紋繡）。'});
   if(r.totalCashIn<r.totalExp)acts.push({t:'邀 1～2 位熟客簽儲值',d:'儲值是先收錢、之後才服務，可以馬上補上周轉的缺口。'});
   if(r.salaryRatio>55)acts.push({t:'檢查老師的排班和抽成',d:'薪水佔太多，收入撐不起現在的人力。先衝營收，1～2 個月內沒改善再調整人力。'});
+  if(r.lights.rent!=='green')acts.push({t:'把每週的空檔時段排滿',d:'房租水電每收 100 元佔 '+per(r.fixedCosts)+' 元，偏高。房租不會變，多做的每一單都在把它攤薄，可以推平日離峰優惠或熟客回訪時段。'});
   if(r.uniqueCustomers>0&&r.uniqueCustomers<15)acts.push({t:'聯絡 5 位超過 3 個月沒來的客人',d:'這個月只服務 '+r.uniqueCustomers+' 位客人。喚醒老客人，比找新客人容易得多。'});
   if(r.marketingRatio<3&&r.revenue>0)acts.push({t:'下個月撥 $'+fmt(Math.round(r.revenue*0.05))+' 做行銷',d:'大約是營收的 5%，例如 IG 廣告或請熟客介紹朋友的小禮物。'});
   if(!acts.length)acts.push({t:'把多出來的利潤分配好',d:'照「我的理財」的比例分配，或存進設備重置基金，讓賺到的錢繼續幫你工作。'});
