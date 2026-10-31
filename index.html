@@ -2607,7 +2607,7 @@ function renderOperationsReport(){
   if(r.marketingRatio<3&&r.revenue>0)acts.push({t:'下個月撥 $'+fmt(Math.round(r.revenue*0.05))+' 做行銷',d:'大約是營收的 5%，例如 IG 廣告或請熟客介紹朋友的小禮物。'});
   if(!acts.length)acts.push({t:'把多出來的利潤分配好',d:'照「我的理財」的比例分配，或存進設備重置基金，讓賺到的錢繼續幫你工作。'});
   h+='<div style="margin-top:18px;"><b style="font-size:15px;">✅ 這個月最該做的事</b><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">'
-    +acts.slice(0,3).map((a,i)=>'<div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;"><div style="flex:1;"><div style="font-size:15px;font-weight:800;">'+(i+1)+'. '+a.t+'</div><div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.6;">'+a.d+'</div></div><button class="btn btn-sm" style="background:#7c3aed;color:#fff;flex-shrink:0;" onclick="advAddAction(\''+a.t.replace(/'/g,'').replace(/"/g,'')+'\')">＋ 加到行動計畫</button></div>').join('')
+    +acts.slice(0,3).map((a,i)=>'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;"><div style="flex:1;min-width:200px;"><div style="font-size:15px;font-weight:800;">'+(i+1)+'. '+a.t+'</div><div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.6;">'+a.d+'</div></div><button class="btn btn-sm" style="background:#7c3aed;color:#fff;flex-shrink:0;" onclick="advAddAction(\''+a.t.replace(/'/g,'').replace(/"/g,'')+'\')">＋ 加到行動計畫</button></div>').join('')
     +'</div></div>';
   // 小辭典
   h+='<details style="margin-top:16px;"><summary style="cursor:pointer;color:#6b7280;font-size:13px;">📖 看不懂的名詞，點這裡</summary><div style="font-size:13px;line-height:1.9;color:#4b5563;margin-top:6px;background:#f9fafb;border-radius:10px;padding:10px 14px;">'
@@ -2685,6 +2685,8 @@ function monthReviewData(m,y){
   const sources=Object.values(src).sort((a,b)=>(a.k==='沒填來源')-(b.k==='沒填來源')||(b.n+b.lastN)-(a.n+a.lastN));
   return {m,y,lm,revenue,exp,profit,custs,newCusts,oldCusts,newRev,oldRev,anonRev,visits,days,avgTicket,lastNew,backList,lostList,retention,items,retail,depNew,depUsed,liability,sources};
 }
+window.mrSetOwner=async function(v){const settings=Object.assign({},S.data.settings||{},{ownerName:v});S.data.settings=settings;noteRefresh();await saveMain({settings});};
+window.mrSetHours=async function(k,v){const wh=Object.assign({},(S.data.settings||{}).workHours||{});wh[k]=toN(v);const settings=Object.assign({},S.data.settings||{},{workHours:wh});S.data.settings=settings;noteRefresh();await saveMain({settings});};
 function pgMonthReview(){
   const r=monthReviewData(S.month,yr());
   let h='<div class="pg-ttl">🔍 月底復盤</div><div class="pg-sub">不只看營收：看利潤結構和客人行為，找出下個月要調整的決策</div>'+moSel();
@@ -2768,10 +2770,78 @@ function pgMonthReview(){
     if(none&&none.n+none.lastN>0)b4+='<div class="tm" style="font-size:12px;margin-top:6px;">有 '+(none.n+none.lastN)+' 位新客沒填來源。建客人時記得選「來源」，下個月這張表會更準。</div>';
   }
   h+=step(4,'📱','客人從哪裡來','把錢和力氣花在最有效的管道',b4);
+  // ── 第五步：老闆和合作夥伴
+  {
+    const st=S.data.settings||{};
+    const ymKey=r.y+'-'+String(r.m).padStart(2,'0');
+    const msales=(S.data.sales||[]).filter(s=>s.month===r.m&&s.year===r.y);
+    const mexp=(S.data.expenses||[]).filter(e=>e.month===r.m&&e.year===r.y);
+    const ecat=c=>mexp.filter(e=>e.category===c).reduce((a,e)=>a+toN(e.amount),0);
+    const salaryExp=ecat('薪資'),fixedExp=ecat('房租')+ecat('水電');
+    const cards=S.data.serviceCosts||[];
+    const findCard=item=>cards.find(c=>c.name===item)||cards.find(c=>c.name&&item&&(item.includes(c.name)||c.name.includes(item)));
+    const staffNames=[...new Set(msales.map(s=>s.staff).filter(Boolean))];
+    const owner=st.ownerName||staffNames.find(n=>n.includes('于蜜'))||'';
+    const rows=msales.map(s=>{const f=getSaleFinancials(s);const c=s.type!=='product'?findCard(s.item):null;const mat=c?calcServiceCardFinancials(c).materialCost:0;return {s,f,mat,min:c?toN(c.duration):0};});
+    const knownMin=rows.reduce((a,x)=>a+x.min,0);
+    const bed=toN(st.bedHourlyRate);
+    const cardRev=rows.filter(x=>x.min>0).reduce((a,x)=>a+x.f.realRevenue,0);
+    const perMin=bed>0?bed/60:(knownMin>0&&r.revenue>0?fixedExp*(cardRev/r.revenue)/knownMin:0);
+    const fixedPct=r.revenue>0?fixedExp/r.revenue:0;
+    const by={};
+    rows.forEach(x=>{const k=x.s.staff||'未分配';const o=by[k]=by[k]||{k,rev:0,comm:0,mat:0,fixed:0,min:0,n:0,noCard:0};
+      o.rev+=x.f.realRevenue;o.comm+=x.f.commission;o.mat+=x.mat;o.min+=x.min;o.n++;
+      if(x.min>0&&perMin>0)o.fixed+=x.min*perMin;else{o.fixed+=x.f.realRevenue*fixedPct;if(x.s.type!=='product')o.noCard++;}});
+    const list=Object.values(by).map(o=>Object.assign(o,{net:o.rev-o.comm-o.mat-o.fixed})).sort((a,b)=>(a.k===owner?-1:b.k===owner?1:b.rev-a.rev));
+    const ownerRow=by[owner];
+    const hours=toN((st.workHours||{})[ymKey]);
+    const ownerComm=ownerRow?ownerRow.comm:0;
+    const ownerIncome=ownerComm+r.profit;
+    const totalComm=rows.reduce((a,x)=>a+x.f.commission,0);
+    const totalBase=rows.reduce((a,x)=>a+toN(x.f.base),0);
+    const curRate=totalBase?totalComm/totalBase:0;
+    const maxRate=totalBase?(r.revenue-(r.exp-salaryExp))/totalBase:0;
+    let b5='';
+    // 于蜜
+    b5+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:14px;"><b>👑 老闆是：</b><select onchange="mrSetOwner(this.value)" style="width:auto;min-width:120px;">'+(owner&&!staffNames.includes(owner)?'<option selected>'+owner+'</option>':'')+(staffNames.length?'':'<option value="">（這個月沒有記老師）</option>')+staffNames.map(n=>'<option'+(n===owner?' selected':'')+'>'+n+'</option>').join('')+'</select></div>';
+    if(owner){
+      b5+='<div style="background:#faf5ff;border-radius:14px;padding:14px 16px;font-size:14px;line-height:1.9;">'
+        +'<div style="font-size:16px;font-weight:900;color:#6b21a8;">'+owner+' 這個月真正賺到的錢</div>'
+        +'你的抽成 <b>$'+fmt(Math.round(ownerComm))+'</b>　'+(r.profit>=0?'＋':'－')+'　沐蜜'+(r.profit>=0?'利潤':'虧損')+' <b>$'+fmt(Math.abs(Math.round(r.profit)))+'</b>　＝　<b style="font-size:20px;color:'+(ownerIncome>=0?'#7c3aed':'#dc2626')+';">'+(ownerIncome<0?'−':'')+'$'+fmt(Math.abs(Math.round(ownerIncome)))+'</b>'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">這個月你在店裡工作了 <input type="number" value="'+(hours||'')+'" placeholder="例：160" onchange="mrSetHours(\''+ymKey+'\',this.value)" style="width:90px;font-size:16px;font-weight:800;"> 小時'
+        +(hours>0?'　→　<b style="font-size:18px;color:'+(ownerIncome>=0?'#7c3aed':'#dc2626')+';">實際時薪 '+(ownerIncome<0?'−':'')+'$'+fmt(Math.abs(Math.round(ownerIncome/hours)))+'</b>':'<span class="tm" style="font-size:12px;">（包含服務、備料、打掃、回訊息、發文，填了就會算時薪）</span>')+'</div>'
+        +(hours>0?'<div style="font-size:13px;color:#4b5563;margin-top:4px;">💡 把它和你當員工時的時薪比：比較低，代表定價太低，或花太多時間在不賺錢的事情上。</div>':'')
+        +(salaryExp<totalComm*0.5&&totalComm>0?'<div style="font-size:12px;color:#b45309;margin-top:4px;">⚠️ 支出裡記的「薪資」只有 $'+fmt(salaryExp)+'，比系統算出的抽成 $'+fmt(totalComm)+' 少很多。如果還沒記完，沐蜜的利潤會被高估。</div>':'')
+        +'</div>';
+    }
+    // 每個人
+    b5+='<div style="font-size:14px;font-weight:800;margin:14px 0 6px;">🤝 每個人幫沐蜜賺了多少？</div><div style="display:flex;flex-direction:column;gap:8px;">'
+      +list.map(o=>{const ok=o.net>=0;const ph=o.min>0?o.net/(o.min/60):null;
+        return '<div style="background:'+(ok?'#f0fdf4':'#fef2f2')+';border-left:5px solid '+(ok?'#16a34a':'#dc2626')+';border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.8;">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><b style="font-size:15px;flex:1;">'+(o.k===owner?'👑 ':'')+o.k+'</b><b style="font-size:16px;color:'+(ok?'#16a34a':'#dc2626')+';">'+(ok?'幫沐蜜賺 $':'沐蜜倒貼 $')+fmt(Math.abs(Math.round(o.net)))+'</b></div>'
+          +'營收 $'+fmt(o.rev)+' − 抽成 $'+fmt(Math.round(o.comm))+' − 耗材 $'+fmt(Math.round(o.mat))+' − 房租水電分攤 $'+fmt(Math.round(o.fixed))
+          +(ph!=null?'<br>每做 1 小時，沐蜜'+(ph>=0?'賺':'虧')+' <b>$'+fmt(Math.abs(Math.round(ph)))+'</b>（共 '+(Math.round(o.min/6)/10)+' 小時、'+o.n+' 筆）':'')
+          +(o.noCard?'<br><span class="tm">有 '+o.noCard+' 筆項目沒有成本卡，耗材沒算進去，實際會再少一點。</span>':'')
+          +(o.k===owner?'<br><span class="tm">你自己的抽成本來就是你的收入，這一列是看「如果請別人做你的工作，店能不能賺」。</span>':'')
+          +'</div>';}).join('')+'</div>';
+    // 抽成上限
+    const losers=list.filter(o=>o.k!==owner&&o.k!=='未分配'&&o.net<0);
+    if(losers.length)acts.unshift({t:'檢討和「'+losers.map(o=>o.k).join('、')+'」的分潤方式',d:losers.map(o=>o.k+' 做了 $'+fmt(o.rev)+'，沐蜜倒貼 $'+fmt(Math.abs(Math.round(o.net)))).join('；')+'。可以降低抽成比例、改成扣完耗材再抽成，或讓她們做價格較高的項目。'});
+    if(totalBase>0){
+      const okR=curRate<=maxRate;
+      b5+='<div style="margin-top:12px;background:'+(okR?'#f0fdf4':'#fffbeb')+';border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.85;"><b>🧮 沐蜜最多能付多少抽成？</b><br>'
+        +'扣掉房租水電、進貨、行銷這些「不是薪水」的支出後，沐蜜每收 100 元，最多付得起 <b style="font-size:18px;color:'+(okR?'#16a34a':'#dc2626')+';">'+Math.max(0,Math.round(maxRate*100))+' 元</b> 抽成才不會虧。<br>'
+        +'這個月平均付 <b>'+Math.round(curRate*100)+' 元</b>。'+(okR?'還在範圍內 ✅':'<b style="color:#dc2626;">超過了</b>，所以只要把薪水記進去，帳面就會虧。')+'</div>';
+      if(!okR&&!losers.length)acts.unshift({t:'重新談抽成，或調高價格',d:'沐蜜最多付得起 '+Math.max(0,Math.round(maxRate*100))+'% 抽成，現在平均 '+Math.round(curRate*100)+'%。可以降低比例、改成扣完耗材再抽成，或讓外聘做價格較高的項目。'});
+    }
+    if(!st.bedHourlyRate&&!knownMin)b5+='<div class="tm" style="font-size:12px;margin-top:6px;">房租水電目前是照營收比例分攤。到「服務成本」建成本卡（填分鐘數），就能改成照每個人實際占用的時間來分攤，會更公平。</div>';
+    b5+='<div class="tm" style="font-size:12px;margin-top:6px;">⏰ 空堂和時間碎片化：預約時間記錄在 LINE 預約系統裡，請翻 10 月行事曆檢查：是不是常常一天只有 1、2 位客人卻要整天待在店裡？</div>';
+    h+=step(5,'🤝','老闆和合作夥伴','一人工作室最貴的是你的時間：你真正賺多少、外聘有沒有幫店賺到錢',b5);
+  }
   // ── 調整
   if(!acts.length)acts.push({t:'維持現在的做法，把多的利潤存起來',d:'這個月各項都在健康範圍內。'});
   h+='<div class="card" style="border:2px solid #7c3aed;"><div class="card-bd"><div style="font-size:18px;font-weight:900;color:#6b21a8;">✅ 下個月要調整的 3 件事</div><div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">'
-    +acts.slice(0,3).map((a,i)=>'<div style="display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;"><div style="flex:1;"><div style="font-size:15px;font-weight:800;">'+(i+1)+'. '+a.t+'</div><div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.6;">'+a.d+'</div></div><button class="btn btn-sm" style="background:#7c3aed;color:#fff;flex-shrink:0;" onclick="advAddAction(\''+a.t.replace(/'/g,'').replace(/"/g,'')+'\')">＋ 加到行動計畫</button></div>').join('')
+    +acts.slice(0,3).map((a,i)=>'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;"><div style="flex:1;min-width:200px;"><div style="font-size:15px;font-weight:800;">'+(i+1)+'. '+a.t+'</div><div style="font-size:13px;color:#6b7280;margin-top:3px;line-height:1.6;">'+a.d+'</div></div><button class="btn btn-sm" style="background:#7c3aed;color:#fff;flex-shrink:0;" onclick="advAddAction(\''+a.t.replace(/'/g,'').replace(/"/g,'')+'\')">＋ 加到行動計畫</button></div>').join('')
     +'</div></div></div>';
   return h;
 }
