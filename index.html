@@ -6028,7 +6028,7 @@ function pmuPhotoStage(t,when){
 
   var html='<div class="card"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">'+title+'</span></div><div class="card-bd">'
     +'<div class="tm" style="font-size:13px;margin-bottom:12px;">'+hint+' 可拍多張。</div>'
-    +(t.mediaChoice?'<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:800;background:'+(t.mediaChoice==='face'?'#f0fdf4':t.mediaChoice==='brow'?'#fffbeb':'#fef2f2')+';color:'+(t.mediaChoice==='face'?'#166534':t.mediaChoice==='brow'?'#92400e':'#991b1b')+';">'+({face:'😊 客人同意露臉，作品照可公開分享',brow:'🙈 客人選「只拍眉／唇、不露臉」：要公開的照片請裁掉臉部',no:'🔒 客人選「不公開」：照片只留在店內紀錄，不可上傳 IG 或官網'})[t.mediaChoice]+'</div>':'')
+    +(t.consentSignature?'<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:800;background:'+(t.agreeMedia?'#f0fdf4':'#fef2f2')+';color:'+(t.agreeMedia?'#166534':'#991b1b')+';">'+(t.agreeMedia?'✓ 客人同意作品照片分享':'🔒 客人沒有勾選同意分享：照片只留在店內紀錄，不可上傳 IG 或官網')+'</div>':'')
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +'<label class="btn btn-p" style="background:#9333ea;cursor:pointer;">📷 開相機拍<input type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>'
     +'<label class="btn btn-s" style="cursor:pointer;">🖼️ 從相簿選<input type="file" accept="image/*" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>'
@@ -6546,17 +6546,7 @@ function pmuConsentStage(t){
   html+=legalRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意','個人資料蒐集、處理及利用告知事項','',(terms.privacy||''),t.agreePrivacy);
   html+=legalRow('pmu_agree_notice','agreeNotice','我已閱讀並理解','紋繡服務說明與術後照護須知','',((notice||'')+'\n\n'+(terms.serviceDesc||'')),t.agreeNotice);
   html+=legalRow('pmu_consent_agree','consentAgreed','我已詳閱並同意','服務與退費同意書','',((terms.consent||'')+stageFull),t.consentAgreed);
-  var _mc=t.mediaChoice||'';
-  var _mb=function(k,ico,lbl,sub){var on=_mc===k;return '<button type="button" onclick="pmuSetMedia(&quot;'+k+'&quot;)" style="flex:1;min-width:150px;text-align:left;padding:12px 14px;border-radius:12px;cursor:pointer;border:2px solid '+(on?'#9333ea':'#e5e7eb')+';background:'+(on?'#faf5ff':'#fff')+';"><div style="font-size:15px;font-weight:800;color:'+(on?'#7e22ce':'var(--txt)')+';">'+(on?'✓ ':'')+ico+' '+lbl+'</div><div style="font-size:12px;color:#6b7280;margin-top:2px;line-height:1.5;">'+sub+'</div></button>';};
-  html+='<div style="padding:12px 14px;background:#f8fafc;border-radius:10px;margin-bottom:10px;border:1px solid '+(_mc?'#e9d5ff':'#fde68a')+';">'
-    +'<div style="font-size:14px;line-height:1.7;color:#334155;font-weight:700;">📷 作品照片可以怎麼使用？<span style="color:#2563eb;text-decoration:underline;cursor:pointer;font-weight:400;font-size:13px;" onclick="pmuToggleTerms(&quot;pmu_agree_media_full&quot;)">【多媒體影像使用說明】</span>'+(_mc?'':'<span style="color:#d97706;font-size:12px;">　請選一個</span>')+'</div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
-    +_mb('face','😊','可以露臉','作品照可放在 IG、官網分享')
-    +_mb('brow','🙈','只拍眉／唇，不露臉','分享時只會出現施作部位')
-    +_mb('no','🔒','不公開','照片只留在店內紀錄、追蹤用')
-    +'</div>'
-    +'<div id="pmu_agree_media_full" style="display:none;margin-top:10px;padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;line-height:1.85;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:#444;">'+(terms.media||'')+'</div>'
-    +'</div>';
+  html+=legalRow('pmu_agree_media','agreeMedia','我同意','多媒體影像使用','（作品照片可分享）',(terms.media||''),t.agreeMedia===true);
   html+='</div></div>';
 
   // 簽名
@@ -6595,7 +6585,6 @@ window.pmuHealthGroupNo=function(cat){
 };
 window.pmuHealthGroupOpen=function(cat){var t=S.treatment;if(!t)return;if(typeof pmuSaveInputs==='function')pmuSaveInputs();t._hgOpen=t._hgOpen||{};t._hgOpen[cat]=!t._hgOpen[cat];pmuHealthRedraw();};
 // 身體狀況勾選切換（切換後重繪，更新紅燈/黃燈警示橫幅與highlight）
-window.pmuSetMedia=function(k){var t=S.treatment;if(!t)return;if(typeof pmuSaveInputs==='function')pmuSaveInputs();t.mediaChoice=k;t.agreeMedia=k!=='no';pmuHealthRedraw();};
 window.pmuHealthToggle=function(id){
   var t=S.treatment;if(!t)return;
   if(typeof pmuSaveInputs==='function')pmuSaveInputs();
@@ -6615,7 +6604,7 @@ window.pmuConfirmConsent=function(){
   // 讀取各勾選狀態
   var gp=document.getElementById('pmu_agree_privacy');if(gp)t.agreePrivacy=gp.checked;
   var gn=document.getElementById('pmu_agree_notice');if(gn)t.agreeNotice=gn.checked;
-  t.agreeMedia=!!t.mediaChoice&&t.mediaChoice!=='no';
+  var gm=document.getElementById('pmu_agree_media');if(gm)t.agreeMedia=gm.checked;
   var ca=document.getElementById('pmu_consent_agree');if(ca)t.consentAgreed=ca.checked;
   var fd=document.getElementById('pmu_firstDate');if(fd&&fd.value)t.firstPmuDate=fd.value;
   // 身體狀況：捕捉補充文字與真實聲明
@@ -6624,7 +6613,6 @@ window.pmuConfirmConsent=function(){
   if(!t.agreePrivacy){alert('請勾選「我已閱讀並同意個人資料之蒐集與使用」');return;}
   if(!t.agreeNotice){alert('請勾選「已閱讀並理解服務說明與術後照護須知」');return;}
   if(!t.consentAgreed){alert('請勾選最下方「同意服務與退費同意書」');return;}
-  if(!t.mediaChoice){alert('請選擇作品照片的使用方式（可以露臉／只拍眉唇不露臉／不公開）');return;}
   var _unans=PMU_HEALTH_ITEMS.filter(function(it){return (t.healthFlags||[]).indexOf(it.id)<0&&(t.healthNo||[]).indexOf(it.id)<0;});
   if(_unans.length){alert('健康狀況還有 '+_unans.length+' 項沒有回答，請點「這組都沒有」或逐項選「沒有／有」');var el=document.getElementById('pmu_health_left');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});return;}
   // 身體狀況紅燈/黃燈提醒（不硬性阻擋，但簽署前再確認一次）
@@ -7261,7 +7249,7 @@ window.pmuSubmit=async()=>{
     numbCream:t.numbCream,numbTime:t.numbTime,
     tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
     consentSignature:t.consentSignature,consentSignedAt:t.consentSignedAt,
-    agreePrivacy:t.agreePrivacy,agreeNotice:t.agreeNotice,agreeMedia:t.agreeMedia,mediaChoice:t.mediaChoice||'',healthNo:t.healthNo||[],
+    agreePrivacy:t.agreePrivacy,agreeNotice:t.agreeNotice,agreeMedia:t.agreeMedia,healthNo:t.healthNo||[],
     firstPmuDate:t.firstPmuDate||'',
     cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,
     aftercareGiven:t.aftercareGiven,photoAfterDone:t.photoAfterDone,
@@ -7335,7 +7323,7 @@ ${terms.serviceDesc}
 ${terms.consent}
 
 ${terms.media}
-${r.mediaChoice?'▶ 本人選擇：'+({face:'可以露臉，作品照可公開分享',brow:'只拍施作部位、不露臉，可公開分享',no:'不公開，照片僅供店內紀錄與追蹤'})[r.mediaChoice]:''}
+${r.agreeMedia===true?'▶ 本人已勾選同意，作品照片可分享':r.agreeMedia===false?'▶ 本人未勾選同意，作品照片僅供店內紀錄':''}
 ${(r.stageTermsSnapshot||(r.pmuServiceType&&pmuStageTermsFor(r.pmuServiceType)))?('\n━━━━━━━━━━━━━━━━━━━\n【本次專屬條款 — '+(PMU_STAGE_LABELS[r.pmuServiceType]||'')+'】\n'+(r.stageTermsSnapshot||pmuStageTermsFor(r.pmuServiceType))+'\n'):''}
 ${terms.closing}
 
