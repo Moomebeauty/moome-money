@@ -491,7 +491,7 @@ function pmuHealthSummaryHtml(r){
     });
     var other=items.filter(function(x){return ['red','yellow','allergy','recent'].indexOf(x.cat)<0;});
     other.forEach(function(x){out+='・'+x.label+'<br>';});
-    if(items.length===0)out='（未勾選任何狀況）<br>';
+    if(items.length===0)out=(r.healthNo&&r.healthNo.length?'✓ 已逐項確認：以上狀況皆沒有':'（未勾選任何狀況）')+'<br>';
     if(r.healthNote)out+='<div style="margin-top:4px;">其他補充：'+r.healthNote+'</div>';
     out+='<div style="margin-top:4px;color:'+(r.healthDeclare?'#16a34a':'#dc2626')+';font-size:12px;">'+(r.healthDeclare?'✓ 已簽真實聲明':'✗ 未簽真實聲明')+'</div>';
     return out;
@@ -512,7 +512,7 @@ function pmuHealthSummaryText(r){
     });
     var other=items.filter(function(x){return ['red','yellow','allergy','recent'].indexOf(x.cat)<0;});
     other.forEach(function(x){lines.push('・'+x.label);});
-    if(items.length===0)lines.push('（未勾選任何狀況）');
+    if(items.length===0)lines.push(r.healthNo&&r.healthNo.length?'✓ 已逐項確認：以上狀況皆沒有':'（未勾選任何狀況）');
     if(r.healthNote)lines.push('其他補充：'+r.healthNote);
     lines.push(r.healthDeclare?'✓ 已簽署真實聲明':'✗ 未簽署真實聲明');
     return lines.join('\n');
@@ -6028,6 +6028,7 @@ function pmuPhotoStage(t,when){
 
   var html='<div class="card"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">'+title+'</span></div><div class="card-bd">'
     +'<div class="tm" style="font-size:13px;margin-bottom:12px;">'+hint+' 可拍多張。</div>'
+    +(t.mediaChoice?'<div style="margin-bottom:12px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:800;background:'+(t.mediaChoice==='face'?'#f0fdf4':t.mediaChoice==='brow'?'#fffbeb':'#fef2f2')+';color:'+(t.mediaChoice==='face'?'#166534':t.mediaChoice==='brow'?'#92400e':'#991b1b')+';">'+({face:'😊 客人同意露臉，作品照可公開分享',brow:'🙈 客人選「只拍眉／唇、不露臉」：要公開的照片請裁掉臉部',no:'🔒 客人選「不公開」：照片只留在店內紀錄，不可上傳 IG 或官網'})[t.mediaChoice]+'</div>':'')
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +'<label class="btn btn-p" style="background:#9333ea;cursor:pointer;">📷 開相機拍<input type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>'
     +'<label class="btn btn-s" style="cursor:pointer;">🖼️ 從相簿選<input type="file" accept="image/*" multiple style="display:none;" onchange="pmuUploadPhoto(&quot;'+when+'&quot;,this)"></label>'
@@ -6347,6 +6348,13 @@ window.pmuToggle=(field,val)=>{
 // ── 階段② 簽同意書（客人畫面）──
 // 服務類型選擇器（新客/免費補色/回娘家補色...）+ 自動算價
 function pmuServiceTypeSelector(t){
+  var _lbl={new:'新客首次',free:'3個月免費補色',m4to12:'回娘家(4-12月)',y1to2:'回娘家(1-2年)',over2:'回娘家(2年以上)'};
+  if(t.pmuServiceType&&!t._svcEdit){
+    var _pr=toN(t.pmuServicePrice);
+    return '<div style="margin-top:12px;background:#faf5ff;padding:14px 16px;border-radius:12px;border:1px solid #e5d5f5;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+      +'<div style="flex:1;min-width:180px;"><div style="font-size:13px;color:#7e22ce;">本次服務</div><div style="font-size:18px;font-weight:900;color:#6b21a8;margin-top:2px;">'+(t.serviceType||'')+'・'+(_lbl[t.pmuServiceType]||'')+'　'+(_pr===0?'🎁 免費':'$'+fmt(_pr))+'</div></div>'
+      +'<button type="button" onclick="pmuSvcEdit(true)" style="border:none;background:none;color:#a78bfa;font-size:12px;cursor:pointer;text-decoration:underline;">老師更改</button></div>';
+  }
   var svc=(t.serviceType||'').includes('唇')?'霧唇':'霧眉';
   var pricing=(S.data.settings&&S.data.settings.pmuPricing)||DEFAULT_PMU_PRICING;
   var p=pricing[svc]||{};
@@ -6358,8 +6366,8 @@ function pmuServiceTypeSelector(t){
     {key:'over2',label:'回娘家(2年以上)',price:pmuTierPrice(p,'over2'),note:'原價'+Math.round((toN(p.over2Discount)||0.8)*10)+'折'}
   ];
   var cur=t.pmuServiceType||'';
-  var html='<div class="fgrp" style="margin-top:12px;background:#faf5ff;padding:12px;border-radius:10px;border:1px solid #e5d5f5;">'
-    +'<label style="color:#9333ea;font-weight:700;">💰 這次服務類型（決定收費）</label>'
+  var html='<div class="fgrp" style="margin-top:12px;background:#fffbeb;padding:12px;border-radius:10px;border:2px dashed #f59e0b;">'
+    +'<label style="color:#b45309;font-weight:800;">👩‍🎨 老師填寫：這次服務類型（選好再把平板交給客人）</label>'
     +'<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">';
   types.forEach(function(ty){
     var sel=cur===ty.key;
@@ -6381,10 +6389,12 @@ window.pmuSetServiceType=function(key,price){
   pmuSaveInputs();
   S.treatment.pmuServiceType=key;
   S.treatment.pmuServicePrice=price;
+  S.treatment._svcEdit=false;
   var c=$('pg-content');if(c)c.innerHTML=renderPage();
   setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},100);
 };
 
+window.pmuSvcEdit=function(on){if(!S.treatment)return;pmuSaveInputs();S.treatment._svcEdit=!!on;var c=$('pg-content');if(c)c.innerHTML=renderPage();setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},100);};
 // 取這位客人的「初次施作日期」（最早一筆紋繡紀錄；優先新客首次）
 // 初次施作日期 → 間隔與免費期判斷（只更新這一小塊，不重繪整頁）
 function pmuFirstDateVerdictHtml(t){
@@ -6467,23 +6477,38 @@ function pmuConsentStage(t){
   html+='<div class="card" style="margin-bottom:14px;">'
     +'<div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">🩺 健康狀況誠實告知</span></div>'
     +'<div class="card-bd">';
-  html+='<div class="tm" style="font-size:12px;line-height:1.75;margin-bottom:10px;"><div style="font-size:14px;font-weight:700;color:var(--blu);margin-bottom:4px;">請勾選是否有以下體質，本資料僅供紋繡師評估施作安全使用，本店依法保密。</div>紋繡屬皮膚微創，身體狀況是保護你我最重要的一關。<b>有該狀況請點「有」</b></div>';
+  if(!Array.isArray(t.healthNo))t.healthNo=[];
+  var _hn=t.healthNo;
+  var _left=PMU_HEALTH_ITEMS.filter(function(it){return _hf.indexOf(it.id)<0&&_hn.indexOf(it.id)<0;}).length;
+  html+='<div style="font-size:14px;line-height:1.8;margin-bottom:12px;color:#334155;"><div style="font-size:16px;font-weight:800;color:var(--blu);margin-bottom:2px;">以下狀況，你有沒有呢？</div>每一組沒有的話，點「<b>這組都沒有</b>」就好；有其中一項，再點那一項的「<b>有</b>」。<br><span style="font-size:12px;color:#64748b;">紋繡屬皮膚微創，這份資料只給紋繡師評估施作安全，本店依法保密。</span></div>'
+    +'<div id="pmu_health_left" style="font-size:13px;font-weight:800;margin-bottom:10px;color:'+(_left?'#d97706':'#16a34a')+';">'+(_left?'還有 '+_left+' 項還沒回答':'✓ 全部都回答了')+'</div>';
   if(_redOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fef2f2;border:2px solid #dc2626;color:#991b1b;font-size:13.5px;font-weight:800;line-height:1.75;margin-bottom:12px;">🔴 偵測到紅燈狀況：原則上<u>不予施作、建議退單</u>。若仍評估施作，務必讓客人充分理解風險並留下紀錄。</div>';
   if(_yelOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fffbeb;border:2px solid #d97706;color:#92400e;font-size:13.5px;font-weight:800;line-height:1.75;margin-bottom:12px;">🟡 偵測到黃燈狀況：屬高風險，施作前<u>務必加簽「特殊評估免責聲明」</u>，並向客人說明癒合與感染風險。</div>';
   ['red','yellow','allergy','recent'].forEach(function(catKey){
     var cat=PMU_HEALTH_CATS[catKey];
-    html+='<div style="margin-bottom:14px;">';
-    html+='<div style="font-size:13px;font-weight:800;color:'+cat.c+';margin-bottom:7px;">'+cat.t+'</div>';
-    PMU_HEALTH_ITEMS.filter(function(it){return it.cat===catKey;}).forEach(function(it){
-      var on=_hf.indexOf(it.id)>=0;
-      html+='<div style="padding:9px 11px;border-radius:9px;margin-bottom:6px;background:'+(on?cat.bg:'#fff')+';border:1px solid '+(on?cat.c:'#eee')+';">'
-        +'<div style="display:flex;align-items:center;gap:9px;">'
-        +'<button type="button" onclick="pmuHealthToggle(&quot;'+it.id+'&quot;)" style="flex-shrink:0;min-width:46px;padding:5px 11px;border:none;border-radius:14px;cursor:pointer;font-size:12px;font-weight:800;background:'+(on?cat.c:'#eef0f3')+';color:'+(on?'#fff':'#9aa0a6')+';">'+(on?'✓ 有':'無')+'</button>'
-        +'<span style="font-weight:700;font-size:13px;line-height:1.5;color:'+(on?cat.c:'var(--txt)')+';">'+it.label+'</span>'
-        +'</div>'
-        +'<div style="font-size:11px;color:#8a8a8a;margin-top:5px;line-height:1.65;padding-left:3px;">💡 '+it.reason+'</div>'
-        +'</div>';
-    });
+    var its=PMU_HEALTH_ITEMS.filter(function(it){return it.cat===catKey;});
+    var allNo=its.every(function(it){return _hn.indexOf(it.id)>=0;});
+    var open=t._hgOpen&&t._hgOpen[catKey];
+    html+='<div style="margin-bottom:14px;border:1px solid '+(allNo?'#bbf7d0':'#e5e7eb')+';border-radius:12px;padding:12px;background:'+(allNo?'#f0fdf4':'#fff')+';">';
+    html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:160px;font-size:14px;font-weight:800;color:'+cat.c+';">'+cat.t+'</div>'
+      +(allNo?'<span style="font-size:14px;font-weight:800;color:#16a34a;">✓ 這組都沒有</span><button type="button" onclick="pmuHealthGroupOpen(&quot;'+catKey+'&quot;)" style="border:none;background:none;color:#64748b;font-size:12px;cursor:pointer;text-decoration:underline;">'+(open?'收起':'修改')+'</button>'
+        :'<button type="button" onclick="pmuHealthGroupNo(&quot;'+catKey+'&quot;)" style="border:2px solid #16a34a;background:#fff;color:#16a34a;border-radius:20px;padding:8px 16px;font-size:15px;font-weight:800;cursor:pointer;">這組都沒有 ✓</button>')
+      +'</div>';
+    if(!allNo||open){
+      html+='<div style="margin-top:10px;">';
+      its.forEach(function(it){
+        var yes=_hf.indexOf(it.id)>=0,no=_hn.indexOf(it.id)>=0;
+        var bt=function(v,lbl,onC,onBg){var on=v?yes:no;return '<button type="button" onclick="pmuHealthSet(&quot;'+it.id+'&quot;,'+v+')" style="min-width:58px;padding:7px 12px;border-radius:16px;cursor:pointer;font-size:14px;font-weight:800;border:2px solid '+(on?onC:'#e5e7eb')+';background:'+(on?onBg:'#fff')+';color:'+(on?(v?'#fff':onC):'#9ca3af')+';">'+(on?'✓ ':'')+lbl+'</button>';};
+        html+='<div style="padding:10px 12px;border-radius:10px;margin-bottom:6px;background:'+(yes?cat.bg:'#fff')+';border:1px solid '+(yes?cat.c:'#eee')+';">'
+          +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+          +'<span style="flex:1;min-width:160px;font-weight:700;font-size:15px;line-height:1.5;color:'+(yes?cat.c:'var(--txt)')+';">'+it.label+'</span>'
+          +'<span style="display:flex;gap:6px;flex-shrink:0;">'+bt(false,'沒有','#16a34a','#f0fdf4')+bt(true,'有',cat.c,cat.c)+'</span>'
+          +'</div>'
+          +'<div style="font-size:12px;color:#8a8a8a;margin-top:5px;line-height:1.65;">💡 '+it.reason+'</div>'
+          +'</div>';
+      });
+      html+='</div>';
+    }
     html+='</div>';
   });
   html+='<div class="fgrp"><label style="font-size:13px;">其他身體狀況補充（選填）</label><input type="text" id="pmu_healthNote" value="'+(t.healthNote||'').replace(/"/g,'&quot;')+'" placeholder="例如：服用中的藥物、特殊體質、過往手術…" oninput="S.treatment.healthNote=this.value"></div>';
@@ -6521,7 +6546,17 @@ function pmuConsentStage(t){
   html+=legalRow('pmu_agree_privacy','agreePrivacy','我已閱讀並同意','個人資料蒐集、處理及利用告知事項','',(terms.privacy||''),t.agreePrivacy);
   html+=legalRow('pmu_agree_notice','agreeNotice','我已閱讀並理解','紋繡服務說明與術後照護須知','',((notice||'')+'\n\n'+(terms.serviceDesc||'')),t.agreeNotice);
   html+=legalRow('pmu_consent_agree','consentAgreed','我已詳閱並同意','服務與退費同意書','',((terms.consent||'')+stageFull),t.consentAgreed);
-  html+=legalRow('pmu_agree_media','agreeMedia','我同意','多媒體影像使用','',(terms.media||''),(t.agreeMedia!==false));
+  var _mc=t.mediaChoice||'';
+  var _mb=function(k,ico,lbl,sub){var on=_mc===k;return '<button type="button" onclick="pmuSetMedia(&quot;'+k+'&quot;)" style="flex:1;min-width:150px;text-align:left;padding:12px 14px;border-radius:12px;cursor:pointer;border:2px solid '+(on?'#9333ea':'#e5e7eb')+';background:'+(on?'#faf5ff':'#fff')+';"><div style="font-size:15px;font-weight:800;color:'+(on?'#7e22ce':'var(--txt)')+';">'+(on?'✓ ':'')+ico+' '+lbl+'</div><div style="font-size:12px;color:#6b7280;margin-top:2px;line-height:1.5;">'+sub+'</div></button>';};
+  html+='<div style="padding:12px 14px;background:#f8fafc;border-radius:10px;margin-bottom:10px;border:1px solid '+(_mc?'#e9d5ff':'#fde68a')+';">'
+    +'<div style="font-size:14px;line-height:1.7;color:#334155;font-weight:700;">📷 作品照片可以怎麼使用？<span style="color:#2563eb;text-decoration:underline;cursor:pointer;font-weight:400;font-size:13px;" onclick="pmuToggleTerms(&quot;pmu_agree_media_full&quot;)">【多媒體影像使用說明】</span>'+(_mc?'':'<span style="color:#d97706;font-size:12px;">　請選一個</span>')+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
+    +_mb('face','😊','可以露臉','作品照可放在 IG、官網分享')
+    +_mb('brow','🙈','只拍眉／唇，不露臉','分享時只會出現施作部位')
+    +_mb('no','🔒','不公開','照片只留在店內紀錄、追蹤用')
+    +'</div>'
+    +'<div id="pmu_agree_media_full" style="display:none;margin-top:10px;padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;line-height:1.85;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:#444;">'+(terms.media||'')+'</div>'
+    +'</div>';
   html+='</div></div>';
 
   // 簽名
@@ -6539,7 +6574,28 @@ function pmuConsentStage(t){
 // 展開/收起條款全文（藍字超連結點開才看）
 window.pmuToggleTerms=function(id){var el=document.getElementById(id);if(el)el.style.display=(el.style.display==='none'||!el.style.display)?'block':'none';};
 
+// 健康狀況：單項設定「有／沒有」、整組「都沒有」
+function pmuHealthRedraw(){var y=window.scrollY;var c=$('pg-content');if(c)c.innerHTML=renderPage();window.scrollTo(0,y);setTimeout(function(){initSignatureCanvasInline('t_guest_sign_canvas');},60);}
+window.pmuHealthSet=function(id,yes){
+  var t=S.treatment;if(!t)return;
+  if(typeof pmuSaveInputs==='function')pmuSaveInputs();
+  t.healthFlags=(t.healthFlags||[]).filter(function(x){return x!==id;});
+  t.healthNo=(t.healthNo||[]).filter(function(x){return x!==id;});
+  (yes?t.healthFlags:t.healthNo).push(id);
+  pmuHealthRedraw();
+};
+window.pmuHealthGroupNo=function(cat){
+  var t=S.treatment;if(!t)return;
+  if(typeof pmuSaveInputs==='function')pmuSaveInputs();
+  var ids=PMU_HEALTH_ITEMS.filter(function(it){return it.cat===cat;}).map(function(it){return it.id;});
+  t.healthFlags=(t.healthFlags||[]).filter(function(x){return ids.indexOf(x)<0;});
+  t.healthNo=(t.healthNo||[]).filter(function(x){return ids.indexOf(x)<0;}).concat(ids);
+  if(t._hgOpen)t._hgOpen[cat]=false;
+  pmuHealthRedraw();
+};
+window.pmuHealthGroupOpen=function(cat){var t=S.treatment;if(!t)return;if(typeof pmuSaveInputs==='function')pmuSaveInputs();t._hgOpen=t._hgOpen||{};t._hgOpen[cat]=!t._hgOpen[cat];pmuHealthRedraw();};
 // 身體狀況勾選切換（切換後重繪，更新紅燈/黃燈警示橫幅與highlight）
+window.pmuSetMedia=function(k){var t=S.treatment;if(!t)return;if(typeof pmuSaveInputs==='function')pmuSaveInputs();t.mediaChoice=k;t.agreeMedia=k!=='no';pmuHealthRedraw();};
 window.pmuHealthToggle=function(id){
   var t=S.treatment;if(!t)return;
   if(typeof pmuSaveInputs==='function')pmuSaveInputs();
@@ -6559,7 +6615,7 @@ window.pmuConfirmConsent=function(){
   // 讀取各勾選狀態
   var gp=document.getElementById('pmu_agree_privacy');if(gp)t.agreePrivacy=gp.checked;
   var gn=document.getElementById('pmu_agree_notice');if(gn)t.agreeNotice=gn.checked;
-  var gm=document.getElementById('pmu_agree_media');if(gm)t.agreeMedia=gm.checked;
+  t.agreeMedia=!!t.mediaChoice&&t.mediaChoice!=='no';
   var ca=document.getElementById('pmu_consent_agree');if(ca)t.consentAgreed=ca.checked;
   var fd=document.getElementById('pmu_firstDate');if(fd&&fd.value)t.firstPmuDate=fd.value;
   // 身體狀況：捕捉補充文字與真實聲明
@@ -6568,6 +6624,9 @@ window.pmuConfirmConsent=function(){
   if(!t.agreePrivacy){alert('請勾選「我已閱讀並同意個人資料之蒐集與使用」');return;}
   if(!t.agreeNotice){alert('請勾選「已閱讀並理解服務說明與術後照護須知」');return;}
   if(!t.consentAgreed){alert('請勾選最下方「同意服務與退費同意書」');return;}
+  if(!t.mediaChoice){alert('請選擇作品照片的使用方式（可以露臉／只拍眉唇不露臉／不公開）');return;}
+  var _unans=PMU_HEALTH_ITEMS.filter(function(it){return (t.healthFlags||[]).indexOf(it.id)<0&&(t.healthNo||[]).indexOf(it.id)<0;});
+  if(_unans.length){alert('健康狀況還有 '+_unans.length+' 項沒有回答，請點「這組都沒有」或逐項選「沒有／有」');var el=document.getElementById('pmu_health_left');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});return;}
   // 身體狀況紅燈/黃燈提醒（不硬性阻擋，但簽署前再確認一次）
   var _hf=t.healthFlags||[];
   var _red=PMU_HEALTH_ITEMS.filter(function(it){return it.cat==='red'&&_hf.indexOf(it.id)>=0;});
@@ -7202,7 +7261,7 @@ window.pmuSubmit=async()=>{
     numbCream:t.numbCream,numbTime:t.numbTime,
     tools:t.tools,pigments:t.pigments,operationNote:t.operationNote,
     consentSignature:t.consentSignature,consentSignedAt:t.consentSignedAt,
-    agreePrivacy:t.agreePrivacy,agreeNotice:t.agreeNotice,agreeMedia:t.agreeMedia,
+    agreePrivacy:t.agreePrivacy,agreeNotice:t.agreeNotice,agreeMedia:t.agreeMedia,mediaChoice:t.mediaChoice||'',healthNo:t.healthNo||[],
     firstPmuDate:t.firstPmuDate||'',
     cardSigned:t.cardSigned,carePackGiven:t.carePackGiven,
     aftercareGiven:t.aftercareGiven,photoAfterDone:t.photoAfterDone,
@@ -7276,6 +7335,7 @@ ${terms.serviceDesc}
 ${terms.consent}
 
 ${terms.media}
+${r.mediaChoice?'▶ 本人選擇：'+({face:'可以露臉，作品照可公開分享',brow:'只拍施作部位、不露臉，可公開分享',no:'不公開，照片僅供店內紀錄與追蹤'})[r.mediaChoice]:''}
 ${(r.stageTermsSnapshot||(r.pmuServiceType&&pmuStageTermsFor(r.pmuServiceType)))?('\n━━━━━━━━━━━━━━━━━━━\n【本次專屬條款 — '+(PMU_STAGE_LABELS[r.pmuServiceType]||'')+'】\n'+(r.stageTermsSnapshot||pmuStageTermsFor(r.pmuServiceType))+'\n'):''}
 ${terms.closing}
 
