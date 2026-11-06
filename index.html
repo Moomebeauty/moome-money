@@ -3492,6 +3492,15 @@ function allPassItems(){
     const m=note.match(/到期\s*(\d{4}-\d{2}-\d{2})/);
     items.push({src:'deposit',id:d.id,customer:d.customer||'',phone:'',plan:note.split('（')[0]||'除毛吃到飽',start:d.date||'',end:m?m[1]:'',price:d.amount});
   });
+  // 沒有到期日 → 用開始日＋方案月數推算（沒寫月數就當半年）
+  items.forEach(x=>{
+    if(!x.end&&x.start){
+      const c=x.src==='contract'?(S.data.passContracts||[]).find(p=>p.id===x.id):null;
+      const txt=(x.plan||'')+' '+((S.data.deposits||[]).find(d=>d.id===x.id)||{}).note;
+      let mo=c&&toN(c.months)>0?toN(c.months):/一年|12個月|12次/.test(txt)?12:/三個月|3個月|3次/.test(txt)?3:6;
+      x.end=addMonthsToDate(x.start,mo);x.guessed=mo;
+    }
+  });
   items.forEach(x=>{x.expired=!!x.end&&x.end<t0;x.daysLeft=x.end?Math.ceil((new Date(x.end)-new Date(t0))/864e5):null;});
   return items.sort((a,b)=>(a.expired-b.expired)||(a.end||'9').localeCompare(b.end||'9'));
 }
@@ -3505,7 +3514,7 @@ function passListRows(){
     +'<div style="flex:1;min-width:180px;"><div style="font-size:16px;font-weight:800;">'+x.customer+(x.src==='deposit'?' <span class="tm" style="font-size:11px;font-weight:400;">（從儲值紀錄找到）</span>':'')+'</div>'
     +'<div class="tm" style="font-size:13px;margin-top:2px;">'+x.plan+(x.price?'・$'+fmt(x.price):'')+(x.used!=null?'・已用 '+x.used+' 次':'')+'</div></div>'
     +'<div style="text-align:right;"><div style="font-size:13px;color:#6b7280;">'+(x.start||'?')+' ～</div><div style="font-size:18px;font-weight:900;color:'+(x.expired?'var(--red)':'var(--grn)')+';">'+(x.end||'沒有到期日')+'</div>'
-    +'<div style="font-size:12px;font-weight:800;color:'+(x.expired?'var(--red)':'var(--grn)')+';">'+(x.daysLeft==null?'':x.expired?'已到期 '+(-x.daysLeft)+' 天':'還可以用 '+x.daysLeft+' 天')+'</div></div>'
+    +'<div style="font-size:12px;font-weight:800;color:'+(x.expired?'var(--red)':'var(--grn)')+';">'+(x.daysLeft==null?'':x.expired?'已到期 '+(-x.daysLeft)+' 天':'還可以用 '+x.daysLeft+' 天')+'</div>'+(x.guessed?'<div class="tm" style="font-size:11px;">（依開始日＋'+(x.guessed===6?'半年':x.guessed+' 個月')+'推算）</div>':'')+'</div>'
     +(x.src==='contract'?'<button class="btn btn-s btn-sm" onclick="viewPassContract(\''+x.id+'\')">📜 看合約</button>':'')
     +'</div>').join('');
 }
@@ -3527,7 +3536,8 @@ function custPassHtml(c){return (() => {
     if(passes.length===0)return'';
     return`<div class="sec" style="margin-top:20px;">
       <div class="sec-hd"><span class="sec-ttl">🎫 除毛吃到飽合約（${passes.length} 筆）</span></div>
-      ${passes.map(p=>{
+      ${passes.map(p0=>{
+        const p=p0.endDate?p0:Object.assign({},p0,{endDate:p0.startDate?addMonthsToDate(p0.startDate,toN(p0.months)||6):''});
         const today2=today();
         const expired=p.endDate<today2;
         const daysLeft=Math.ceil((new Date(p.endDate)-new Date(today2))/(1000*60*60*24));
