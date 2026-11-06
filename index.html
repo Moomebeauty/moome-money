@@ -3289,6 +3289,8 @@ function pgCustomersList(customerStats,totalLiability,totalCustomers){
     📦 累計贈送儲值額度：<b>$${fmt(totalDiscount)}</b>　（實收 $${fmt(totalCash)} → 客戶可消費 $${fmt(totalCash+totalDiscount)}）
   </div>`:''}
 
+  ${passListSection()}
+
   <div class="sec-hd">
     <span class="sec-ttl">客戶清單</span>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -3477,8 +3479,51 @@ function custIntakeHtml(c){return (() => {
       </div>
     </div>`;
   })();}
+// ─── 🎫 所有除毛吃到飽合約（可搜尋，不用先找到客人）───
+function allPassItems(){
+  const t0=today();
+  const items=(S.data.passContracts||[]).map(p=>({src:'contract',id:p.id,customer:p.customer||'',phone:p.phone||'',plan:p.planName||'除毛吃到飽',start:p.startDate||'',end:p.endDate||'',price:p.price,used:p.usedCount}));
+  // 舊資料：只有儲值紀錄（備註寫「吃到飽／包期／到期」）但沒有合約的，也列出來
+  (S.data.deposits||[]).forEach(d=>{
+    const note=d.note||'';
+    if(!/吃到飽|包期/.test(note))return;
+    const nm=normalizeName(d.customer);
+    if(items.some(x=>normalizeName(x.customer)===nm&&(x.start===d.date||Math.abs(new Date(x.start)-new Date(d.date))<3*864e5)))return;
+    const m=note.match(/到期\s*(\d{4}-\d{2}-\d{2})/);
+    items.push({src:'deposit',id:d.id,customer:d.customer||'',phone:'',plan:note.split('（')[0]||'除毛吃到飽',start:d.date||'',end:m?m[1]:'',price:d.amount});
+  });
+  items.forEach(x=>{x.expired=!!x.end&&x.end<t0;x.daysLeft=x.end?Math.ceil((new Date(x.end)-new Date(t0))/864e5):null;});
+  return items.sort((a,b)=>(a.expired-b.expired)||(a.end||'9').localeCompare(b.end||'9'));
+}
+function passListRows(){
+  const kw=normalizeName(S.passSearch||'').toLowerCase();
+  let items=allPassItems();
+  if(kw)items=items.filter(x=>{const n=normalizeName(x.customer).toLowerCase();return n.includes(kw)||(n.length>=2&&kw.includes(n))||(x.phone||'').includes(kw);});
+  else if(!S.passShowAll)items=items.filter(x=>!x.expired);
+  if(!items.length)return '<div class="tm" style="padding:14px 4px;">'+(kw?'找不到「'+(S.passSearch||'').replace(/</g,'&lt;')+'」的吃到飽合約':'目前沒有使用中的吃到飽合約')+'</div>';
+  return items.map(x=>'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;margin-bottom:8px;background:'+(x.expired?'#fef2f2':'#f0fdf4')+';border-left:5px solid '+(x.expired?'var(--red)':'var(--grn)')+';">'
+    +'<div style="flex:1;min-width:180px;"><div style="font-size:16px;font-weight:800;">'+x.customer+(x.src==='deposit'?' <span class="tm" style="font-size:11px;font-weight:400;">（從儲值紀錄找到）</span>':'')+'</div>'
+    +'<div class="tm" style="font-size:13px;margin-top:2px;">'+x.plan+(x.price?'・$'+fmt(x.price):'')+(x.used!=null?'・已用 '+x.used+' 次':'')+'</div></div>'
+    +'<div style="text-align:right;"><div style="font-size:13px;color:#6b7280;">'+(x.start||'?')+' ～</div><div style="font-size:18px;font-weight:900;color:'+(x.expired?'var(--red)':'var(--grn)')+';">'+(x.end||'沒有到期日')+'</div>'
+    +'<div style="font-size:12px;font-weight:800;color:'+(x.expired?'var(--red)':'var(--grn)')+';">'+(x.daysLeft==null?'':x.expired?'已到期 '+(-x.daysLeft)+' 天':'還可以用 '+x.daysLeft+' 天')+'</div></div>'
+    +(x.src==='contract'?'<button class="btn btn-s btn-sm" onclick="viewPassContract(\''+x.id+'\')">📜 看合約</button>':'')
+    +'</div>').join('');
+}
+function passListSection(){
+  const all=allPassItems();
+  if(!all.length)return '';
+  const active=all.filter(x=>!x.expired).length;
+  return '<div class="card" style="margin:18px 0;border-top:4px solid var(--grn);"><div class="card-bd">'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><span style="flex:1;font-size:17px;font-weight:900;">🎫 除毛吃到飽合約</span><span class="bdg grn">使用中 '+active+' 筆</span><span class="tm" style="font-size:12px;">共 '+all.length+' 筆</span></div>'
+    +'<input type="text" id="pass_search" placeholder="🔍 打客人名字查到期日，例如：珮慈" value="'+(S.passSearch||'').replace(/"/g,'&quot;')+'" oninput="if(!event.isComposing)passSearchGo(this.value)" oncompositionend="passSearchGo(this.value)" style="width:100%;font-size:16px;padding:11px 14px;border-radius:12px;margin-bottom:10px;">'
+    +'<div id="pass_rows">'+passListRows()+'</div>'
+    +(all.length>active?'<button class="btn btn-s btn-sm" onclick="S.passShowAll=!S.passShowAll;var c=document.getElementById(\'pg-content\');if(c)c.innerHTML=renderPage();">'+(S.passShowAll?'只看使用中的':'也顯示已到期的（'+(all.length-active)+' 筆）')+'</button>':'')
+    +'</div></div>';
+}
+window.passSearchGo=function(v){S.passSearch=v;const el=document.getElementById('pass_rows');if(el)el.innerHTML=passListRows();};
 function custPassHtml(c){return (() => {
-    const passes=(S.data.passContracts||[]).filter(p=>normalizeName(p.customer)===normalizeName(c.name));
+    const cn=normalizeName(c.name);
+    const passes=(S.data.passContracts||[]).filter(p=>{const pn=normalizeName(p.customer);return pn===cn||(cn.length>=2&&pn.includes(cn))||(pn.length>=2&&cn.includes(pn));});
     if(passes.length===0)return'';
     return`<div class="sec" style="margin-top:20px;">
       <div class="sec-hd"><span class="sec-ttl">🎫 除毛吃到飽合約（${passes.length} 筆）</span></div>
