@@ -4635,7 +4635,7 @@ window.viewPassSignature=(id)=>{
 window.showCustomerIntake=(name)=>{
   const cust=(S.data.customers||[]).find(x=>x.name===name);
   if(!cust||!cust.healthForm){alert('沒有健康問卷資料');return;}
-  const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const qs=guestQuestions().filter(q=>!/Pick$/.test(q.key)).map(q=>q.key==='concerns'?Object.assign({},q,{label:'本次最想改善的問題'}):q.key==='expectation'?Object.assign({},q,{label:'對本次服務的期待'}):q);
   const rows=qs.filter(q=>q.type!=='section'&&q.type!=='declaration').map(q=>{
     let v=cust.healthForm[q.key];
     if(Array.isArray(v))v=v.join('、');
@@ -7957,7 +7957,7 @@ function pgGuestIntakeView(t){
       <div class="card-hd" style="background:var(--bluL);"><span class="card-ttl" style="color:var(--blu);">📋 健康小問卷</span></div>
       <div class="card-bd">
         <div class="tm" style="font-size:13px;margin-bottom:14px;">這些幫助我避開可能讓您不適的狀況，讓服務更安全 ♡</div>
-        ${healthQuestions.map(q=>renderGuestQuestion(q,t)).join('')}
+        ${renderGuestQuestionList(guestQuestions(),t)}
       </div>
     </div>
 
@@ -8034,8 +8034,39 @@ function guestStaffAlerts(t){
     +(goal?'<div style="padding:6px 10px;margin-top:6px;border-radius:8px;background:#eff6ff;color:#1e40af;">🎯 客人想改善：'+goal+'</div>':'')
     +'</div></details>';
 }
+// 新客問卷整理：生日、性別、介紹人、女性題只給女生、服務目標用選的
+const GUEST_CONCERNS=['痘痘／粉刺','毛孔粗大','暗沉／膚色不均','斑點','乾燥／脫皮','出油','敏感／泛紅','細紋／鬆弛','黑眼圈／浮腫','肩頸痠痛'];
+const GUEST_EXPECT=['放鬆紓壓','改善目前膚況','深層清潔粉刺','保濕補水','提亮膚色','學會正確的居家保養','定期保養維持好膚況'];
+function guestQuestions(){
+  const base=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const out=[];let addedBasic=false;
+  base.forEach(q=>{
+    if(['occupation','contactPhone','contactRelation','birthYear','gender','birthday','referrer','concernsPick','expectationPick'].includes(q.key)){
+      if(q.key==='birthYear'&&!addedBasic){addedBasic=true;out.push({key:'gender',label:'性別',type:'radio',options:['女','男']},{key:'birthday',label:'生日',type:'date'});}
+      return;
+    }
+    if(q.type==='section'&&/女性/.test(q.label)){out.push(Object.assign({},q,{label:q.label.replace(/[（(]男性可跳過[)）]/,'').trim(),female:true}));return;}
+    if(q.key==='concerns'){out.push({key:'concernsPick',label:'本次最想改善的問題（可以選好幾個）',type:'checkbox_group',options:GUEST_CONCERNS},{key:'concerns',label:'其他想改善的（選填）',type:'text',placeholder:'上面沒有的，可以寫在這裡'});return;}
+    if(q.key==='expectation'){out.push({key:'expectationPick',label:'對這次服務的期待（可以選好幾個）',type:'checkbox_group',options:GUEST_EXPECT},{key:'expectation',label:'其他期待（選填）',type:'text',placeholder:'上面沒有的，可以寫在這裡'});return;}
+    out.push(q);
+    if(q.key==='referralSource')out.push({key:'referrer',label:'介紹您來的朋友是？',type:'text',placeholder:'朋友的名字',showIfFriend:true});
+  });
+  if(!addedBasic){const i=out.findIndex(q=>q.type==='section');out.splice(i+1,0,{key:'gender',label:'性別',type:'radio',options:['女','男']},{key:'birthday',label:'生日',type:'date'});}
+  return out;
+}
+function renderGuestQuestionList(qs,t){
+  const hf=t.healthForm||{};let h='',inF=false;
+  qs.forEach(q=>{
+    if(q.type==='section'&&inF){h+='</div>';inF=false;}
+    if(q.female){h+='<div id="g_female" style="display:'+(hf.gender==='女'?'block':'none')+';">';inF=true;}
+    if(q.showIfFriend){h+='<div id="gq_referrer_wrap" style="display:'+((hf.referralSource||[]).includes('朋友介紹')?'block':'none')+';">'+renderGuestQuestion(q,t)+'</div>';return;}
+    h+=renderGuestQuestion(q,t);
+  });
+  if(inF)h+='</div>';
+  return h;
+}
 // 做臉／新客問卷：這幾題一定要回答（沒有就點「以上皆無」）
-const GUEST_REQUIRED=['chronic','skinCondition','currentMed','recentTreatment','hasAllergy'];
+const GUEST_REQUIRED=['gender','chronic','skinCondition','currentMed','recentTreatment','hasAllergy'];
 const GUEST_NONE=/^(以上皆無|無已知過敏)$/;
 // 渲染單一問卷題目（客戶填寫用）
 function renderGuestQuestion(q,t){
@@ -8047,8 +8078,12 @@ function renderGuestQuestion(q,t){
   }
   const v=t.healthForm?.[q.key];
   const req=GUEST_REQUIRED.includes(q.key)?' <span style="color:#dc2626;">*</span>':'';
+  if(q.type==='date'){
+    return`<div class="fgrp" id="gq_${q.key}" style="margin-bottom:10px;"><label>${q.label}${req}</label>
+      <input type="date" value="${v||''}" max="${today()}" onchange="setGuestForm('${q.key}',this.value)" style="font-size:16px;"></div>`;
+  }
   if(q.type==='text'){
-    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+    return`<div class="fgrp" id="gq_${q.key}" style="margin-bottom:10px;"><label>${q.label}</label>
       <input type="text" value="${(v||'').replace(/"/g,'&quot;')}" placeholder="${q.placeholder||''}" oninput="setGuestForm('${q.key}',this.value)"></div>`;
   }
   if(q.type==='textarea'){
@@ -8162,6 +8197,7 @@ window.pickGuestRadio=(key,val)=>{
   if(!S.treatment)return;
   if(!S.treatment.healthForm)S.treatment.healthForm={};
   S.treatment.healthForm[key]=val;
+  if(key==='gender'){const f=document.getElementById('g_female');if(f)f.style.display=val==='女'?'block':'none';}
   // 局部更新同組選項外觀，不重繪整頁
   if(window.event&&window.event.target){
     const clicked=window.event.target.closest('label')||window.event.target;
@@ -8189,6 +8225,7 @@ window.toggleGuestCheck=(key,opt)=>{
     arr.push(opt);
   }
   S.treatment.healthForm[key]=arr;
+  if(key==='referralSource'){const w=document.getElementById('gq_referrer_wrap');if(w)w.style.display=arr.includes('朋友介紹')?'block':'none';}
   // 只更新這一題的標籤外觀，不重繪整頁（避免名字/電話輸入被打斷）
   const grp=document.getElementById('gq_'+key);
   if(grp)grp.querySelectorAll('label[data-opt]').forEach(el=>{const on=arr.includes(el.getAttribute('data-opt'));el.style.background=on?'var(--blu)':'var(--bg2)';el.style.color=on?'#fff':'var(--txt)';});
@@ -8207,19 +8244,28 @@ window.submitGuestIntake=async()=>{
   if(!name){pmuNeed('g_name','請填寫您的稱呼／姓名');return;}
   if(!phone){pmuNeed('g_phone','請填寫聯絡電話');return;}
   const hf=t.healthForm||{};
-  const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const qs=guestQuestions();
   const miss=GUEST_REQUIRED.find(k=>qs.some(q=>q.key===k)&&!(Array.isArray(hf[k])?hf[k].length:hf[k]));
   if(miss){const q=qs.find(x=>x.key===miss);pmuNeed('gq_'+miss,'請回答「'+(q?q.label.replace(/^\d+\.\s*/,''):'')+'」，沒有的話點「'+((q&&q.options||[]).find(o=>GUEST_NONE.test(o))||'否')+'」');return;}
   if(!t.healthAgreed&&!$('g_agree')?.checked){pmuNeed('g_agree','請勾選「我已詳閱並同意」');return;}
   if(!_sigCanvas||(!_sigHasContent&&!pmuCanvasHasInk(_sigCanvas))){pmuNeed('t_guest_sign_canvas','請在框框裡簽名');return;}
   const signature=_sigCanvas.toDataURL('image/png');
+  // 選的＋自己寫的 合併成一句，方便之後查看
+  const mergeTxt=(pick,txt)=>[...(hf[pick]||[]),...(hf[txt]?[hf[txt]]:[])].join('、');
+  if((hf.concernsPick||[]).length)hf.concerns=mergeTxt('concernsPick','concerns');
+  if((hf.expectationPick||[]).length)hf.expectation=mergeTxt('expectationPick','expectation');
+  if(hf.gender==='男')['pregnant','pregnantWeeks','breastfeeding','menstrual','hormone'].forEach(k=>delete hf[k]);
+  if(hf.birthday)hf.birthYear=hf.birthday.slice(0,4);
+  if(!(hf.referralSource||[]).includes('朋友介紹'))delete hf.referrer;
+  const srcTxt=(hf.referralSource||[]).join('、')+(hf.referrer?'（'+hf.referrer+'）':'');
 
   // 建客戶檔 + 存首次同意紀錄
   const custId=uid();
   const customers=[...(S.data.customers||[]),{
     id:custId,name,phone,
     createdAt:today(),
-    healthForm:t.healthForm||{},
+    birthday:hf.birthday||'',gender:hf.gender||'',source:srcTxt,
+    healthForm:hf,
     serviceHealthAnswers:t.serviceHealthAnswers||{},
     serviceCats:t.guestServiceCats||[],
     healthAgreed:true,healthAgreedAt:new Date().toISOString(),
