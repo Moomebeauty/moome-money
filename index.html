@@ -7889,11 +7889,14 @@ function pgGuestIntakeView(t){
   // A｜美容師先選服務
   if(!t._handed){
     const cats=Object.keys(S.data.settings?.serviceHealthQuestions||{});
-    const allCats=cats.length>0?cats:['美容做臉','熱蠟除毛','霧眉霧唇','美體按摩'];
+    const allCats=(cats.length>0?cats:['美容做臉','熱蠟除毛','美體按摩']).filter(c=>!/紋繡|霧眉|霧唇/.test(c));
     const chosen=t.guestServiceCats||[];
+    const dr=guestLoadDraft();
     return btnBack('cancelGuestIntake()','取消')+`
     <div style="max-width:560px;margin:0 auto;padding:60px 18px;">
+      ${dr?`<div style="background:#eff6ff;border:2px solid #93c5fd;border-radius:14px;padding:14px 16px;margin-bottom:18px;"><div style="font-size:15px;font-weight:800;color:#1e40af;">📝 有一份填到一半的資料</div><div style="font-size:14px;color:#475569;margin:4px 0 10px;">${(dr.t.guestName||'（還沒填名字）')}・${new Date(dr.at).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}・填到第 ${(dr.t._step||0)+1} 步</div><div style="display:flex;gap:8px;"><button type="button" class="btn btn-p" style="flex:2;background:#2563eb;" onclick="guestResumeDraft()">繼續填寫 →</button><button type="button" class="btn btn-s" style="flex:1;" onclick="guestDropDraft()">刪掉</button></div></div>`:''}
       <div style="text-align:center;font-size:16px;font-weight:800;color:var(--goldDk);margin-bottom:16px;">👩‍💼 美容師先選這次要做的服務，再把平板交給客人</div>
+      <div style="text-align:center;font-size:13px;color:var(--mut);margin:-8px 0 14px;">紋繡請改用「紋繡服務」流程</div>
       <div class="card"><div class="card-bd"><div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
         ${allCats.map(cat=>`<button type="button" style="padding:12px 20px;background:${chosen.includes(cat)?'var(--gold)':'#fff'};color:${chosen.includes(cat)?'#fff':'var(--txt)'};border:2px solid var(--gold);border-radius:22px;cursor:pointer;font-size:16px;font-weight:700;" onclick="toggleGuestServiceCat('${cat}')">${chosen.includes(cat)?'✓ ':''}${cat}</button>`).join('')}
       </div></div></div>
@@ -7924,8 +7927,8 @@ function pgGuestIntakeView(t){
   let body='';
   if(step===0){
     body=`<div class="card"><div class="card-bd">
-      <div class="fgrp"><label>您的稱呼／姓名 <span style="color:#dc2626;">*</span></label><input type="text" id="g_name" value="${(t.guestName||'').replace(/"/g,'&quot;')}" placeholder="怎麼稱呼您呢？" style="font-size:17px;" oninput="S.treatment.guestName=this.value;"></div>
-      <div class="fgrp" style="margin-top:10px;"><label>聯絡電話 <span style="color:#dc2626;">*</span></label><input type="tel" id="g_phone" value="${(t.guestPhone||'').replace(/"/g,'&quot;')}" placeholder="例：0912-345-678" style="font-size:17px;" oninput="S.treatment.guestPhone=this.value;"></div>
+      <div class="fgrp"><label>您的稱呼／姓名 <span style="color:#dc2626;">*</span></label><input type="text" id="g_name" value="${(t.guestName||'').replace(/"/g,'&quot;')}" placeholder="怎麼稱呼您呢？" style="font-size:17px;" oninput="S.treatment.guestName=this.value;clearTimeout(window._gsd);window._gsd=setTimeout(guestSaveDraft,400);"></div>
+      <div class="fgrp" style="margin-top:10px;"><label>聯絡電話 <span style="color:#dc2626;">*</span></label><input type="tel" id="g_phone" value="${(t.guestPhone||'').replace(/"/g,'&quot;')}" placeholder="例：0912-345-678" style="font-size:17px;" oninput="S.treatment.guestPhone=this.value;clearTimeout(window._gsd);window._gsd=setTimeout(guestSaveDraft,400);"></div>
       <div style="margin-top:6px;">${renderGuestQuestionList(groups[0],t)}</div>
     </div></div>`;
   }else if(step===1){
@@ -7944,11 +7947,13 @@ function pgGuestIntakeView(t){
     const terms=guestTermsList(t,qs);
     const minor=guestIsMinor(hf.birthday);
     body=`<div class="card" style="border:2px solid var(--roseL);"><div class="card-bd">${guestRecapHtml(t)}</div></div>
-      ${terms.map((mt,i)=>`<div class="card" style="margin-top:14px;"><div class="card-hd" style="background:var(--goldL);"><span class="card-ttl" style="color:var(--goldDk);">${mt.title}</span></div><div class="card-bd">
-        <div style="background:var(--bg2);padding:14px 16px;border-radius:10px;font-size:15px;line-height:1.9;white-space:pre-wrap;max-height:240px;overflow-y:auto;color:#44403c;">${mt.content}</div>
-        <label style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer;padding:12px;background:var(--goldL);border-radius:10px;"><input type="checkbox" id="g_agree_${mt.id}" style="margin-top:5px;transform:scale(1.5);" ${t['agree_'+mt.id]?'checked':''} onchange="S.treatment['agree_${mt.id}']=this.checked;"><span style="font-size:16px;font-weight:700;color:var(--goldDk);">${mt.agree}</span></label>
+      ${guestAgreeGroups(terms).map(g=>`<div class="card" style="margin-top:14px;"><div class="card-bd">
+        <div style="font-size:16px;font-weight:900;color:var(--goldDk);margin-bottom:8px;">${g.title}</div>
+        <ul style="margin:0 0 6px;padding-left:20px;font-size:15px;line-height:1.85;color:#44403c;">${g.points.map(x=>'<li>'+x+'</li>').join('')}</ul>
+        ${g.items.map(mt=>`<details style="margin-top:4px;"><summary style="cursor:pointer;color:#2563eb;font-size:14px;">看完整「${mt.title.replace(/^\S+\s/,'')}」</summary><div style="background:var(--bg2);padding:12px 14px;border-radius:10px;font-size:14px;line-height:1.85;white-space:pre-wrap;max-height:260px;overflow-y:auto;color:#44403c;margin-top:6px;">${mt.content}</div></details>`).join('')}
+        <label style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;cursor:pointer;padding:12px;background:var(--goldL);border-radius:10px;"><input type="checkbox" id="g_agree_${g.id}" style="margin-top:5px;transform:scale(1.5);" ${t['agree_'+g.id]?'checked':''} onchange="S.treatment['agree_${g.id}']=this.checked;guestSaveDraft();"><span style="font-size:16px;font-weight:700;color:var(--goldDk);">${g.agree}</span></label>
       </div></div>`).join('')}
-      <label style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;cursor:pointer;padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;"><input type="checkbox" id="g_media" style="margin-top:5px;transform:scale(1.5);" ${t.agreeMedia?'checked':''} onchange="S.treatment.agreeMedia=this.checked;guestRecapRefresh();"><span style="font-size:15px;line-height:1.7;color:#334155;"><b>（選填）我同意</b>美容師拍攝服務前後對比照片，並以不露出全臉為原則分享於本店社群或官網。不勾選則照片僅供店內紀錄與追蹤膚況使用。</span></label>
+      <label style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;cursor:pointer;padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;"><input type="checkbox" id="g_media" style="margin-top:5px;transform:scale(1.5);" ${t.agreeMedia?'checked':''} onchange="S.treatment.agreeMedia=this.checked;guestRecapRefresh();"><span style="font-size:15px;line-height:1.7;color:#334155;"><b>📷（選填）我同意</b>美容師拍攝服務前後的膚況對比照片，分享於本店社群或官網 ♡<br><span style="font-size:13px;color:#6b7280;">沒勾選也沒關係，照片只會留在店內，用來追蹤您的膚況變化。</span></span></label>
       ${minor?`<div class="card" style="margin-top:14px;border:2px solid #f59e0b;"><div class="card-bd">
         <div style="font-size:16px;font-weight:800;color:#b45309;margin-bottom:6px;">👨‍👩‍👧 您未滿 18 歲，需要法定代理人（父母或監護人）同意</div>
         <div style="font-size:14px;color:#6b7280;margin-bottom:10px;">請由法定代理人填寫以下資料，並在下方簽名。</div>
@@ -8033,6 +8038,16 @@ function guestTermsList(t,qs){
   list.push({id:'privacy',title:'🔒 個人資料告知',content:S.data.settings?.guestPrivacyTerms||DEFAULT_GUEST_PRIVACY,agree:'我已了解並同意本店依上述方式蒐集、使用我的個人資料（含健康資料）'});
   return list;
 }
+// 簽名頁：把條款分成 2 個勾選，每個先列重點
+function guestAgreeGroups(terms){
+  const svc=terms.filter(x=>x.id!=='privacy'),pv=terms.filter(x=>x.id==='privacy');
+  const g=[];
+  if(svc.length)g.push({id:'svc',title:'📜 服務說明與客戶聲明',items:svc,agree:'我已據實填寫，並了解、同意以上服務說明',
+    points:['本服務為美容保養，<b>非醫療行為</b>，效果因膚質而異','服務後可能有暫時性泛紅、微熱或冒痘，通常幾天內會改善','過程中有任何不舒服，請隨時告訴美容師','以上資料皆據實填寫；健康狀況有變化，會主動告知']});
+  if(pv.length)g.push({id:'privacy',title:'🔒 個人資料使用',items:pv,agree:'我同意本店依上述方式使用我的個人資料（含健康資料）',
+    points:['只用於本店服務、評估安全與售後關心，不會提供給其他人','保存到最後一次服務後 2 年','您可以隨時要求查看、修改或刪除您的資料']});
+  return g;
+}
 function guestRecapHtml(t){
   const hf=t.healthForm||{};
   const pick=k=>(Array.isArray(hf[k])?hf[k]:[]).filter(x=>!GUEST_NONE.test(x));
@@ -8047,11 +8062,28 @@ function guestRecapHtml(t){
     +row('今天服務',(t.guestServiceCats||[]).join('、')||'—')
     +row('身體狀況',issues.length?'<b style="color:#dc2626;">有：'+issues.join('、')+'</b>':'<b style="color:#16a34a;">沒有特殊狀況</b>')
     +row('想改善',goal.join('、')||'—')
-    +row('作品照片',t.agreeMedia?'同意分享（不露全臉）':'不分享，只留店內紀錄')
+    +row('對比照片',t.agreeMedia?'同意分享':'不分享，只留店內紀錄')
     +'</div>';
 }
 window.guestRecapRefresh=function(){const c=document.querySelector('#g_recap');if(c&&S.treatment){const tmp=document.createElement('div');tmp.innerHTML=guestRecapHtml(S.treatment);const n=tmp.querySelector('#g_recap');if(n)c.innerHTML=n.innerHTML;}};
-function guestRerender(){const c=$('pg-content');if(c)c.innerHTML=renderPage();window.scrollTo(0,0);setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},120);}
+// ── 填到一半自動暫存（存在這台平板上，送出或刪掉才清除）──
+const GUEST_DRAFT_KEY='moome_guest_draft';
+function guestSaveDraft(){
+  const t=S.treatment;if(!t||t.mode!=='guestIntake'||t.guestSubmitted||!t._handed)return;
+  const nm=document.getElementById('g_name'),ph=document.getElementById('g_phone');if(nm)t.guestName=nm.value;if(ph)t.guestPhone=ph.value;
+  try{localStorage.setItem(GUEST_DRAFT_KEY,JSON.stringify({at:Date.now(),t:Object.assign({},t,{signature:null})}));}catch(e){}
+}
+window.guestSaveDraft=guestSaveDraft;
+function guestLoadDraft(){
+  try{const d=JSON.parse(localStorage.getItem(GUEST_DRAFT_KEY)||'null');if(d&&d.t&&Date.now()-d.at<3*864e5)return d;}catch(e){}
+  return null;
+}
+function guestClearDraft(){try{localStorage.removeItem(GUEST_DRAFT_KEY);}catch(e){}}
+window.guestResumeDraft=function(){const d=guestLoadDraft();if(!d)return;S.treatment=Object.assign(d.t,{mode:'guestIntake',guestSubmitted:false,_handed:true,_started:true});S.page='treatment';render();window.scrollTo(0,0);setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},150);};
+window.guestDropDraft=function(){if(!confirm('確定刪掉這份填到一半的資料？'))return;guestClearDraft();guestRerender();};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)guestSaveDraft();});
+window.addEventListener('pagehide',()=>guestSaveDraft());
+function guestRerender(){guestSaveDraft();const c=$('pg-content');if(c)c.innerHTML=renderPage();window.scrollTo(0,0);setTimeout(()=>{initSignatureCanvasInline('t_guest_sign_canvas');},120);}
 window.guestHandOver=function(){const t=S.treatment;if(!t)return;if(!(t.guestServiceCats||[]).length){toast('請先選這次的服務');return;}t._handed=true;t._started=false;t._step=0;guestRerender();};
 window.guestBackToStaff=function(){if(!S.treatment)return;S.treatment._handed=false;guestRerender();};
 window.guestStart=function(){if(!S.treatment)return;S.treatment._started=true;S.treatment._step=0;guestRerender();};
@@ -8203,6 +8235,7 @@ window.setGuestForm=(key,val)=>{
   if(!S.treatment)return;
   if(!S.treatment.healthForm)S.treatment.healthForm={};
   S.treatment.healthForm[key]=val;
+  clearTimeout(window._gsd);window._gsd=setTimeout(guestSaveDraft,400);
 };
 
 // 老師選這次的服務類別（會帶出對應專屬確認題目）
@@ -8250,6 +8283,7 @@ window.pickGuestServiceAns=(key,val)=>{
   if(!S.treatment)return;
   if(!S.treatment.serviceHealthAnswers)S.treatment.serviceHealthAnswers={};
   S.treatment.serviceHealthAnswers[key]=val;
+  guestSaveDraft();
   if(window.event&&window.event.target){
     const clicked=window.event.target.closest('label')||window.event.target;
     const group=clicked.parentElement;
@@ -8289,7 +8323,7 @@ window.pickGuestRadio=(key,val)=>{
   if(!S.treatment)return;
   if(!S.treatment.healthForm)S.treatment.healthForm={};
   S.treatment.healthForm[key]=val;
-  guestApplyShowIf();
+  guestApplyShowIf();guestSaveDraft();
   // 局部更新同組選項外觀，不重繪整頁
   if(window.event&&window.event.target){
     const clicked=window.event.target.closest('label')||window.event.target;
@@ -8317,15 +8351,16 @@ window.toggleGuestCheck=(key,opt)=>{
     arr.push(opt);
   }
   S.treatment.healthForm[key]=arr;
-  guestApplyShowIf();
+  guestApplyShowIf();guestSaveDraft();
   // 只更新這一題的標籤外觀，不重繪整頁（避免名字/電話輸入被打斷）
   const grp=document.getElementById('gq_'+key);
   if(grp)grp.querySelectorAll('label[data-opt]').forEach(el=>{const on=arr.includes(el.getAttribute('data-opt'));el.style.background=on?'var(--blu)':'var(--bg2)';el.style.color=on?'#fff':'var(--txt)';});
 };
 
 window.cancelGuestIntake=()=>{
-  if(confirm('確定取消？已填寫的內容不會儲存。'))
-    switchTreatmentMode('staff');
+  const t=S.treatment;
+  if(t&&t._handed){guestSaveDraft();if(confirm('要先離開嗎？\n已填的資料會自動暫存，之後按「接待新客人」就能繼續填。'))switchTreatmentMode('staff');}
+  else if(confirm('確定取消？'))switchTreatmentMode('staff');
 };
 
 window.submitGuestIntake=async()=>{
@@ -8338,7 +8373,7 @@ window.submitGuestIntake=async()=>{
   const hf=t.healthForm||{};
   const qs=guestQuestions();
   const terms=guestTermsList(t,qs);
-  for(const mt of terms){const cb=$('g_agree_'+mt.id);if(cb)t['agree_'+mt.id]=cb.checked;if(!t['agree_'+mt.id]){pmuNeed('g_agree_'+mt.id,'請勾選「'+mt.agree.slice(0,14)+'…」');return;}}
+  for(const g of guestAgreeGroups(terms)){const cb=$('g_agree_'+g.id);if(cb)t['agree_'+g.id]=cb.checked;if(!t['agree_'+g.id]){pmuNeed('g_agree_'+g.id,'請勾選「'+g.agree.slice(0,14)+'…」');return;}}
   const minor=guestIsMinor(hf.birthday);
   if(minor){const g=$('g_guardian'),r=$('g_guardian_rel');if(g)t.guardianName=g.value.trim();if(r)t.guardianRel=r.value.trim();
     if(!t.guardianName){pmuNeed('g_guardian','未滿 18 歲，請填寫法定代理人姓名');return;}
@@ -8367,7 +8402,7 @@ window.submitGuestIntake=async()=>{
     agreedTerms:(t.guestServiceCats||[]),
     // 簽署當下的條款全文（日後條款修改也能查到客人簽的版本）
     intakeTermsSnapshot:guestTermsList(t,qs).map(mt=>'━━ '+mt.title.replace(/^\S+\s/,'')+' ━━\n'+mt.content+'\n☑ '+mt.agree).join('\n\n')
-      +'\n\n━━ 作品照片 ━━\n'+(t.agreeMedia?'☑ 同意拍攝前後對比照，以不露出全臉為原則分享':'☐ 不同意分享，照片僅供店內紀錄')
+      +'\n\n━━ 對比照片 ━━\n'+(t.agreeMedia?'☑ 同意拍攝服務前後膚況對比照片，並分享於本店社群或官網':'☐ 未勾選同意分享，照片僅供店內紀錄與追蹤膚況')
       +(minor?'\n\n━━ 法定代理人 ━━\n'+t.guardianName+'（'+t.guardianRel+'）代為同意並簽名':''),
     agreeMedia:!!t.agreeMedia,
     guardianName:minor?t.guardianName:'',guardianRel:minor?t.guardianRel:'',
@@ -8378,6 +8413,7 @@ window.submitGuestIntake=async()=>{
 
   t.guestName=name;
   t.guestSubmitted=true;
+  guestClearDraft();
   toast(`✅ ${name} 的同意書已完成`);
   render();
 };
