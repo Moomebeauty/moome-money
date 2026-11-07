@@ -7888,7 +7888,8 @@ function pgGuestIntakeView(t){
   });
   // 都沒對應到 → 用通用版
   if(matchedTermsList.length===0){
-    matchedTermsList.push({key:'服務同意',content:termsMap['預設（通用）']||DEFAULT_HEALTH_QUESTIONS_DECLARATION});
+    const hasDecl=healthQuestions.some(q=>q.type==='declaration');
+    matchedTermsList.push({key:'服務同意',content:termsMap['預設（通用）']||(hasDecl?'':DEFAULT_HEALTH_QUESTIONS_DECLARATION)});
   }
   const done=t.guestSubmitted;
 
@@ -7905,6 +7906,7 @@ function pgGuestIntakeView(t){
           接下來我會依您的膚況與需求，<br>為您規劃最適合的保養～<br><br>
           現在請把裝置交回給美容師 🌸
         </div>
+        ${guestStaffAlerts(t)}
       </div>
     </div>`;
   }
@@ -7980,11 +7982,11 @@ function pgGuestIntakeView(t){
       <div class="card-bd">
         ${matchedTermsList.map(mt=>`
           ${matchedTermsList.length>1?`<div style="font-weight:700;color:var(--goldDk);font-size:14px;margin-bottom:6px;">◆ ${mt.key}</div>`:''}
-          <div style="background:var(--bg2);padding:14px;border-radius:10px;font-size:13px;line-height:1.9;white-space:pre-wrap;max-height:220px;overflow-y:auto;margin-bottom:12px;">${mt.content}</div>
+          ${mt.content?`<div style="background:var(--bg2);padding:14px;border-radius:10px;font-size:15px;line-height:1.9;white-space:pre-wrap;max-height:260px;overflow-y:auto;margin-bottom:12px;">${mt.content}</div>`:''}
         `).join('')}
         <label style="display:flex;align-items:flex-start;gap:8px;margin-top:6px;cursor:pointer;padding:12px;background:var(--goldL);border-radius:10px;">
           <input type="checkbox" id="g_agree" style="margin-top:3px;transform:scale(1.3);" ${t.healthAgreed?'checked':''} onchange="S.treatment.healthAgreed=this.checked;">
-          <span style="font-size:14px;font-weight:700;color:var(--goldDk);">我已詳閱並同意上述${matchedTermsList.length>1?'各項':''}內容，所填資料屬實</span>
+          <span style="font-size:16px;font-weight:700;color:var(--goldDk);">我已詳閱並同意上述${matchedTermsList.length>1?'各項':''}${matchedTermsList[0].content?'內容':'客戶聲明'}，所填資料屬實</span>
         </label>
       </div>
     </div>
@@ -8011,12 +8013,40 @@ function pgGuestIntakeView(t){
   </div>`;
 }
 
+// 完成畫面給老師看的重點（勾了什麼要注意）
+function guestStaffAlerts(t){
+  const hf=t.healthForm||{};const out=[];
+  const pick=(k,lbl)=>{const v=hf[k];const a=(Array.isArray(v)?v:[]).filter(x=>!GUEST_NONE.test(x));if(a.length)out.push(lbl+'：'+a.join('、'));};
+  pick('chronic','慢性病／體質');pick('skinCondition','皮膚狀況');pick('currentMed','近三個月用藥');pick('recentTreatment','近一年療程');
+  if(hf.lastTreatmentDate)out.push('最近一次療程：'+hf.lastTreatmentDate);
+  if(hf.hasAllergy==='是'){const al=[].concat(hf.allergenDrug||[],hf.allergenContact||[],(hf.allergenFood||[]).filter(x=>!GUEST_NONE.test(x)));out.push('⚠️ 過敏體質'+(al.length?'：'+al.join('、'):'')+(hf.allergenOther&&hf.allergenOther!=='無'?'（'+hf.allergenOther+'）':''));}
+  if((hf.allergySymptoms||[]).some(x=>x.includes('休克')))out.push('🚨 有呼吸困難／過敏性休克病史');
+  if(hf.pregnant==='是'||hf.pregnant==='備孕中')out.push('🤰 '+(hf.pregnant==='是'?'懷孕中'+(hf.pregnantWeeks?'（'+hf.pregnantWeeks+'）':''):'備孕中'));
+  if(hf.breastfeeding==='是')out.push('🍼 哺乳中');
+  if(hf.longTermMed&&hf.longTermMed!=='無')out.push('長期服藥：'+hf.longTermMed);
+  if(hf.otherSupplement&&hf.otherSupplement!=='無')out.push('其他補充：'+hf.otherSupplement);
+  const sa=t.serviceHealthAnswers||{};
+  Object.keys(sa).forEach(k=>{const v=sa[k];if(v==='是'||(Array.isArray(v)&&v.length))out.push('專屬確認 '+k.replace(/^svc_/,'').replace(/_/g,' ')+'：'+(Array.isArray(v)?v.join('、'):v));});
+  const goal=[hf.concerns,hf.expectation].filter(Boolean).join('；');
+  return '<details style="margin-top:26px;text-align:left;border-top:1px dashed #e5e7eb;padding-top:14px;"><summary style="cursor:pointer;color:#9ca3af;font-size:13px;">👩‍💼 美容師：點這裡看重點提醒'+(out.length?'（'+out.length+' 項要注意）':'')+'</summary>'
+    +'<div style="margin-top:10px;font-size:14px;line-height:1.85;">'
+    +(out.length?out.map(x=>'<div style="padding:6px 10px;margin-bottom:6px;border-radius:8px;background:#fef2f2;color:#991b1b;">'+x+'</div>').join(''):'<div style="padding:6px 10px;border-radius:8px;background:#f0fdf4;color:#166534;">✓ 健康問卷沒有需要特別注意的項目</div>')
+    +(goal?'<div style="padding:6px 10px;margin-top:6px;border-radius:8px;background:#eff6ff;color:#1e40af;">🎯 客人想改善：'+goal+'</div>':'')
+    +'</div></details>';
+}
+// 做臉／新客問卷：這幾題一定要回答（沒有就點「以上皆無」）
+const GUEST_REQUIRED=['chronic','skinCondition','currentMed','recentTreatment','hasAllergy'];
+const GUEST_NONE=/^(以上皆無|無已知過敏)$/;
 // 渲染單一問卷題目（客戶填寫用）
 function renderGuestQuestion(q,t){
   if(q.type==='section'){
     return`<div style="font-weight:700;color:var(--roseDk);font-size:15px;margin:18px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--roseL);">${q.label}</div>`;
   }
+  if(q.type==='declaration'){
+    return`<div style="background:#fffbeb;border:1px solid #fde68a;padding:14px 16px;border-radius:10px;font-size:15px;line-height:1.9;white-space:pre-wrap;color:#44403c;margin-bottom:10px;">${q.content||''}</div>`;
+  }
   const v=t.healthForm?.[q.key];
+  const req=GUEST_REQUIRED.includes(q.key)?' <span style="color:#dc2626;">*</span>':'';
   if(q.type==='text'){
     return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
       <input type="text" value="${(v||'').replace(/"/g,'&quot;')}" placeholder="${q.placeholder||''}" oninput="setGuestForm('${q.key}',this.value)"></div>`;
@@ -8026,16 +8056,16 @@ function renderGuestQuestion(q,t){
       <textarea rows="2" placeholder="${q.placeholder||''}" oninput="setGuestForm('${q.key}',this.value)">${v||''}</textarea></div>`;
   }
   if(q.type==='radio'){
-    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+    return`<div class="fgrp" id="gq_${q.key}" style="margin-bottom:10px;"><label>${q.label}${req}</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-        ${(q.options||[]).map(o=>`<label style="padding:8px 16px;background:${v===o?'var(--rose)':'var(--bg2)'};color:${v===o?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:14px;font-weight:${v===o?'700':'400'};" onclick="pickGuestRadio('${q.key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
+        ${(q.options||[]).map(o=>`<label style="padding:9px 18px;background:${v===o?'var(--rose)':'var(--bg2)'};color:${v===o?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:15px;font-weight:${v===o?'700':'400'};" onclick="pickGuestRadio('${q.key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
       </div></div>`;
   }
   if(q.type==='checkbox_group'){
     const arr=Array.isArray(v)?v:[];
-    return`<div class="fgrp" style="margin-bottom:10px;"><label>${q.label}</label>
+    return`<div class="fgrp" id="gq_${q.key}" style="margin-bottom:10px;"><label>${q.label}${req}</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-        ${(q.options||[]).map(o=>`<label style="padding:6px 12px;background:${arr.includes(o)?'var(--blu)':'var(--bg2)'};color:${arr.includes(o)?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:13px;">
+        ${(q.options||[]).map(o=>`<label data-opt="${o.replace(/"/g,'&quot;')}" style="padding:8px 14px;background:${arr.includes(o)?'var(--blu)':'var(--bg2)'};color:${arr.includes(o)?'#fff':'var(--txt)'};border-radius:16px;cursor:pointer;font-size:14px;">
           <input type="checkbox" style="display:none;" ${arr.includes(o)?'checked':''} onchange="toggleGuestCheck('${q.key}','${o.replace(/'/g,"\\'")}')">${o}</label>`).join('')}
       </div></div>`;
   }
@@ -8150,17 +8180,18 @@ window.pickGuestRadio=(key,val)=>{
 window.toggleGuestCheck=(key,opt)=>{
   if(!S.treatment)return;
   if(!S.treatment.healthForm)S.treatment.healthForm={};
-  const arr=Array.isArray(S.treatment.healthForm[key])?S.treatment.healthForm[key]:[];
+  let arr=Array.isArray(S.treatment.healthForm[key])?S.treatment.healthForm[key]:[];
   const i=arr.indexOf(opt);
-  if(i>=0)arr.splice(i,1);else arr.push(opt);
-  S.treatment.healthForm[key]=arr;
-  // 只更新被點的那顆標籤外觀，不重繪整頁（避免名字/電話輸入被打斷）
-  const selected=arr.includes(opt);
-  if(window.event&&window.event.target){
-    const el=window.event.target.closest('label')||window.event.target;
-    el.style.background=selected?'var(--blu)':'var(--bg2)';
-    el.style.color=selected?'#fff':'var(--txt)';
+  if(i>=0)arr.splice(i,1);
+  else{
+    if(GUEST_NONE.test(opt))arr=[];            // 點「以上皆無」→ 清掉其他
+    else arr=arr.filter(x=>!GUEST_NONE.test(x)); // 點其他 → 取消「以上皆無」
+    arr.push(opt);
   }
+  S.treatment.healthForm[key]=arr;
+  // 只更新這一題的標籤外觀，不重繪整頁（避免名字/電話輸入被打斷）
+  const grp=document.getElementById('gq_'+key);
+  if(grp)grp.querySelectorAll('label[data-opt]').forEach(el=>{const on=arr.includes(el.getAttribute('data-opt'));el.style.background=on?'var(--blu)':'var(--bg2)';el.style.color=on?'#fff':'var(--txt)';});
 };
 
 window.cancelGuestIntake=()=>{
@@ -8173,10 +8204,14 @@ window.submitGuestIntake=async()=>{
   if(!t)return;
   const name=(t.guestName||$('g_name')?.value||'').trim();
   const phone=(t.guestPhone||$('g_phone')?.value||'').trim();
-  if(!name){alert('請填寫您的稱呼／姓名');return;}
-  if(!phone){alert('請填寫聯絡電話');return;}
-  if(!t.healthAgreed&&!$('g_agree')?.checked){alert('請勾選「同意」才能完成');return;}
-  if(!_sigCanvas||!_sigHasContent){alert('請簽名確認');return;}
+  if(!name){pmuNeed('g_name','請填寫您的稱呼／姓名');return;}
+  if(!phone){pmuNeed('g_phone','請填寫聯絡電話');return;}
+  const hf=t.healthForm||{};
+  const qs=S.data.settings?.healthQuestions||DEFAULT_HEALTH_QUESTIONS;
+  const miss=GUEST_REQUIRED.find(k=>qs.some(q=>q.key===k)&&!(Array.isArray(hf[k])?hf[k].length:hf[k]));
+  if(miss){const q=qs.find(x=>x.key===miss);pmuNeed('gq_'+miss,'請回答「'+(q?q.label.replace(/^\d+\.\s*/,''):'')+'」，沒有的話點「'+((q&&q.options||[]).find(o=>GUEST_NONE.test(o))||'否')+'」');return;}
+  if(!t.healthAgreed&&!$('g_agree')?.checked){pmuNeed('g_agree','請勾選「我已詳閱並同意」');return;}
+  if(!_sigCanvas||(!_sigHasContent&&!pmuCanvasHasInk(_sigCanvas))){pmuNeed('t_guest_sign_canvas','請在框框裡簽名');return;}
   const signature=_sigCanvas.toDataURL('image/png');
 
   // 建客戶檔 + 存首次同意紀錄
