@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>沐蜜美學💰財務系統</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -165,19 +165,67 @@ tr:hover td{background:var(--bg);}
 .bdel-row{background:var(--redL);color:var(--red);border:none;border-radius:8px;width:36px;height:36px;font-size:18px;cursor:pointer;align-self:end;}
 .bdel-row:hover{background:var(--red);color:#fff;}
 
+/* ── 手機／平板 ── */
+.tb-menu,.bnav,.sb-extra,.sb-brand,.nav-mask{display:none;}
+@media(max-width:1023px){
+  .sidebar{width:270px;transform:translateX(-100%);transition:transform .25s ease;z-index:1200;box-shadow:4px 0 24px rgba(0,0,0,.18);padding-bottom:30px;}
+  .app.nav-open .sidebar{transform:translateX(0);}
+  .nav-mask{position:fixed;inset:0;background:rgba(45,31,26,.35);z-index:1100;}
+  .app.nav-open .nav-mask{display:block;}
+  .sb-brand{display:block;padding:18px 20px 12px;font-family:'Noto Serif TC',serif;font-size:20px;font-weight:900;color:#fff;letter-spacing:.12em;}
+  .sb-extra{display:block;border-top:1px solid rgba(255,255,255,.2);margin-top:10px;padding-top:6px;}
+  .main{margin-left:0;}
+  .tb-menu{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border:none;background:var(--roseL);color:var(--roseDk);border-radius:12px;font-size:22px;cursor:pointer;flex-shrink:0;}
+  .topbar{padding:0 14px;gap:10px;}
+  .tb-ttl{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tb-desk{display:none;}
+  .sg4{grid-template-columns:repeat(2,1fr);}
+  .content{padding:20px;}
+}
 @media(max-width:768px){
   body{font-size:16px;}
-  .sidebar{width:64px;}
-  .sb-item span:last-child{display:none;}
-  .sb-item{padding:14px;justify-content:center;}
-  .main{margin-left:64px;}
-  .sg4{grid-template-columns:repeat(2,1fr);}
-  .sg3{grid-template-columns:1fr;}
-  .sg2{grid-template-columns:1fr;}
+  .topbar{height:56px;}
+  .tb-ttl{font-size:17px;}
+  .tb-txt{display:none;}
+  .tb-search{padding:8px 12px;font-size:16px;}
+  .content{padding:14px 14px 96px;}
+  .pg-ttl{font-size:22px;}
+  .pg-sub{font-size:13px;margin-bottom:14px;}
+  .sg{gap:10px;margin-bottom:14px;}
+  .sg2,.sg3,.sg4{grid-template-columns:repeat(2,1fr);}
+  .sg:has(> .card),.sg:has(> div > .card),.sg:has(> div > .fgrp){grid-template-columns:1fr;}
+  .tw td,.tw th{white-space:nowrap;}
+  .tw td{max-width:240px;overflow:hidden;text-overflow:ellipsis;}
+  .tw{-webkit-overflow-scrolling:touch;}
+  .sc{padding:12px 14px;}
+  .sl{font-size:13px;margin-bottom:4px;}
+  .sv{font-size:21px;}
+  .sv.sm{font-size:18px;}
+  .ss{font-size:12px;}
+  .card{border-radius:14px;margin-bottom:14px;}
+  .card-hd{padding:13px 14px;}
+  .card-bd{padding:14px;}
+  .card-ttl{font-size:16px;}
   .fg2{grid-template-columns:1fr;}
+  .fgrp input,.fgrp select,.fgrp textarea,input,select,textarea{font-size:16px;}
   .batch-row{grid-template-columns:1fr 1fr;gap:6px;}
-  .pg-ttl{font-size:24px;}
-  .content{padding:18px;}
+  table{font-size:14px;}
+  th{padding:10px;font-size:12px;}
+  td{padding:10px;}
+  .tab-bar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;}
+  .tab-bar::-webkit-scrollbar{display:none;}
+  .tab-p{white-space:nowrap;flex-shrink:0;}
+  .btn{padding:10px 16px;}
+  .mbtns .btn{flex:1;}
+  .modal-bg.open{align-items:flex-end;}
+  .modal{width:100%;max-width:100%;border-radius:20px 20px 0 0;padding:22px 16px calc(22px + env(safe-area-inset-bottom));max-height:92vh;}
+  .mttl{font-size:18px;margin-bottom:16px;}
+  .toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));text-align:center;}
+  .sec-hd{flex-wrap:wrap;gap:8px;}
+  .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:900;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-top:1px solid var(--bdr);padding:6px 4px calc(6px + env(safe-area-inset-bottom));}
+  .bnav-i{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;font-size:11px;color:var(--mut);cursor:pointer;padding:4px 0;font-family:inherit;}
+  .bnav-ic{font-size:21px;line-height:1.1;}
+  .bnav-i.on{color:var(--roseDk);font-weight:800;}
 }
 .toast{position:fixed;bottom:28px;right:28px;background:var(--brown);color:#fff;padding:14px 22px;border-radius:12px;font-size:15px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:.3s;pointer-events:none;letter-spacing:0.06em;}
 .toast.show{opacity:1;transform:translateY(0);}
@@ -875,6 +923,7 @@ function startSync(){
     S.data.noteFolders=d.noteFolders||[];
     S.data.mindNotes=d.mindNotes||[];
     S.data.skinSolutions=d.skinSolutions||[];
+    S.data.ritual=d.ritual||{};
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -1076,6 +1125,7 @@ function appHTML(){
   const PAGES=[
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'action',ico:'🎯',lbl:'行動計畫'},
+    {id:'ritual',ico:'🌅',lbl:'金錢儀式'},
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
     {id:'myfinance',ico:'👑',lbl:'我的理財'},
     {id:'advisor',ico:'📈',lbl:'經營報表',group:'report'},
@@ -1103,29 +1153,37 @@ function appHTML(){
   const isCustomerMode=S.page==='treatment'&&S.treatment&&(S.treatment.mode==='customer'||S.treatment.mode==='newCustomer'||S.treatment.mode==='depositCustomer'||S.treatment.mode==='guestIntake'||S.treatment.mode==='depositSign'||S.treatment.mode==='passSign'||S.treatment.mode==='pmu');
   return`
 <div class="app${isCustomerMode?' customer-mode':''}">
-  ${isCustomerMode?'':`<nav class="sidebar">
+  ${isCustomerMode?'':`<div class="nav-mask" onclick="toggleNav(false)"></div><nav class="sidebar">
+    <div class="sb-brand">🌸 沐蜜美學</div>
     ${PAGES.map(p=>`<div class="sb-item${(S.page===p.id||(p.group&&p.group===curGroup))?' active':''}" onclick="setP('${p.id}')">
       <span class="ico">${p.ico}</span><span>${p.lbl}</span>
     </div>`).join('')}
+    <div class="sb-extra">
+      <div class="sb-item" onclick="toggleNav(false);exportXLSX()"><span class="ico">⬇</span><span>匯出 Excel</span></div>
+      <div class="sb-item" onclick="doOut()"><span class="ico">🚪</span><span>登出</span></div>
+    </div>
   </nav>`}
   <div class="main${isCustomerMode?' main-full':''}">
     ${isCustomerMode?'':`<div class="topbar">
+      <button class="tb-menu" onclick="toggleNav()" aria-label="選單">☰</button>
       <span class="tb-ttl">${curPage.ico} ${curPage.lbl}</span>
       <div class="tb-right">
         <div id="sync-dot" class="sync-dot"></div>
-        <button class="btn-out" onclick="openSearch()" style="background:linear-gradient(135deg,var(--pur),var(--blu));color:#fff;border:none;">🔍 搜尋</button>
-        <button class="btn-out" onclick="exportXLSX()">⬇ 匯出</button>
-        <button class="btn-out" onclick="doOut()">登出</button>
+        <button class="btn-out tb-search" onclick="openSearch()" style="background:linear-gradient(135deg,var(--pur),var(--blu));color:#fff;border:none;">🔍<span class="tb-txt"> 搜尋</span></button>
+        <button class="btn-out tb-desk" onclick="exportXLSX()">⬇ 匯出</button>
+        <button class="btn-out tb-desk" onclick="doOut()">登出</button>
       </div>
     </div>`}
     <div class="content${isCustomerMode?' content-customer':''}" id="pg-content">${renderPage()}</div>
   </div>
+  ${isCustomerMode?'':`<div class="bnav">${[['overview','📊','總覽'],['sales','💰','記帳'],['customers','👤','客戶'],['action','🎯','行動'],['__menu','☰','全部']].map(([id,ic,lb])=>`<button class="bnav-i${S.page===id?' on':''}" onclick="${id==='__menu'?'toggleNav()':`setP('${id}')`}"><span class="bnav-ic">${ic}</span><span>${lb}</span></button>`).join('')}</div>`}
 </div>
 <div class="modal-bg${S.modal?' open':''}" id="modal-bg">
   <div class="modal${S.modal&&S.modal.lg?' lg':''}" id="modal-inner">${renderModal()}</div>
 </div>`;
 }
 
+window.toggleNav=function(open){const a=document.querySelector('.app');if(!a)return;if(open===undefined)a.classList.toggle('nav-open');else a.classList.toggle('nav-open',!!open);};
 // ── 選單合併：一個入口，進去用分頁切換（原本的頁面內容不變）──
 const NAV_GROUPS={
   report:{tabs:[['advisor','🩺 白話健檢'],['monthReview','🔍 月底復盤'],['reports','📅 月報年報'],['profit','💎 季度年度分析']]},
@@ -1171,6 +1229,7 @@ function _renderPageInner(){
     case'courses':   return pgCourses();
     case'notes':     return pgNotes();
     case'action':    return pgAction();
+    case'ritual':    return pgRitual();
     case'cases':     return pgCases();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
@@ -1780,13 +1839,181 @@ window.actSaveGoal=async function(id){
 };
 window.actDelGoal=async function(id){if(!confirm('刪除這個目標？（相關行動會保留）'))return;await delSub('actionItems',id);closeMod();actRefresh();};
 
+// ═══════════ 🌅 每日金錢儀式 ═══════════
+const RITUAL_POOL=[
+  {id:'g1',g:'gold',t:'我愛今天的自己。',en:'I love the person I am today.'},
+  {id:'g2',g:'gold',t:'我的潛能無限。',en:'I have limitless potential.'},
+  {id:'g3',g:'gold',t:'我感謝我所擁有的一切。',en:"I'm grateful for all that I have."},
+  {id:'g4',g:'gold',t:'我熱愛我的人生。',en:'I love my life.'},
+  {id:'g5',g:'gold',t:'我感到平靜，也感到安心。',en:'I feel calm and at peace.'},
+  {id:'g6',g:'gold',t:'我散發著活力與能量。',en:'I radiate vitality and energy.'},
+  {id:'g7',g:'gold',t:'我有能力，一步一步創造我想要的生活。',en:'I have the power to create what I desire.'},
+  {id:'g8',g:'gold',t:'豐盛正一點一點流進我的生活。',en:"I'm attracting abundance into my life."},
+  {id:'g9',g:'gold',t:'我值得被愛，我夠好，我完全值得！',en:"I'm lovable, I'm good enough, I'm worthy."},
+  {id:'f1',g:'flow',t:'錢是流動的，流出去，也會流回來。'},
+  {id:'f2',g:'flow',t:'我可以放心地花，也可以安心地存，兩個都是在照顧自己。'},
+  {id:'f3',g:'flow',t:'我正在學會讓錢流動，而不是緊緊抓住它。'},
+  {id:'f4',g:'flow',t:'我感謝每一筆進帳，也祝福每一筆支出。'},
+  {id:'f5',g:'flow',t:'我的安全感來自我的能力和行動，不是帳戶裡的數字。'},
+  {id:'f6',g:'flow',t:'我每個月都更清楚自己的錢去了哪裡。'},
+  {id:'v1',g:'value',t:'我的技術值得好的價格。'},
+  {id:'v2',g:'value',t:'每一位客人離開時更美、更開心，錢就會自然回來。'},
+  {id:'v3',g:'value',t:'我把時間留給最有價值的事。'},
+  {id:'v4',g:'value',t:'我不需要完美，今天比昨天好一點就夠了。'},
+  {id:'v5',g:'value',t:'沐蜜是我用心打造的地方，值得被更多人看見。'},
+  {id:'v6',g:'value',t:'我敢收我應得的錢，也敢拒絕不適合的生意。'}
+];
+const RITUAL_G={gold:'✨ 黃金九句',flow:'🌊 讓錢流動',value:'💎 我的價值'};
+function ritualData(){return S.data.ritual||{};}
+function ritualPool(){const r=ritualData();return RITUAL_POOL.filter(x=>!(r.hidden||[]).includes(x.id)).concat((r.custom||[]).map(x=>Object.assign({g:x.g||'value'},x)));}
+function ritualDayIdx(d){return Math.floor(new Date(d||today()).getTime()/864e5);}
+// 今天的 3 句：每組輪一句（收藏的會優先出現）
+function ritualToday(){
+  const r=ritualData(),td=today(),log=(r.log||{})[td]||{};
+  const pool=ritualPool(),fav=r.fav||[];
+  const out=[];
+  ['gold','flow','value'].forEach((g,gi)=>{
+    let arr=pool.filter(x=>x.g===g);if(!arr.length)return;
+    const favs=arr.filter(x=>fav.includes(x.id));if(favs.length&&ritualDayIdx()%2===0)arr=favs;
+    const shift=(log.shift||0)+(log['s_'+g]||0);
+    out.push(arr[(ritualDayIdx()+gi*3+shift)%arr.length]);
+  });
+  return out;
+}
+function ritualStreak(){
+  const log=ritualData().log||{};let n=0;const d=new Date(today());
+  if(!log[today()]||!(log[today()].am||log[today()].pm))d.setDate(d.getDate()-1);
+  for(;;){const k=d.toISOString().slice(0,10);const l=log[k];if(l&&(l.am||l.pm)){n++;d.setDate(d.getDate()-1);}else break;}
+  return n;
+}
+function ritualIncomeToday(){
+  const td=today();
+  return (S.data.sales||[]).filter(s=>s.date===td&&s.payMethod!=='儲值扣款').reduce((a,s)=>a+toN(s.amount),0)
+    +(S.data.deposits||[]).filter(d=>d.date===td).reduce((a,d)=>a+toN(d.actualReceived||d.amount),0);
+}
+async function ritualSave(patch){
+  const r=JSON.parse(JSON.stringify(ritualData()));
+  patch(r);S.data.ritual=r;
+  try{await saveMain({ritual:r});}catch(e){}
+}
+function ritualRefresh(){const c=document.getElementById('pg-content');if(c){const y=window.scrollY;c.innerHTML=renderPage();window.scrollTo(0,y);}}
+window.ritualRefresh=ritualRefresh;
+// 總覽上的小卡
+function ritualOverviewCard(){
+  const log=(ritualData().log||{})[today()]||{};
+  const h=new Date().getHours(),eve=h>=17;
+  const st=ritualStreak();
+  const a=ritualToday()[0];
+  return '<div class="card" onclick="setP(\'ritual\')" style="cursor:pointer;margin:0 0 16px;background:linear-gradient(135deg,#fff7ed,#fdf2f8);border:1px solid #fde68a;"><div class="card-bd" style="display:flex;align-items:center;gap:12px;">'
+    +'<div style="font-size:34px;">'+(eve?'🌙':'🌅')+'</div>'
+    +'<div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:900;color:#9a3412;">'+(eve?(log.pm?'今晚的感恩完成了 ♡':'晚上的金錢感恩'):(log.am?'今天的金句念過了 ✓':'早安！念 3 句金句開始今天'))+(st?'　<span style="font-size:12px;color:#d97706;">🔥 連續 '+st+' 天</span>':'')+'</div>'
+    +'<div style="font-size:14px;color:#78350f;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">「'+(a?a.t:'')+'」</div></div>'
+    +'<span style="color:#d97706;font-size:20px;">›</span></div></div>';
+}
+function pgRitual(){
+  const r=ritualData(),td=today(),log=(r.log||{})[td]||{};
+  const tab=S.ritualTab||(new Date().getHours()>=17?'pm':'am');
+  const st=ritualStreak();
+  // 最近 7 天
+  const days=[];for(let i=6;i>=0;i--){const d=new Date(td);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);const l=(r.log||{})[k]||{};days.push({k,d:d.getDate(),w:'日一二三四五六'[d.getDay()],am:l.am,pm:l.pm});}
+  let h='<div class="pg-ttl">🌅 每日金錢儀式</div><div class="pg-sub">早上念金句、做一件賺錢的事；晚上感謝今天的每一筆錢</div>';
+  h+='<div class="card" style="background:linear-gradient(135deg,#fffbeb,#fff);"><div class="card-bd">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><b style="font-size:16px;color:#9a3412;">🔥 連續 '+st+' 天</b><span class="tm" style="font-size:12px;">早上或晚上做一個就算</span></div>'
+    +'<div style="display:flex;justify-content:space-between;gap:4px;">'+days.map(x=>'<div style="flex:1;text-align:center;"><div style="font-size:11px;color:#a8a29e;">'+x.w+'</div><div style="margin:4px auto 0;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;'+(x.am&&x.pm?'background:linear-gradient(135deg,#f59e0b,#ec4899);color:#fff;':x.am||x.pm?'background:#fde68a;color:#92400e;':'background:#f5f5f4;color:#a8a29e;')+(x.k===td?'outline:2px solid #ec4899;outline-offset:2px;':'')+'">'+x.d+'</div></div>').join('')+'</div>'
+    +'</div></div>';
+  const tb=(k,l)=>'<button type="button" onclick="S.ritualTab=\''+k+'\';ritualRefresh()" style="flex:1;padding:12px;border-radius:14px;border:none;font-size:16px;font-weight:800;cursor:pointer;'+(tab===k?'background:'+(k==='am'?'linear-gradient(135deg,#f59e0b,#f97316)':'linear-gradient(135deg,#6366f1,#a855f7)')+';color:#fff;':'background:#f5f5f4;color:#78716c;')+'">'+l+'</button>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:14px;">'+tb('am','🌅 早上'+(log.am?' ✓':''))+tb('pm','🌙 晚上'+(log.pm?' ✓':''))+'</div>';
+  if(tab==='am'){
+    const affs=ritualToday();
+    h+='<div class="card" style="background:linear-gradient(160deg,#fff7ed 0%,#fdf2f8 100%);"><div class="card-bd">'
+      +'<div style="font-size:14px;color:#9a3412;margin-bottom:12px;line-height:1.7;">深呼吸一次，慢慢念出來（心裡念也可以）。<br>念的時候，想像這句話已經是真的。</div>'
+      +affs.map((a,i)=>'<div style="background:#fff;border-radius:16px;padding:18px 18px 14px;margin-bottom:10px;box-shadow:0 2px 10px rgba(251,146,60,.12);">'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><span style="font-size:12px;color:#d97706;font-weight:800;flex:1;">'+RITUAL_G[a.g]+'</span>'
+        +'<button type="button" onclick="ritualFav(\''+a.id+'\')" style="border:none;background:none;font-size:18px;cursor:pointer;">'+((r.fav||[]).includes(a.id)?'⭐':'☆')+'</button>'
+        +'<button type="button" onclick="ritualShift(\''+a.g+'\')" style="border:none;background:none;font-size:13px;color:#a8a29e;cursor:pointer;">換一句</button></div>'
+        +'<div style="font-family:\'Noto Serif TC\',serif;font-size:22px;font-weight:900;color:#7c2d12;line-height:1.6;">'+a.t+'</div>'
+        +(a.en?'<div style="font-size:13px;color:#a8a29e;margin-top:4px;font-style:italic;">'+a.en+'</div>':'')
+        +'</div>').join('')
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">'
+      +'<button type="button" class="btn btn-s" style="flex:1;min-width:140px;" onclick="ritualSpeak()">🔊 唸給我聽</button>'
+      +'<button type="button" class="btn btn-s" style="flex:1;min-width:140px;" onclick="ritualBreath()">🌬️ 1 分鐘呼吸</button></div>'
+      +'<div id="ritual_breath"></div>'
+      +'</div></div>';
+    // 今天最重要的賺錢行動
+    const must=(typeof actMustToday==='function'?actMustToday(td):[]).filter(t=>t.status!=='done');
+    h+='<div class="card"><div class="card-bd"><div style="font-size:16px;font-weight:900;color:#7c2d12;margin-bottom:6px;">💪 念完，就去做這一件事</div>'
+      +'<div class="tm" style="font-size:13px;margin-bottom:10px;">金句讓心定下來，行動才會把錢帶進來。</div>'
+      +(must.length?'<div style="background:#fef2f2;border-left:5px solid #ef4444;border-radius:12px;padding:12px 14px;font-size:16px;font-weight:800;color:#991b1b;">'+must[0].title+'</div><button type="button" class="btn btn-s btn-sm" style="margin-top:8px;" onclick="S.actTab=\'today\';setP(\'action\')">去行動計畫 ›</button>'
+        :'<div style="display:flex;gap:8px;"><input type="text" id="ritual_act" placeholder="例：傳訊息邀 3 位老客回來" value="'+((log.act||'').replace(/"/g,'&quot;'))+'" style="flex:1;font-size:16px;padding:11px 12px;border-radius:10px;border:1.5px solid var(--bdr);"></div>')
+      +'</div></div>';
+    h+='<button type="button" class="btn btn-p" style="width:100%;padding:16px;font-size:17px;background:'+(log.am?'#d6d3d1':'linear-gradient(135deg,#f59e0b,#ec4899)')+';" onclick="ritualDone(\'am\')">'+(log.am?'✓ 今天早上完成了':'✓ 我念完了，開始美好的一天')+'</button>';
+  }else{
+    const inc=ritualIncomeToday();
+    h+='<div class="card" style="background:linear-gradient(160deg,#eef2ff 0%,#fdf4ff 100%);"><div class="card-bd" style="text-align:center;">'
+      +'<div style="font-size:14px;color:#6366f1;">今天進來的錢</div>'
+      +'<div style="font-family:\'Noto Serif TC\',serif;font-size:38px;font-weight:900;color:#4338ca;margin:4px 0;">$'+fmt(inc)+'</div>'
+      +'<div style="font-size:16px;color:#5b21b6;line-height:1.8;font-weight:700;">'+(inc>0?'謝謝你們來到我身邊 ♡<br>謝謝今天每一位信任我的客人':'今天沒有進帳也沒關係<br>我播下的種子，正在慢慢長大')+'</div>'
+      +'<div style="font-size:13px;color:#7c3aed;margin-top:10px;line-height:1.7;">今天花出去的每一筆，也對它說：<br>「謝謝你，去照顧別人，記得帶更多朋友回來」</div>'
+      +'</div></div>';
+    const th=log.thanks||['','',''];
+    h+='<div class="card"><div class="card-bd"><div style="font-size:16px;font-weight:900;color:#4338ca;margin-bottom:10px;">🙏 今天感謝的 3 件事</div>'
+      +[0,1,2].map(i=>'<input type="text" id="ritual_th'+i+'" value="'+((th[i]||'').replace(/"/g,'&quot;'))+'" placeholder="'+['例：王小姐說她的皮膚變好了','例：今天順利準時收工','例：謝謝自己今天很努力'][i]+'" style="width:100%;font-size:16px;padding:11px 12px;border-radius:10px;border:1.5px solid var(--bdr);margin-bottom:8px;">').join('')
+      +'<div style="font-size:16px;font-weight:900;color:#4338ca;margin:8px 0;">🌱 今天我為「錢」做的一件好事</div>'
+      +'<input type="text" id="ritual_good" value="'+((log.good||'').replace(/"/g,'&quot;'))+'" placeholder="例：記好帳、回覆了客人、拒絕了不划算的折扣" style="width:100%;font-size:16px;padding:11px 12px;border-radius:10px;border:1.5px solid var(--bdr);">'
+      +'</div></div>';
+    h+='<button type="button" class="btn btn-p" style="width:100%;padding:16px;font-size:17px;background:linear-gradient(135deg,#6366f1,#a855f7);" onclick="ritualDone(\'pm\')">'+(log.pm?'✓ 已完成（再按一次可以更新）':'✓ 完成今天的感恩')+'</button>';
+  }
+  // 我的金句
+  h+='<details style="margin-top:20px;"><summary style="cursor:pointer;font-size:15px;font-weight:800;color:#78716c;">📜 我的金句庫（'+ritualPool().length+' 句，可以新增或隱藏）</summary><div class="card" style="margin-top:10px;"><div class="card-bd">'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><input type="text" id="ritual_new" placeholder="寫一句屬於你的金句" style="flex:1;min-width:180px;font-size:16px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--bdr);"><button type="button" class="btn btn-p btn-sm" onclick="ritualAdd()">＋ 加入</button></div>'
+    +['gold','flow','value'].map(g=>'<div style="font-size:13px;font-weight:800;color:#d97706;margin:10px 0 6px;">'+RITUAL_G[g]+'</div>'
+      +RITUAL_POOL.concat(r.custom||[]).filter(x=>(x.g||'value')===g).map(x=>{const hid=(r.hidden||[]).includes(x.id),cu=(r.custom||[]).some(c=>c.id===x.id);
+        return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed #f1e4de;'+(hid?'opacity:.4;':'')+'"><span style="flex:1;font-size:15px;">'+((r.fav||[]).includes(x.id)?'⭐ ':'')+x.t+'</span>'
+          +(cu?'<button type="button" class="bdel" onclick="ritualDel(\''+x.id+'\')">×</button>':'<button type="button" class="btn btn-s btn-sm" style="font-size:12px;padding:4px 10px;" onclick="ritualHide(\''+x.id+'\')">'+(hid?'顯示':'隱藏')+'</button>')+'</div>';}).join('')).join('')
+    +'</div></div></details>';
+  h+='<div class="tm" style="font-size:12px;margin-top:16px;line-height:1.7;text-align:center;">💡 金句讓心安定、更有勇氣行動；真正讓錢變多的，是你每天做的那一件事。</div>';
+  return h;
+}
+window.ritualFav=function(id){ritualSave(r=>{r.fav=r.fav||[];const i=r.fav.indexOf(id);if(i>=0)r.fav.splice(i,1);else r.fav.push(id);});ritualRefresh();};
+window.ritualShift=function(g){ritualSave(r=>{r.log=r.log||{};const l=r.log[today()]=r.log[today()]||{};l['s_'+g]=(l['s_'+g]||0)+1;});ritualRefresh();};
+window.ritualHide=function(id){ritualSave(r=>{r.hidden=r.hidden||[];const i=r.hidden.indexOf(id);if(i>=0)r.hidden.splice(i,1);else r.hidden.push(id);});ritualRefresh();};
+window.ritualAdd=function(){const el=$('ritual_new');const v=(el&&el.value||'').trim();if(!v){toast('先寫一句金句');return;}ritualSave(r=>{r.custom=r.custom||[];r.custom.push({id:'c'+Date.now(),g:'value',t:v});r.fav=r.fav||[];});toast('✨ 已加入你的金句庫');ritualRefresh();};
+window.ritualDel=function(id){if(!confirm('刪除這句金句？'))return;ritualSave(r=>{r.custom=(r.custom||[]).filter(x=>x.id!==id);});ritualRefresh();};
+window.ritualDone=function(k){
+  ritualSave(r=>{r.log=r.log||{};const l=r.log[today()]=r.log[today()]||{};l[k]=true;
+    if(k==='am'){const a=$('ritual_act');if(a)l.act=a.value.trim();}
+    if(k==='pm'){l.thanks=[0,1,2].map(i=>($('ritual_th'+i)||{}).value||'');l.good=($('ritual_good')||{}).value||'';l.income=ritualIncomeToday();}
+    // 只留最近 120 天
+    const ks=Object.keys(r.log).sort();while(ks.length>120)delete r.log[ks.shift()];
+  });
+  toast(k==='am'?'🌅 美好的一天開始了，去做那一件事吧！':'🌙 謝謝今天的自己，晚安 ♡');
+  ritualRefresh();window.scrollTo(0,0);
+};
+window.ritualSpeak=function(){
+  if(!('speechSynthesis' in window)){toast('這台裝置不支援朗讀');return;}
+  speechSynthesis.cancel();
+  ritualToday().forEach(a=>{const u=new SpeechSynthesisUtterance(a.t);u.lang='zh-TW';u.rate=0.85;u.pitch=1.05;speechSynthesis.speak(u);});
+};
+window.ritualBreath=function(){
+  const box=$('ritual_breath');if(!box)return;
+  if(window._rbT){clearInterval(window._rbT);window._rbT=null;box.innerHTML='';return;}
+  const seq=[['吸氣',4,1.25],['停住',4,1.25],['慢慢吐氣',6,0.85]];let i=0,left=60,phase=0,t=seq[0][1];
+  box.innerHTML='<div style="text-align:center;padding:20px 0 6px;"><div id="rb_c" style="margin:0 auto;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,#fde68a,#f9a8d4);transition:transform 4s ease-in-out;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#7c2d12;"></div><div id="rb_l" class="tm" style="margin-top:10px;font-size:13px;"></div></div>';
+  const tick=()=>{const c=$('rb_c'),l=$('rb_l');if(!c){clearInterval(window._rbT);window._rbT=null;return;}
+    if(t<=0){phase=(phase+1)%3;t=seq[phase][1];}
+    c.style.transitionDuration=seq[phase][1]+'s';c.style.transform='scale('+seq[phase][2]+')';
+    c.textContent=seq[phase][0]+' '+t;l.textContent='還有 '+left+' 秒・放鬆胸口和雙手';
+    t--;left--;if(left<0){clearInterval(window._rbT);window._rbT=null;c.textContent='很好 ♡';c.style.transform='scale(1)';l.textContent='感覺胸口慢慢鬆開了';}};
+  tick();window._rbT=setInterval(tick,1000);
+};
+
 // 總覽最上方：今天的 3 件事
 function actOverviewCard(){
   const td=today();
   const must=actMustToday(td);
   const msgs=actCustomerMsgs().length,fu=actFollowUps().length,od=actOverdue().length;
   let h='<div class="card" style="margin:0 0 16px;border:2px solid #fca5a5;background:linear-gradient(135deg,#fff,#fff7ed);"><div class="card-bd">'
-    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><b style="font-size:17px;color:#b91c1c;">🔥 今天的 3 件事</b><span class="tm" style="font-size:12px;">'+must.filter(t=>t.status==='done').length+' / '+must.length+' 完成</span><span style="flex:1;"></span><button class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="S.actTab=\'today\';setP(\'action\')">🎯 行動計畫 ›</button></div>';
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><b style="font-size:17px;color:#b91c1c;white-space:nowrap;">🔥 今天的 3 件事</b><span class="tm" style="font-size:12px;white-space:nowrap;">'+must.filter(t=>t.status==='done').length+' / '+must.length+' 完成</span><span style="flex:1;"></span><button class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="S.actTab=\'today\';setP(\'action\')">🎯 行動計畫 ›</button></div>';
   h+=must.length?'<div style="display:flex;flex-direction:column;gap:6px;">'+must.map(t=>actTaskRow(t)).join('')+'</div>'
     :'<div class="tm" style="font-size:14px;">今天還沒排。<a href="javascript:void(0)" onclick="S.actTab=\'today\';setP(\'action\')" style="color:#dc2626;font-weight:800;">去選今天最重要的 3 件事 ›</a></div>';
   const chips=[];
@@ -1853,6 +2080,7 @@ function pgOverview(){
 
   return`
   ${actOverviewCard()}
+  ${ritualOverviewCard()}
   <div class="pg-ttl">📊 工作室總覽</div>
   <div class="pg-sub">${yr()}年 ${MOS[S.month-1]}　第 ${curQ} 季</div>
 
