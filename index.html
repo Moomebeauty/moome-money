@@ -195,6 +195,7 @@ tr:hover td{background:var(--bg);}
   .sg2,.sg3,.sg4{grid-template-columns:repeat(2,1fr);}
   .sg:has(> .card),.sg:has(> div > .card),.sg:has(> div > .fgrp){grid-template-columns:1fr;}
   .tw td,.tw th{white-space:nowrap;}
+  .cp-tbl th,.cp-tbl td{padding:6px 3px;}
   .tw td{max-width:240px;overflow:hidden;text-overflow:ellipsis;}
   .tw{-webkit-overflow-scrolling:touch;}
   .sc{padding:12px 14px;}
@@ -9466,6 +9467,147 @@ function getDerivedCashFlows(){
   return flows;
 }
 
+// ═══════════ 🛟 未來 3 個月現金預測（含「為什麼」教學）═══════════
+function cpWhy(title,body){return '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:13px;color:#2563eb;font-weight:700;">💡 '+title+'</summary><div style="margin-top:6px;background:#eff6ff;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.85;color:#1e3a8a;">'+body+'</div></details>';}
+function cpHistory(){
+  // 最近 3 個「完整月份」的平均（不含本月）
+  const all=getDerivedCashFlows();
+  const n=new Date();let y=n.getFullYear(),m=n.getMonth()+1;
+  const months=[];for(let i=0;i<3;i++){m--;if(m<1){m=12;y--;}months.push([y,m]);}
+  const inM=(e)=>months.some(([yy,mm])=>e.year===yy&&e.month===mm);
+  const fl=all.filter(inM);
+  const used=months.filter(([yy,mm])=>fl.some(e=>e.year===yy&&e.month===mm)).length||1;
+  const avgIn=fl.filter(e=>toN(e.amount)>0).reduce((s,e)=>s+toN(e.amount),0)/used;
+  const cat=c=>fl.filter(e=>toN(e.amount)<0&&c.includes(e.cat)).reduce((s,e)=>s+Math.abs(toN(e.amount)),0)/used;
+  const known=['房租','水電','薪資','進貨成本','材料耗材','進貨'];
+  const other=fl.filter(e=>toN(e.amount)<0&&!known.includes(e.cat)).reduce((s,e)=>s+Math.abs(toN(e.amount)),0)/used;
+  return {used,avgIn,rent:cat(['房租']),util:cat(['水電']),salary:cat(['薪資']),stock:cat(['進貨成本','材料耗材','進貨']),other};
+}
+function cpPlan(){
+  const p=JSON.parse(JSON.stringify((S.data.settings||{}).cashPlan||{}));
+  const h=cpHistory();const r=v=>Math.round(v/100)*100;
+  if(!p.rows)p.rows=[
+    {k:'rent',name:'🏠 房租',m:[r(h.rent),r(h.rent),r(h.rent)]},
+    {k:'util',name:'💡 水電網路',m:[r(h.util),r(h.util),r(h.util)]},
+    {k:'salary',name:'👩‍🎨 老師薪資／抽成',m:[r(h.salary),r(h.salary),r(h.salary)]},
+    {k:'loan',name:'🏦 貸款本金＋利息',m:[0,0,0]},
+    {k:'tax',name:'🧾 勞健保・稅金',m:[0,0,0]},
+    {k:'stock',name:'📦 進貨・耗材',m:[r(h.stock),r(h.stock),r(h.stock)]},
+    {k:'other',name:'📣 行銷・平台・雜支',m:[r(h.other),r(h.other),r(h.other)]}
+  ];
+  if(!p.income){const v=r(h.avgIn*0.8);p.income=[v,v,v];}
+  return {p,h};
+}
+function cpMonths(){const n=new Date();const out=[];let y=n.getFullYear(),m=n.getMonth()+1;for(let i=0;i<3;i++){m++;if(m>12){m=1;y++;}out.push({y,m});}return out;}
+function cpUnpaidPurchases(){return (S.data.purchases||[]).filter(x=>!(x.paid||x.paidToExpense)).reduce((s,x)=>s+toN(x.totalCost),0);}
+function cashPlanHTML(){
+  const {p,h}=cpPlan();
+  const ms=cpMonths();
+  const bank=toN(p.bank),cash=toN(p.cash),thisMonthLeft=toN(p.thisMonthLeft),restricted=toN(p.restricted);
+  const unpaid=cpUnpaidPurchases();
+  const liability=getTotalDepositLiability();
+  const usable=bank+cash-unpaid-thisMonthLeft-restricted;
+  const outM=[0,1,2].map(i=>p.rows.reduce((s,r)=>s+toN(r.m[i]),0));
+  const inM=[0,1,2].map(i=>toN(p.income[i]));
+  let bal=usable;const rows=ms.map((mm,i)=>{const open=bal;bal=bal+inM[i]-outM[i];return {mm,open,inc:inM[i],out:outM[i],close:bal};});
+  const avgOut=(outM[0]+outM[1]+outM[2])/3;
+  const runway=avgOut>0?usable/avgOut:0;
+  const minClose=Math.min(...rows.map(r=>r.close));
+  const gap=minClose<0?-minClose:0;
+  const updated=p.asOf||'';
+  const fresh=updated&&(new Date(today())-new Date(updated))/864e5<=30;
+  const inp=(id,val,ph)=>'<input type="number" inputmode="numeric" value="'+(val||'')+'" placeholder="'+(ph||'0')+'" onchange="cpSet(\''+id+'\',this.value)" style="width:100%;font-size:16px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--bdr);">';
+  const money=v=>(v<0?'−':'')+'$'+fmt(Math.abs(Math.round(v)));
+  let html='<div class="card" style="border:2px solid #0ea5e9;"><div class="card-hd" style="background:linear-gradient(90deg,#e0f2fe,#fff);"><span class="card-ttl" style="color:#0369a1;">🛟 未來 3 個月現金預測</span><span class="tm" style="font-size:12px;">'+(updated?'銀行餘額更新於 '+updated:'還沒填銀行餘額')+'</span></div><div class="card-bd">';
+  html+='<div style="font-size:14px;color:#334155;line-height:1.8;margin-bottom:6px;">帳面賺錢不等於有錢付帳單。這裡回答三個問題：<b>現在手上真的能用的錢有多少？未來 3 個月要付多少？會不會有某個月付不出來？</b></div>'
+    +cpWhy('為什麼要做這個預測？','很多店家倒閉，不是因為不賺錢，而是在「某一個月」剛好現金不夠，付不出房租或薪水。<br>例如：12 月客人少、1 月又要付年終或大筆進貨，即使整年是賺的，中間只要有一個月現金斷掉就會很危險。<br>提前 3 個月看見缺口，你就有時間慢慢補，而不是到月底才慌張。');
+  // ① 家底
+  html+='<div style="margin-top:16px;font-size:16px;font-weight:900;color:#0369a1;">① 現在手上「真的能用」的錢</div>'
+    +'<div class="fg fg2" style="margin-top:8px;">'
+    +'<div class="fgrp"><label>🏦 銀行帳戶餘額（今天看存摺／網銀）</label>'+inp('bank',p.bank,'例：120000')+'</div>'
+    +'<div class="fgrp"><label>💵 店裡的現金</label>'+inp('cash',p.cash,'例：8000')+'</div>'
+    +'<div class="fgrp"><label>📅 這個月「還沒付」的錢（例：月底要發的薪水）</label>'+inp('thisMonthLeft',p.thisMonthLeft,'0')+'</div>'
+    +'<div class="fgrp"><label>🔒 其他不能動的錢（例：預留的稅金、設備基金）</label>'+inp('restricted',p.restricted,'0')+'</div>'
+    +'</div>'
+    +'<div style="margin-top:10px;background:#f8fafc;border-radius:12px;padding:12px 14px;font-size:15px;line-height:2;">'
+    +'銀行 '+money(bank)+' ＋ 現金 '+money(cash)
+    +(unpaid?' − 欠廠商貨款 '+money(unpaid)+' <span class="tm" style="font-size:12px;">（進貨管理裡「未付款」的自動帶入）</span>':'')
+    +(thisMonthLeft?' − 本月還沒付 '+money(thisMonthLeft):'')+(restricted?' − 不能動的 '+money(restricted):'')
+    +'<br>＝ <b style="font-size:20px;color:'+(usable>=0?'#0369a1':'#dc2626')+';">淨可動用現金 '+money(usable)+'</b></div>'
+    +'<div style="margin-top:8px;font-size:13px;color:#7c3aed;background:#faf5ff;border-radius:10px;padding:10px 12px;line-height:1.8;">💳 另外，你還欠客人 <b>'+money(liability)+'</b> 的儲值服務。這筆錢通常不用還現金，但要用你的時間和耗材去「還」，而且客人來消費時不會再付錢。所以儲值越多，未來的「新現金」就越少。</div>'
+    +cpWhy('為什麼不能只看存摺上的數字？','存摺上的錢，有些其實「已經是別人的」：<br>• 欠廠商的貨款，遲早要付出去<br>• 這個月底要發的薪水，已經訂好了<br>• 預留的稅金，到時候一定要繳<br>把這些先扣掉，剩下的才是你遇到突發狀況時真的能動用的錢。就像薪水入帳後，先扣掉房租和卡費，剩下的才是能花的。');
+  // ② 未來支出
+  html+='<div style="margin-top:20px;font-size:16px;font-weight:900;color:#0369a1;">② 未來 3 個月「一定要付」的錢</div>'
+    +'<div class="tm" style="font-size:13px;margin:4px 0 8px;">已經用你最近 '+h.used+' 個月的平均先幫你填好，有不一樣的直接改（例如過年前要多進貨、年中要繳稅）。</div>'
+    +'<div><table class="cp-tbl" style="font-size:14px;table-layout:fixed;width:100%;"><colgroup><col style="width:28%"><col><col><col></colgroup><thead><tr><th>項目</th>'+ms.map(x=>'<th style="text-align:right;">'+x.m+' 月</th>').join('')+'</tr></thead><tbody>'
+    +p.rows.map((r,ri)=>'<tr><td style="white-space:normal;line-height:1.4;">'+r.name+'</td>'+[0,1,2].map(i=>'<td><input type="number" inputmode="numeric" value="'+(r.m[i]||'')+'" placeholder="0" onchange="cpRow('+ri+','+i+',this.value)" style="width:100%;font-size:15px;padding:7px 3px;border-radius:8px;border:1.5px solid var(--bdr);text-align:right;"></td>').join('')+'</tr>').join('')
+    +'<tr style="background:#fef2f2;"><td><b>合計要付</b></td>'+outM.map(v=>'<td style="text-align:right;"><b style="color:#dc2626;">'+money(v)+'</b></td>').join('')+'</tr></tbody></table></div>'
+    +cpWhy('為什麼要分開列，不能只寫一個總數？','因為每一項的「彈性」不一樣：<br>• 房租、貸款、稅金：時間到就要付，<b>完全不能拖</b><br>• 老師抽成：跟營收一起變動，生意少時會跟著變少<br>• 進貨、行銷：<b>可以自己控制</b>，缺錢時最先能暫停的就是它們<br>分開列，遇到缺口時你才知道哪裡可以先縮。');
+  // ③ 預估收入
+  html+='<div style="margin-top:20px;font-size:16px;font-weight:900;color:#0369a1;">③ 未來 3 個月「保守估計」會進來的錢</div>'
+    +'<div class="tm" style="font-size:13px;margin:4px 0 8px;">最近平均每月進帳 '+money(h.avgIn)+'，先打 8 折當保守估計。</div>'
+    +'<div style="display:flex;gap:8px;">'+ms.map((x,i)=>'<div style="flex:1;"><div style="font-size:13px;color:#64748b;margin-bottom:4px;">'+x.m+' 月</div><input type="number" inputmode="numeric" value="'+(p.income[i]||'')+'" onchange="cpInc('+i+',this.value)" style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1.5px solid var(--bdr);"></div>').join('')+'</div>'
+    +cpWhy('為什麼要打 8 折，不用平均數？','預測收入時寧可「低估」：<br>• 收入是「希望」會進來，支出是「一定」要付出去<br>• 客人可能臨時取消、遇到連假或天氣不好，生意就會變少<br>• 客人用儲值扣款來消費，不會帶來新的現金<br>用保守數字算出來還夠，才是真的安全；用樂觀數字算，萬一沒達到就會措手不及。');
+  // ④ 結果
+  html+='<div style="margin-top:20px;font-size:16px;font-weight:900;color:#0369a1;">④ 每個月底會剩多少錢？</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">'
+    +rows.map(r=>'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:'+(r.close<0?'#fef2f2':'#f0fdf4')+';border-left:5px solid '+(r.close<0?'#dc2626':'#16a34a')+';">'
+      +'<b style="font-size:16px;width:46px;">'+r.mm.m+' 月</b>'
+      +'<span style="flex:1;min-width:180px;font-size:13px;color:#475569;">月初 '+money(r.open)+' ＋ 收入 '+money(r.inc)+' − 支出 '+money(r.out)+'</span>'
+      +'<b style="font-size:18px;color:'+(r.close<0?'#dc2626':'#16a34a')+';">月底 '+money(r.close)+(r.close<0?' ⚠️':'')+'</b></div>').join('')+'</div>';
+  // 結論
+  let verdict;
+  if(!bank&&!cash)verdict='<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:14px;font-size:15px;color:#92400e;font-weight:700;">先在 ① 填上今天的銀行餘額和店裡現金，系統才能幫你算 👆</div>';
+  else if(gap>0)verdict='<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:14px 16px;"><div style="font-size:18px;font-weight:900;color:#dc2626;">🚨 有缺口：最緊的那個月會差 '+money(gap)+'</div><div style="font-size:14px;color:#7f1d1d;margin-top:4px;line-height:1.7;">現在開始補還來得及，看下面的「缺口怎麼補」。</div></div>';
+  else if(runway<3)verdict='<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;"><div style="font-size:18px;font-weight:900;color:#b45309;">🟡 撐得過去，但安全墊偏薄</div><div style="font-size:14px;color:#78350f;margin-top:4px;line-height:1.7;">現在的錢大約夠付 <b>'+(Math.round(runway*10)/10)+' 個月</b>支出，建議慢慢存到 3 個月以上。每個月存 '+money(Math.max(0,(avgOut*3-usable)/6))+'，大約半年可以存到。</div></div>';
+  else verdict='<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:12px;padding:14px 16px;"><div style="font-size:18px;font-weight:900;color:#16a34a;">✅ 很安全：現在的錢夠付 '+(Math.round(runway*10)/10)+' 個月支出</div><div style="font-size:14px;color:#14532d;margin-top:4px;line-height:1.7;">未來 3 個月每個月底都是正的。多出來的錢可以照「我的理財」分流，或投資在會賺錢的地方。</div></div>';
+  html+='<div style="margin-top:12px;">'+verdict+'</div>'
+    +cpWhy('「可以撐幾個月」是什麼意思？為什麼建議 3 個月？','意思是：如果明天開始完全沒有客人，現在的錢能付幾個月的房租、薪水、進貨。<br>很多理財和經營建議都會說，小店至少要留 <b>3～6 個月</b>的支出當安全墊，因為生病、裝修、淡季、疫情這類意外，通常要 1～3 個月才恢復。<br>有安全墊，你遇到意外時才不用急著打折、借錢或做不想做的生意。');
+  // ⑤ 缺口怎麼補
+  html+='<details '+(gap>0||runway<3?'open':'')+' style="margin-top:18px;"><summary style="cursor:pointer;font-size:16px;font-weight:900;color:#0369a1;">⑤ 缺口怎麼補？（開源、節流、找資金）</summary><div style="margin-top:10px;display:flex;flex-direction:column;gap:10px;">'
+    +cpStrategy('🌱 先開源：讓錢早一點進來','#16a34a',[
+      ['傳訊息邀請老客人回來','客人已經信任你，不用花廣告費。到「行動計畫」可以看到該傳訊息的名單。'],
+      ['推出期間限定的組合（服務＋居家保養品）','產品不花你的工時，又能讓庫存變成現金。'],
+      ['推儲值方案（但要小心）','儲值能讓現金馬上進來，但等於先向客人「借」未來的工時；之後客人來消費時就不會再付錢。只適合短期救急，而且要確定之後做得完。'],
+      ['熱門時段不打折','用折扣換客人，等於做更多、賺更少，只會讓缺口更大。']])
+    +cpStrategy('✂️ 再節流：讓錢晚一點出去','#d97706',[
+      ['先暫停進貨，用現有庫存','到「庫存盤點」看現有的貨夠用多久，不急的先不補。'],
+      ['暫停 3 個月內不會帶來收入的花費','例如新設備、裝潢、進修課程、效果不明的廣告。'],
+      ['跟熟的廠商談延後或分期付款','關係好的廠商通常願意給 15～30 天的彈性，等於爭取時間。']])
+    +cpStrategy('🏦 最後才找資金','#2563eb',[
+      ['問往來銀行的小額週轉貸款','政府有協助小店的方案（例如勞動部的微型創業鳳凰貸款、青年創業貸款），利息比一般貸款低，可以問銀行或官方網站確認資格。'],
+      ['不要用信用卡循環或民間借貸','利息很高，會讓缺口越滾越大。']])
+    +'</div>'+cpWhy('為什麼順序是「開源 → 節流 → 借錢」？','• 開源：問題被真正解決，錢是自己賺來的<br>• 節流：沒有成本，但只能撐一陣子<br>• 借錢：只是把問題往後延，而且要付利息<br>所以先想辦法讓錢進來，再控制支出，最後才借錢；借錢也要先確定之後還得起。')+'</details>';
+  // ⑥ 檢查
+  const checks=[
+    [fresh,'銀行餘額 30 天內有更新','每個月月初看一次存摺，填進來就好'],
+    [runway>=3,'現金夠撐 3 個月以上','現在約 '+(Math.round(runway*10)/10)+' 個月'],
+    [(bank||cash)&&gap===0,'未來 3 個月每個月底都是正的',gap>0?'最緊的月份差 '+money(gap):''],
+    [liability<=Math.max(1,h.avgIn)*1.5,'儲值負債不超過 1.5 個月收入','現在欠客人 '+money(liability)],
+    [!!(S.data.settings||{}).cashFlowStartDate,'已設定現金流起算日','讓統計數字不被很久以前的資料影響']
+  ];
+  const ok=checks.filter(c=>c[0]).length;
+  html+='<div style="margin-top:18px;background:#f8fafc;border-radius:12px;padding:14px;"><div style="font-size:16px;font-weight:900;color:#0f172a;margin-bottom:8px;">📋 你的現金流管理做得怎麼樣？ <span style="color:'+(ok>=4?'#16a34a':ok>=3?'#d97706':'#dc2626')+';">'+ok+' / '+checks.length+'</span></div>'
+    +checks.map(c=>'<div style="display:flex;gap:8px;padding:6px 0;font-size:14px;line-height:1.6;"><span>'+(c[0]?'✅':'⬜')+'</span><span style="flex:1;"><b>'+c[1]+'</b>'+(c[2]?'<br><span class="tm" style="font-size:12px;">'+c[2]+'</span>':'')+'</span></div>').join('')
+    +'</div>';
+  html+='</div></div>';
+  return html;
+}
+function cpStrategy(t,c,items){return '<div style="border:1px solid '+c+'33;border-left:5px solid '+c+';border-radius:12px;padding:12px 14px;"><div style="font-size:15px;font-weight:900;color:'+c+';margin-bottom:6px;">'+t+'</div>'+items.map(x=>'<div style="padding:5px 0;font-size:14px;line-height:1.7;"><b>• '+x[0]+'</b><br><span style="color:#475569;">　'+x[1]+'</span></div>').join('')+'</div>';}
+async function cpSave(fn){
+  const {p}=cpPlan();fn(p);
+  const settings=Object.assign({},S.data.settings||{},{cashPlan:p});S.data.settings=settings;
+  clearTimeout(window._cpT);
+  window._cpT=setTimeout(()=>{const box=document.getElementById('cp_box');if(!box)return;
+    const ins=[...box.querySelectorAll('input')];const fi=ins.indexOf(document.activeElement);
+    const y=window.scrollY;box.innerHTML=cashPlanHTML();window.scrollTo(0,y);
+    if(fi>=0){const n=box.querySelectorAll('input')[fi];if(n)n.focus({preventScroll:true});}},30);
+  try{await saveMain({settings});}catch(e){}
+}
+window.cpSet=function(k,v){cpSave(p=>{p[k]=toN(v);if(k==='bank'||k==='cash')p.asOf=today();});};
+window.cpRow=function(ri,i,v){cpSave(p=>{p.rows[ri].m[i]=toN(v);});};
+window.cpInc=function(i,v){cpSave(p=>{p.income[i]=toN(v);});};
+
 function pgCashflow(){
   const all=getDerivedCashFlows();
   const entries=all.filter(e=>e.month===S.month&&e.year===yr()).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
@@ -9497,6 +9639,8 @@ function pgCashflow(){
   return`
   <div class="pg-ttl">🏦 現金流帳目</div>
   <div class="pg-sub">工作室的生死線——維持店面生存、繳房租、發薪水的唯一依靠</div>
+  <div id="cp_box">${cashPlanHTML()}</div>
+  <div style="font-size:16px;font-weight:900;color:var(--brown);margin:22px 0 10px;">📒 過去的現金進出紀錄</div>
 
   ${(()=>{
     // ── 健康度儀表板 ──
