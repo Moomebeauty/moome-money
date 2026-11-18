@@ -493,6 +493,7 @@ const DEFAULT_PMU_CONDITIONS=['癌症','糖尿病','甲狀腺疾病','心臟病'
 const DEFAULT_PMU_ALLERGIES=['異位性皮膚炎','食物過敏','植物過敏','藥物過敏','金屬過敏','其他'];
 
 // 身體狀況臨床篩檢清單（每項附「為什麼」原因，讓每次填寫都更清楚背後邏輯）
+const PMU_HEALTH_CUST_TITLE={red:'🩺 重大疾病與特殊狀況',yellow:'🩹 慢性病與體質',allergy:'🌾 過敏體質',recent:'💊 近 1 個月的皮膚狀況與用藥'};
 const PMU_HEALTH_CATS={
   red:{t:'🔴 紅燈族群｜原則上不予施作',c:'#dc2626',bg:'#fef2f2'},
   yellow:{t:'🟡 黃燈族群｜高風險，需加簽特殊評估免責聲明',c:'#d97706',bg:'#fffbeb'},
@@ -7061,32 +7062,53 @@ function pmuConsentStage(t){
   if(!Array.isArray(t.healthNo))t.healthNo=[];
   var _hn=t.healthNo;
   var _left=PMU_HEALTH_ITEMS.filter(function(it){return _hf.indexOf(it.id)<0&&_hn.indexOf(it.id)<0;}).length;
-  html+='<div style="font-size:16px;line-height:1.8;margin-bottom:12px;color:#334155;"><div style="font-size:18px;font-weight:800;color:var(--blu);margin-bottom:2px;">以下狀況，你有沒有呢？</div>每一組沒有的話，點「<b>這組都沒有</b>」就好；有其中一項，再點那一項的「<b>有</b>」。<br><span style="font-size:13px;color:#64748b;">紋繡屬皮膚微創，這份資料只給紋繡師評估施作安全，本店依法保密。</span></div>'
+  html+='<div style="font-size:16px;line-height:1.8;margin-bottom:12px;color:#334155;"><div style="font-size:18px;font-weight:800;color:var(--blu);margin-bottom:2px;">以下狀況，你有沒有呢？</div>共 4 組，每組看完清單：都沒有就按綠色的「<b>✅ 以上都沒有</b>」；有其中任何一項，按「<b>有其中幾項</b>」再逐項選。<br><span style="font-size:13px;color:#64748b;">紋繡屬皮膚微創，這份資料只給紋繡師評估施作安全，本店依法保密。</span></div>'
     +'<div id="pmu_health_left" style="font-size:15px;font-weight:800;margin-bottom:10px;color:'+(_left?'#d97706':'#16a34a')+';">'+(_left?'還有 '+_left+' 項還沒回答':'✓ 全部都回答了')+'</div>';
   if(_redOn||_yelOn)html+='<div style="padding:12px 14px;border-radius:10px;background:#fff7ed;border:2px solid #fb923c;color:#9a3412;font-size:15px;font-weight:800;line-height:1.75;margin-bottom:12px;">🙏 你勾選的狀況，需要先和老師討論，簽名前請先告訴老師喔。</div>';
-  ['red','yellow','allergy','recent'].forEach(function(catKey){
+  // 每一組：清楚的「還沒回答／已回答」狀態
+  var _cats=['red','yellow','allergy','recent'];
+  var _gState=function(ck){var its=PMU_HEALTH_ITEMS.filter(function(it){return it.cat===ck;});var yes=its.filter(function(it){return _hf.indexOf(it.id)>=0;}).length;var no=its.filter(function(it){return _hn.indexOf(it.id)>=0;}).length;return {its:its,yes:yes,no:no,left:its.length-yes-no,allNo:no===its.length};};
+  var _doneG=_cats.filter(function(ck){return _gState(ck).left===0;}).length;
+  html+='<div style="display:flex;gap:6px;margin-bottom:14px;">'+_cats.map(function(ck,i){var g=_gState(ck);var ok=g.left===0;return '<div onclick="var e=document.getElementById(\'hg_'+ck+'\');if(e)e.scrollIntoView({behavior:\'smooth\',block:\'start\'});" style="cursor:pointer;flex:1;text-align:center;padding:8px 4px;border-radius:10px;font-size:13px;font-weight:800;background:'+(ok?'#16a34a':'#fff7ed')+';color:'+(ok?'#fff':'#c2410c')+';border:2px solid '+(ok?'#16a34a':'#fdba74')+';">'+(ok?'✓ ':'')+'第 '+(i+1)+' 組</div>';}).join('')+'</div>';
+  _cats.forEach(function(catKey,gi){
     var cat=PMU_HEALTH_CATS[catKey];
-    var its=PMU_HEALTH_ITEMS.filter(function(it){return it.cat===catKey;});
-    var allNo=its.every(function(it){return _hn.indexOf(it.id)>=0;});
+    var g=_gState(catKey);
+    var some=(t._hgSome&&t._hgSome[catKey])||g.yes>0;
     var open=t._hgOpen&&t._hgOpen[catKey];
-    html+='<div style="margin-bottom:14px;border:1px solid '+(allNo?'#bbf7d0':'#e5e7eb')+';border-radius:12px;padding:12px;background:'+(allNo?'#f0fdf4':'#fff')+';">';
-    html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div style="flex:1;min-width:160px;font-size:14px;font-weight:800;color:'+cat.c+';">'+cat.t+'</div>'
-      +(allNo?'<span style="font-size:14px;font-weight:800;color:#16a34a;">✓ 這組都沒有</span><button type="button" onclick="pmuHealthGroupOpen(&quot;'+catKey+'&quot;)" style="border:none;background:none;color:#64748b;font-size:12px;cursor:pointer;text-decoration:underline;">'+(open?'收起':'修改')+'</button>'
-        :'<button type="button" onclick="pmuHealthGroupNo(&quot;'+catKey+'&quot;)" style="border:2px solid #16a34a;background:#fff;color:#16a34a;border-radius:20px;padding:8px 16px;font-size:15px;font-weight:800;cursor:pointer;">這組都沒有 ✓</button>')
-      +'</div>';
-    if(!allNo||open){
-      html+='<div style="margin-top:10px;">';
-      its.forEach(function(it){
+    var done=g.left===0;
+    var title=PMU_HEALTH_CUST_TITLE[catKey]||cat.t;
+    var stC=g.allNo?'#16a34a':done?cat.c:'#ea580c';
+    html+='<div id="hg_'+catKey+'" style="margin-bottom:16px;border:3px solid '+(g.allNo?'#22c55e':done?cat.c:'#fdba74')+';border-radius:16px;overflow:hidden;background:'+(g.allNo?'#f0fdf4':'#fff')+';scroll-margin-top:80px;">';
+    // 標題列＋狀態
+    html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:'+(g.allNo?'#dcfce7':done?cat.bg:'#fff7ed')+';">'
+      +'<span style="font-size:13px;font-weight:900;color:#fff;background:'+stC+';border-radius:12px;padding:3px 10px;">第 '+(gi+1)+' 組</span>'
+      +'<span style="flex:1;min-width:150px;font-size:17px;font-weight:900;color:#1f2937;">'+title+'</span>'
+      +'<span style="font-size:14px;font-weight:900;color:'+stC+';">'+(g.allNo?'✅ 已回答：都沒有':done?'✅ 已回答：有 '+g.yes+' 項':(some?'⏳ 還有 '+g.left+' 項沒選':'⏳ 還沒回答'))+'</span></div>';
+    if(g.allNo&&!open){
+      html+='<div style="padding:10px 14px;display:flex;align-items:center;gap:10px;"><span style="flex:1;font-size:14px;color:#166534;">'+g.its.map(function(it){return it.label;}).join('、')+'</span>'
+        +'<button type="button" onclick="pmuHealthGroupOpen(&quot;'+catKey+'&quot;)" style="border:1px solid #86efac;background:#fff;color:#166534;border-radius:14px;padding:6px 12px;font-size:13px;cursor:pointer;flex-shrink:0;">修改</button></div>';
+    }else if(!some&&!open){
+      // 還沒回答：先看清單，再選「都沒有」或「有其中幾項」
+      html+='<div style="padding:12px 14px 4px;"><div style="font-size:14px;color:#64748b;margin-bottom:6px;">以下這些，你有沒有呢？</div>'
+        +g.its.map(function(it){return '<div style="font-size:16px;line-height:1.6;padding:5px 0;border-bottom:1px dashed #f1f5f9;">・'+it.label+'</div>';}).join('')+'</div>'
+        +'<div style="display:flex;gap:10px;padding:12px 14px 14px;">'
+        +'<button type="button" onclick="pmuHealthGroupNo(&quot;'+catKey+'&quot;)" style="flex:3;border:none;background:#16a34a;color:#fff;border-radius:14px;padding:14px 10px;font-size:17px;font-weight:900;cursor:pointer;box-shadow:0 3px 10px rgba(22,163,74,.3);">✅ 以上都沒有</button>'
+        +'<button type="button" onclick="pmuHealthGroupSome(&quot;'+catKey+'&quot;)" style="flex:2;border:2px solid '+cat.c+';background:#fff;color:'+cat.c+';border-radius:14px;padding:14px 10px;font-size:16px;font-weight:800;cursor:pointer;">有其中幾項</button></div>';
+    }else{
+      // 逐項選
+      html+='<div style="padding:10px 12px;">'+(some&&!g.allNo?'<div style="font-size:14px;color:#64748b;margin:0 2px 8px;">請每一項都選「沒有」或「有」：</div>':'');
+      g.its.forEach(function(it){
         var yes=_hf.indexOf(it.id)>=0,no=_hn.indexOf(it.id)>=0;
-        var bt=function(v,lbl,onC,onBg){var on=v?yes:no;return '<button type="button" onclick="pmuHealthSet(&quot;'+it.id+'&quot;,'+v+')" style="min-width:58px;padding:7px 12px;border-radius:16px;cursor:pointer;font-size:14px;font-weight:800;border:2px solid '+(on?onC:'#e5e7eb')+';background:'+(on?onBg:'#fff')+';color:'+(on?(v?'#fff':onC):'#9ca3af')+';">'+(on?'✓ ':'')+lbl+'</button>';};
-        html+='<div style="padding:10px 12px;border-radius:10px;margin-bottom:6px;background:'+(yes?cat.bg:'#fff')+';border:1px solid '+(yes?cat.c:'#eee')+';">'
+        var bt=function(v,lbl,onC,onBg){var on=v?yes:no;return '<button type="button" onclick="pmuHealthSet(&quot;'+it.id+'&quot;,'+v+')" style="min-width:70px;padding:10px 14px;border-radius:14px;cursor:pointer;font-size:15px;font-weight:900;border:2px solid '+(on?onC:'#d1d5db')+';background:'+(on?onBg:'#fff')+';color:'+(on?'#fff':'#6b7280')+';">'+(on?'✓ ':'')+lbl+'</button>';};
+        html+='<div style="padding:10px 12px;border-radius:12px;margin-bottom:8px;background:'+(yes?cat.bg:no?'#f0fdf4':'#fffbeb')+';border:2px solid '+(yes?cat.c:no?'#bbf7d0':'#fde68a')+';">'
           +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
-          +'<span style="flex:1;min-width:160px;font-weight:700;font-size:15px;line-height:1.5;color:'+(yes?cat.c:'var(--txt)')+';">'+it.label+'</span>'
-          +'<span style="display:flex;gap:6px;flex-shrink:0;">'+bt(false,'沒有','#16a34a','#f0fdf4')+bt(true,'有',cat.c,cat.c)+'</span>'
+          +'<span style="flex:1;min-width:150px;font-weight:700;font-size:16px;line-height:1.5;color:'+(yes?cat.c:'var(--txt)')+';">'+(!yes&&!no?'<span style="color:#ea580c;">●</span> ':'')+it.label+'</span>'
+          +'<span style="display:flex;gap:6px;flex-shrink:0;">'+bt(false,'沒有','#16a34a','#16a34a')+bt(true,'有',cat.c,cat.c)+'</span>'
           +'</div>'
           +(yes?'<div style="font-size:14px;color:#475569;margin-top:6px;line-height:1.7;">💡 '+it.reason+'<br><b style="color:'+cat.c+';">這個狀況請先跟老師討論，老師會幫你評估 🙏</b></div>':'')
           +'</div>';
       });
+      if(g.allNo&&open)html+='<div style="text-align:right;"><button type="button" onclick="pmuHealthGroupOpen(&quot;'+catKey+'&quot;)" style="border:none;background:none;color:#64748b;font-size:13px;cursor:pointer;text-decoration:underline;">收起</button></div>';
       html+='</div>';
     }
     html+='</div>';
@@ -7163,8 +7185,20 @@ window.pmuHealthGroupNo=function(cat){
   t.healthFlags=(t.healthFlags||[]).filter(function(x){return ids.indexOf(x)<0;});
   t.healthNo=(t.healthNo||[]).filter(function(x){return ids.indexOf(x)<0;}).concat(ids);
   if(t._hgOpen)t._hgOpen[cat]=false;
+  if(t._hgSome)t._hgSome[cat]=false;
   pmuHealthRedraw();
+  // 自動帶到下一組還沒回答的
+  setTimeout(function(){
+    var cats=['red','yellow','allergy','recent'],hf=t.healthFlags||[],hn=t.healthNo||[];
+    var next=cats.find(function(ck){return PMU_HEALTH_ITEMS.some(function(it){return it.cat===ck&&hf.indexOf(it.id)<0&&hn.indexOf(it.id)<0;});});
+    var el=document.getElementById(next?'hg_'+next:'pmu_healthNote');
+    if(el)el.scrollIntoView({behavior:'smooth',block:next?'start':'center'});
+    toast(next?'✓ 這組完成，下一組 👇':'✓ 身體狀況全部回答完了');
+  },80);
 };
+window.pmuHealthGroupSome=function(cat){var t=S.treatment;if(!t)return;if(typeof pmuSaveInputs==='function')pmuSaveInputs();t._hgSome=t._hgSome||{};t._hgSome[cat]=true;
+  var ids=PMU_HEALTH_ITEMS.filter(function(it){return it.cat===cat;}).map(function(it){return it.id;});
+  t.healthNo=(t.healthNo||[]).filter(function(x){return ids.indexOf(x)<0;});pmuHealthRedraw();};
 window.pmuHealthGroupOpen=function(cat){var t=S.treatment;if(!t)return;if(typeof pmuSaveInputs==='function')pmuSaveInputs();t._hgOpen=t._hgOpen||{};t._hgOpen[cat]=!t._hgOpen[cat];pmuHealthRedraw();};
 // 身體狀況勾選切換（切換後重繪，更新紅燈/黃燈警示橫幅與highlight）
 window.pmuHealthToggle=function(id){
