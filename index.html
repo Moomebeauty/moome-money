@@ -4648,6 +4648,7 @@ window.viewPmuRecord=(id)=>{
         ${r.designStyle?`風格：${r.designStyle}<br>`:''}
         ${r.expectation?`期待：${r.expectation}<br>`:''}
         ${r.designNote?`設計溝通：${r.designNote}`:''}
+        ${(r.skinTags||[]).length?`<br>膚質評估：${r.skinTags.map(k=>PMU_SKIN_PLANS[k]?PMU_SKIN_PLANS[k].icon+' '+PMU_SKIN_PLANS[k].name:k).join('、')}${(r.skinTags||[]).some(k=>PMU_SKIN_PLANS[k]&&PMU_SKIN_PLANS[k].retouch)?'<br>補色節奏：'+r.skinTags.filter(k=>PMU_SKIN_PLANS[k]&&PMU_SKIN_PLANS[k].retouch).map(k=>PMU_SKIN_PLANS[k].retouch).join('；'):''}`:''}
       </div>
       <div style="background:#f3e8ff;padding:14px;border-radius:10px;margin-top:10px;">
         <b>🔍 面診評估</b><br>
@@ -6584,6 +6585,154 @@ const PMU_STYLE_DESC={
   '原生自然風':'清透感、幾乎沒有框感，像用眉粉輕輕掃過。適合極少化妝、想「天生好看、不被發現做了眉」的低調客人。',
   '男士自然眉':'順毛流、根根仿真、框感低、眉形略粗，保留陽剛與自然，避免過濃過黑。適合想修飾稀疏/雜亂又不想被看出來的男性。'
 };
+// ═══════════ 🔬 沐蜜專屬膚質評估卡（看・觸・問）＋ 對應技術與方案 ═══════════
+const PMU_SKIN_LOOK=['毛孔粗大','表面明顯油光','皮膚薄','容易泛紅／看得到微血管','有細紋','緊繃／脫皮','都不明顯'];
+const PMU_SKIN_TOUCH=['皮脂厚、有韌性','中等','皮膚薄、缺乏彈性'];
+const PMU_SKIN_ASK=[
+  {k:'skinAskAcid',q:'平常有沒有擦酸類、美白、抗老產品？（如 A 醇、果酸）'},
+  {k:'skinAskSun',q:'是不是戶外運動愛好者、常曬太陽或游泳？'},
+  {k:'skinAskStress',q:'平常容易熬夜、壓力大，或皮膚容易過敏嗎？'}
+];
+const PMU_SKIN_PLANS={
+  oil:{icon:'💧',name:'油性肌（易出油、毛孔大）',c:'#0891b2',
+    tech:[['手法','點刺式／顆粒感較明顯的手法，點與點之間留空隙，預留油脂暈開的空間，避免做成整片死實的色塊。'],
+          ['色料','選分子較穩定、濃度較高的色乳（偏礦物性或高飽和），目標色階稍微加重一點點，抵消出油後的代謝。']],
+    retouch:'1～1.5 個月內回來做第一次精修補色',
+    after:['1～1.5 個月內務必回來第一次補色，把被油脂推出來的空洞填滿'],
+    say:'你的膚質比較容易出油，所以我會用「點刺」的方式，點跟點之間留一點空間給油脂，顏色也會比目標稍微深一點點，代謝之後剛好。油性肌留色比較有挑戰，我會請你在 1～1.5 個月內回來補第一次，補完就會穩定很多。'},
+  thin:{icon:'🌸',name:'乾性／敏感薄皮（易泛紅、皮層薄）',c:'#db2777',
+    tech:[['手法','嚴格控制進針深度，寧淺勿深；減少同一部位重複空走的次數，避免皮損太大、組織液過多把色料沖走。'],
+          ['色料','選顆粒細膩、好上色的植物性或混合型色乳，縮短上色時間，降低皮膚負擔。']],
+    retouch:'一般節奏，約 1～3 個月內補色',
+    after:['修復期比一般人更注重保濕：薄擦修復霜，不要讓痂乾裂','結痂薄、不乾裂的話，留色率反而是所有膚質裡最好的'],
+    say:'你的皮膚比較薄、比較敏感，所以我會下手很輕、做淺一點，也會用比較細緻好上色的色乳，讓皮膚負擔小一點。回家只要記得薄薄擦修復霜、不要讓它乾裂，你這種膚質留色反而是最好的喔。'},
+  acid:{icon:'🧪',name:'愛擦酸類／美白抗老（表皮代謝快）',c:'#7c3aed',
+    tech:[['範圍規劃','設計眉型時邊界做得稍微「柔霧」，不要框死硬邊，未來代謝褪色時才會自然，不會一塊一塊。']],
+    after:['下次補色前 1 週，先停用酸類、A 醇、美白產品','術後每天擦保養品前，先在眉毛上薄擦一層凡士林或乳霜當隔離膜，再擦酸類，並避開眉周 1 公分'],
+    say:'你平常有在用酸類跟 A 醇，它會讓皮膚代謝變快，眉毛也會掉得比較快。所以我會把邊緣做得柔霧一點，以後就算變淡也會很自然。回家擦保養品前，先在眉毛上薄擦一層凡士林當保護膜，再擦酸類，並且避開眉毛周圍 1 公分，就能留得比較久。'},
+  sun:{icon:'☀️',name:'戶外咖／常日曬（紫外線暴露高）',c:'#d97706',
+    tech:[['色調調配','避免容易因紫外線氧化變紅或變藍的色系，精準加入適量中和色（如橄欖綠或暖棕調），平衡未來的變色風險。']],
+    after:['眉毛也要防曬：出門戴帽子、撐傘，或在眉毛上輕拍物理性防曬','防曬做得好，能明顯延長留色時間'],
+    say:'你常在戶外，紫外線會讓色料慢慢變紅或變藍，所以我調色時會加一點中和色，讓它以後也不容易變色。出門記得戴帽子或撐傘，眉毛上也可以輕拍一點物理性防曬，顏色可以維持得久很多。'},
+  stress:{icon:'🌙',name:'常熬夜／壓力大／易過敏',c:'#475569',
+    tech:[['操作節奏','進針更輕柔、分段操作，隨時觀察泛紅與組織液狀況，不舒服就先暫停。']],
+    after:['術前 2～3 天盡量早睡，術後一週避免熬夜，修復會比較順','過敏體質：術後如有紅腫癢持續加重，請立刻回報'],
+    say:'熬夜跟壓力會讓皮膚修復變慢，也比較容易泛紅。施作前兩三天盡量早點睡，做完這一週也先別熬夜，恢復會順很多；如果有一直癢或紅腫越來越明顯，馬上傳訊息給我。'},
+  mixed:{icon:'⚖️',name:'混合型（易出油，但眉周皮薄敏感）',c:'#0e7490',
+    tech:[['手法','進針深度以「薄皮」為準（寧淺勿深），但用點刺式、點與點留空隙，預留油脂暈開的空間。'],
+          ['色料','選顆粒細膩、好上色的色乳，目標色階稍微加重一點點，抵消出油後的代謝。']],
+    retouch:'以油性為準：1～1.5 個月內回來做第一次精修補色',
+    after:['1～1.5 個月內務必回來第一次補色','修復期要做好保濕：薄擦修復霜，不要讓痂乾裂'],
+    say:'你的皮膚有點特別：會出油，但眉毛這邊的皮又比較薄。所以我會下手輕、做淺一點，同時用點刺的方式留空間給油脂，顏色也會稍微加深一點點。回家記得薄擦修復霜保濕，1～1.5 個月內回來補第一次，就會很穩定。'},
+  normal:{icon:'✨',name:'中性肌（狀況穩定）',c:'#16a34a',
+    tech:[['手法','標準手法，依眉型設計正常上色。']],
+    retouch:'一般節奏，約 1～3 個月內補色',
+    after:['依一般術後照護，3 個月內回來補色讓顏色更完整'],
+    say:'你的膚質很穩定，是很適合做霧眉的膚質，照一般的照顧方式就好，3 個月內回來補一次色，顏色就會很完整。'}
+};
+function pmuSkinProfile(t){
+  const look=t.skinLook||[],touch=t.skinTouch||'';
+  const oil=look.includes('毛孔粗大')||look.includes('表面明顯油光')||touch==='皮脂厚、有韌性';
+  const thin=look.includes('皮膚薄')||look.includes('容易泛紅／看得到微血管')||look.includes('有細紋')||look.includes('緊繃／脫皮')||touch==='皮膚薄、缺乏彈性';
+  const tags=[];
+  if(oil&&thin)tags.push('mixed');else{if(oil)tags.push('oil');if(thin)tags.push('thin');}
+  if(t.skinAskAcid==='是')tags.push('acid');
+  if(t.skinAskSun==='是')tags.push('sun');
+  if(t.skinAskStress==='是')tags.push('stress');
+  const started=look.length||touch||t.skinAskAcid||t.skinAskSun||t.skinAskStress;
+  if(started&&!oil&&!thin)tags.unshift('normal');
+  let type='';
+  if(oil&&thin)type='混合';else if(oil)type='偏油/大油肌';else if(look.includes('容易泛紅／看得到微血管'))type='敏感';else if(thin)type='偏乾';else if(started)type='中性';
+  return {tags,type,started,mixed:oil&&thin};
+}
+function pmuSkinCardHtml(t){
+  const P=pmuSkinProfile(t);
+  const chipM=(o)=>{const on=(t.skinLook||[]).includes(o);return '<button type="button" onclick="pmuSkinLookToggle(&quot;'+o+'&quot;)" style="padding:8px 14px;margin:3px;border-radius:18px;border:none;cursor:pointer;font-size:14px;background:'+(on?'#0f766e':'var(--bg2)')+';color:'+(on?'#fff':'var(--txt)')+';">'+(on?'✓ ':'')+o+'</button>';};
+  const chipS=(f,o)=>{const on=t[f]===o;return '<button type="button" onclick="pmuSet(&quot;'+f+'&quot;,&quot;'+o+'&quot;)" style="padding:8px 14px;margin:3px;border-radius:18px;border:none;cursor:pointer;font-size:14px;background:'+(on?'#0f766e':'var(--bg2)')+';color:'+(on?'#fff':'var(--txt)')+';">'+(on?'✓ ':'')+o+'</button>';};
+  const step=(n,ttl,how)=>'<div style="display:flex;gap:10px;align-items:flex-start;margin:16px 0 6px;"><span style="width:30px;height:30px;border-radius:50%;background:#0f766e;color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+n+'</span><div><div style="font-size:16px;font-weight:900;color:#115e59;">'+ttl+'</div><div class="tm" style="font-size:13px;line-height:1.6;">'+how+'</div></div></div>';
+  let h='<div class="card" style="margin-bottom:14px;border:2px solid #14b8a6;"><div class="card-hd" style="background:linear-gradient(90deg,#ccfbf1,#fff);"><span class="card-ttl" style="color:#0f766e;font-size:17px;">🔬 沐蜜專屬膚質評估卡</span><span class="tm" style="font-size:12px;">看・觸・問 3 步驟</span></div><div class="card-bd">';
+  h+='<div style="background:#f0fdfa;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.75;color:#134e4a;">「在沐蜜，我會先看你的皮膚、了解膚質與作息，再決定怎麼做。」<br><span style="font-size:12px;color:#0f766e;">邊做邊說出你在看什麼，客人會清楚感受到這是專業流程，不是行銷口號。</span></div>';
+  h+=step('1','👀 看：毛孔與紋理','觀察眉周與 T 字部位（可複選）')+'<div>'+PMU_SKIN_LOOK.map(chipM).join('')+'</div>';
+  h+='<div class="tm" style="font-size:12px;line-height:1.7;margin:4px 2px 0;">毛孔粗大、油光 → 油性　｜　皮膚薄、泛紅、看得到微血管 → 敏感／薄皮　｜　細紋、緊繃、脫皮 → 乾性</div>';
+  h+=step('2','👆 觸：厚度與彈性','用指腹輕捏或輕推眉骨處的皮膚')+'<div>'+PMU_SKIN_TOUCH.map(o=>chipS('skinTouch',o)).join('')+'</div>';
+  h+='<div class="tm" style="font-size:12px;line-height:1.7;margin:4px 2px 0;">皮脂厚有韌性 → 吃色但易出油暈色　｜　薄、缺乏彈性 → 易泛紅、滲組織液，進針要非常輕柔</div>';
+  h+=step('3','💬 問：抓出隱形殺手','直接問客人這三題');
+  h+=PMU_SKIN_ASK.map(a=>'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed #ccfbf1;"><span style="flex:1;min-width:200px;font-size:15px;">「'+a.q+'」</span><span>'+chipS(a.k,'是')+chipS(a.k,'否')+'</span></div>').join('');
+  // 判定
+  if(P.started){
+    h+='<div style="margin-top:18px;border-top:2px dashed #99f6e4;padding-top:14px;">';
+    h+='<div style="font-size:17px;font-weight:900;color:#0f766e;margin-bottom:8px;">📋 判定結果與對策</div>';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">'+P.tags.map(k=>'<span style="padding:6px 12px;border-radius:16px;font-size:14px;font-weight:800;color:#fff;background:'+PMU_SKIN_PLANS[k].c+';">'+PMU_SKIN_PLANS[k].icon+' '+PMU_SKIN_PLANS[k].name+'</span>').join('')+'</div>';
+    h+=P.tags.map(k=>{const p=PMU_SKIN_PLANS[k];return '<div style="border-left:5px solid '+p.c+';background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 6px rgba(0,0,0,.05);">'
+      +'<div style="font-size:15px;font-weight:900;color:'+p.c+';margin-bottom:6px;">'+p.icon+' '+p.name+'</div>'
+      +'<div style="font-size:12px;font-weight:800;color:#64748b;">🛠️ 我的技術決定（做在前面）</div>'
+      +p.tech.map(x=>'<div style="font-size:14px;line-height:1.7;margin:2px 0;"><b>'+x[0]+'：</b>'+x[1]+'</div>').join('')
+      +(p.retouch?'<div style="font-size:14px;line-height:1.7;margin-top:4px;"><b>補色節奏：</b>'+p.retouch+'</div>':'')
+      +'<div style="font-size:12px;font-weight:800;color:#64748b;margin-top:8px;">🏠 給客人的術後配合</div>'
+      +p.after.map(x=>'<div style="font-size:14px;line-height:1.7;">・'+x+'</div>').join('')
+      +'<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:13px;font-weight:800;color:#0f766e;">🗣️ 跟客人這樣說</summary><div style="margin-top:6px;background:#f0fdfa;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.85;color:#134e4a;">'+p.say+'</div></details>'
+      +'</div>';}).join('');
+    h+='</div>';
+  }
+  h+='</div></div>';
+  return h;
+}
+// ═══════════ 📋 設計總表（諮詢完一頁看完重點）═══════════
+function pmuDesignSummaryHtml(t,compact){
+  const P=pmuSkinProfile(t);
+  const row=(k,v)=>v?'<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed #e9d5ff;"><span style="width:84px;flex-shrink:0;color:#7e22ce;font-weight:800;font-size:13px;">'+k+'</span><span style="flex:1;font-size:15px;line-height:1.65;">'+v+'</span></div>':'';
+  const sec=(ico,ttl,body)=>body?'<div style="margin-top:14px;"><div style="font-size:15px;font-weight:900;color:#6b21a8;margin-bottom:4px;">'+ico+' '+ttl+'</div>'+body+'</div>':'';
+  const esc=x=>String(x||'').replace(/</g,'&lt;');
+  const lbl={new:'新客首次',free:'3個月免費補色',m4to12:'回娘家(4-12月)',y1to2:'回娘家(1-2年)',over2:'回娘家(2年以上)'};
+  // 選色
+  let colorTxt='';
+  try{const r=pmuColorOptions(t);if(r&&r.opts&&r.opts.length){let o=r.opts.find((x,i)=>pmuColorPickKey(t,i)===t.colorPick)||(r.opts.length===1?r.opts[0]:null);if(o)colorTxt='<b>'+esc(o.arr)+'</b><br><span style="font-size:18px;font-weight:900;color:#be185d;">'+esc(o.mix)+'</span>';}}catch(e){}
+  const lr=(lab,f)=>{const L=t[f+'Left'],R=t[f+'Right'],N=t[f+'Note'];if(!L&&!R&&!N)return '';return '<tr><td style="padding:6px 4px;font-weight:700;color:#475569;white-space:nowrap;">'+lab+'</td><td style="padding:6px 4px;color:#0891b2;">'+(L||'—')+'</td><td style="padding:6px 4px;color:#db2777;">'+(R||'—')+'</td></tr>'+(N?'<tr><td></td><td colspan="2" style="padding:0 4px 6px;font-size:13px;color:#64748b;">📝 '+esc(N)+'</td></tr>':'');};
+  const face=lr('太陽穴','temple')+lr('毛流','hairFlow')+lr('肌肉','muscle')+lr('骨骼','bone');
+  // 技術對策彙整
+  const tech=[],after=[],retouch=[];
+  P.tags.forEach(k=>{const p=PMU_SKIN_PLANS[k];p.tech.forEach(x=>tech.push('<b>'+x[0]+'</b>（'+p.icon+'）：'+x[1]));if(p.retouch)retouch.push(p.icon+' '+p.retouch);p.after.forEach(x=>after.push(x));});
+  const edu=[['eduSymmetry','對稱觀念'],['eduScab','結痂過渡期'],['eduRetention','持久與留色']];
+  let h='<div style="background:linear-gradient(160deg,#faf5ff,#fff);border:2px solid #c084fc;border-radius:16px;padding:16px 16px 18px;">';
+  h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:19px;font-weight:900;color:#6b21a8;flex:1;">📋 '+esc(t.customer||'客人')+' 的設計總表</span><span class="tm" style="font-size:12px;">'+(t.date||today())+'</span></div>';
+  h+=row('服務',esc((t.serviceType||'')+(t.pmuServiceType?'・'+(lbl[t.pmuServiceType]||''):'')));
+  h+=sec('🎯','客人的需求',
+    row('痛點',esc([...(t.painPoints||[]),t.painPointNote].filter(Boolean).join('、')))
+    +row('想做原因',esc((t.motivations||[]).join('、')))
+    +row('生活習慣',esc([t.makeupHabit,t.workFace&&('工作：'+t.workFace),t.exerciseHabit&&('運動：'+t.exerciseHabit)].filter(Boolean).join('｜')))
+    +row('風格',esc([t.styleChoice,t.styleCustom].filter(Boolean).join('｜')))
+    +row('期待',esc(t.expectation)));
+  h+=sec('🔬','膚質評估',P.started?('<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0;">'+P.tags.map(k=>'<span style="padding:4px 10px;border-radius:14px;font-size:13px;font-weight:800;color:#fff;background:'+PMU_SKIN_PLANS[k].c+';">'+PMU_SKIN_PLANS[k].icon+' '+PMU_SKIN_PLANS[k].name+'</span>').join('')+'</div>'
+    +row('看',esc((t.skinLook||[]).join('、')))+row('觸',esc(t.skinTouch))+row('皮膚補充',esc(t.skinDesc))):row('皮膚',esc([t.skinType,t.skinDesc].filter(Boolean).join('｜'))));
+  h+=sec('🦴','面診評估',(t.baseColor?row('底色',esc(t.baseColor)):'')+(face?'<table style="width:100%;font-size:14px;margin-top:4px;"><tr><th></th><th style="color:#0891b2;text-align:left;">左眉</th><th style="color:#db2777;text-align:left;">右眉</th></tr>'+face+'</table>':'')+row('其他',esc(t.faceOther)));
+  h+=sec('🛠️','這次的技術決定',(tech.length?tech.map(x=>'<div style="font-size:14px;line-height:1.75;padding:3px 0;">・'+x+'</div>').join(''):'')
+    +(colorTxt?row('選色',colorTxt):'')+row('配方調整',esc(t.colorNote))
+    +(retouch.length?row('補色節奏',retouch.join('<br>')):''));
+  h+=sec('✍️','設計溝通紀錄',t.designNote?'<div style="font-size:15px;line-height:1.85;white-space:pre-wrap;background:#fff;border-radius:10px;padding:10px 12px;">'+esc(t.designNote)+'</div>':'');
+  h+=sec('📣','衛教已說明','<div style="font-size:14px;">'+edu.map(e=>(t[e[0]]?'✅ ':'⬜ ')+e[1]).join('　')+'</div>');
+  if(after.length){
+    h+=sec('🏠','給客人的術後重點（可複製傳 LINE）','<div style="background:#fff;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.85;">'+after.map(x=>'・'+x).join('<br>')+'</div><button type="button" class="btn btn-s btn-sm" style="margin-top:8px;" onclick="pmuCopyAfterTips()">📋 複製給客人</button>');
+  }
+  h+='</div>';
+  return h;
+}
+window.pmuSkinLookToggle=function(o){
+  const t=S.treatment;if(!t)return;pmuSaveInputs();
+  let a=Array.isArray(t.skinLook)?t.skinLook.slice():[];
+  const i=a.indexOf(o);
+  if(i>=0)a.splice(i,1);else{ if(o==='都不明顯')a=[];else a=a.filter(x=>x!=='都不明顯'); a.push(o);}
+  t.skinLook=a;
+  const P=pmuSkinProfile(t);if(P.type&&(!t.skinType||t._skinTypeAuto)){t.skinType=P.type;t._skinTypeAuto=true;}
+  const y=window.scrollY;const c=$('pg-content');if(c)c.innerHTML=renderPage();window.scrollTo(0,y);
+};
+window.pmuCopyAfterTips=async function(){
+  const t=S.treatment;if(!t)return;const P=pmuSkinProfile(t);
+  const tips=[];P.tags.forEach(k=>PMU_SKIN_PLANS[k].after.forEach(x=>tips.push('・'+x)));
+  const text=(t.customer||'')+' 你好 🌸\n依照今天幫你評估的膚質，回家這樣照顧，眉毛會留得更好：\n'+tips.join('\n')+'\n\n有任何問題隨時傳訊息給我 ♡ 沐蜜';
+  let ok=false;try{await navigator.clipboard.writeText(text);ok=true;}catch(e){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy');}catch(e2){}ta.remove();}
+  if(ok)toast('✅ 已複製，貼到 LINE 傳給客人');else alert(text);
+};
+
 function pmuDesignStage(t){
   const custList=(S.data.customers||[]).map(c=>c.name);
   function chipsOne(field,opts,accent){
@@ -6615,6 +6764,8 @@ function pmuDesignStage(t){
     +['霧眉','霧唇','霧眉+霧唇'].map(function(s){return'<button type="button" style="padding:8px 16px;background:'+(t.serviceType===s?'#9333ea':'var(--bg2)')+';color:'+(t.serviceType===s?'#fff':'var(--txt)')+';border:none;border-radius:16px;cursor:pointer;font-size:14px;" onclick="pmuSet(&quot;serviceType&quot;,&quot;'+s+'&quot;)">'+s+'</button>';}).join('')
     +'</div></div></div></div>';
 
+  // 🔬 膚質評估卡（了解需求之前）
+  h+=pmuSkinCardHtml(t);
   // 一、了解客人的需求
   h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #9333ea;"><div class="card-hd" style="background:#f3e8ff;"><span class="card-ttl" style="color:#9333ea;">① 了解客人的需求</span></div><div class="card-bd">';
   h+='<div class="tm" style="font-size:12px;margin-bottom:10px;">了解生活痛點與習慣，才能決定眉型方向與日常實用性。</div>';
@@ -6661,7 +6812,8 @@ function pmuDesignStage(t){
   h+=lrRow('🌿 原生毛流狀況','hairFlow',['完整濃密','前濃後缺','整體偏淡','分布不均','雜亂逆生']);
   h+=lrRow('💪 肌肉狀況（表情施力）','muscle',['正常','眉頭易用力','挑眉習慣','皺眉明顯']);
   h+=lrRow('🦴 骨骼狀況','bone',['平整','眉骨偏高','眉骨偏低','額/顳骨落差']);
-  h+='<div class="fgrp" style="margin-top:12px;"><label>🧴 皮膚狀況</label><div style="margin-top:4px;">'+chipsOne('skinType',['中性','偏乾','偏油/大油肌','混合','敏感'],'#0891b2')+'</div>'
+  if((!t.skinType||t._skinTypeAuto)&&pmuSkinProfile(t).type){t.skinType=pmuSkinProfile(t).type;t._skinTypeAuto=true;}
+  h+='<div class="fgrp" style="margin-top:12px;"><label>🧴 皮膚狀況'+(pmuSkinProfile(t).type?' <span class="tm" style="font-size:12px;font-weight:400;">（評估卡判定：'+pmuSkinProfile(t).type+'）</span>':'')+'</label><div style="margin-top:4px;">'+chipsOne('skinType',['中性','偏乾','偏油/大油肌','混合','敏感'],'#0891b2')+'</div>'
     +'<input type="text" id="pmu_skinDesc" value="'+((t.skinDesc||'').replace(/"/g,'&quot;'))+'" placeholder="皮膚補充（出油、毛孔、角質…自訂）" style="margin-top:8px;" oninput="S.treatment.skinDesc=this.value"></div>';
   h+='<div class="fgrp" style="margin-top:12px;"><label>📌 其他面診觀察（自訂）</label><textarea id="pmu_faceOther" rows="2" placeholder="任何其他重要觀察" oninput="S.treatment.faceOther=this.value">'+((t.faceOther||'').replace(/</g,'&lt;'))+'</textarea></div>';
   h+='</div></div>';
@@ -6673,6 +6825,7 @@ function pmuDesignStage(t){
   h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">⑥ 我幫客人的設計溝通紀錄</span></div><div class="card-bd">'
     +'<textarea id="pmu_designNote" rows="9" style="width:100%;min-height:240px;font-size:17px;line-height:1.75;padding:14px 16px;border-radius:12px;resize:vertical;box-sizing:border-box;" placeholder="怎麼設計的、量了什麼、客人在鏡子前確認了什麼、最後定案的方向" oninput="S.treatment.designNote=this.value">'+((t.designNote||'').replace(/</g,'&lt;'))+'</textarea></div></div>';
 
+  h+='<div style="margin:18px 0 14px;">'+pmuDesignSummaryHtml(t)+'</div>';
   h+='<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署。</div>';
   h+='<div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;margin-top:10px;">'
     +'<div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人在鏡子前確認滿意了？</div>'
@@ -7076,6 +7229,7 @@ function pmuOperationStage(t){
   const pigments=S2.pmuPigments||['棕色','咖啡色','灰棕色','紅棕色','橘調'];
   const numbTimes=S2.pmuNumbTimes||['20分','30分','40分','45分','60分'];
   return`
+    <details open style="margin-bottom:14px;"><summary style="cursor:pointer;font-size:16px;font-weight:900;color:#6b21a8;padding:10px 0;">📋 設計總表（點一下收合／展開）</summary>${pmuDesignSummaryHtml(t)}</details>
     <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;margin-bottom:14px;">
       ✓ 同意書已簽署（${t.consentSignedAt}）。現在邊操作邊記錄，這些之後在客戶檔案都查得到。
     </div>
@@ -7138,6 +7292,8 @@ window.pmuSet=(field,val)=>{
   if(!S.treatment)return;
   pmuSaveInputs();
   S.treatment[field]=val;
+  if(field==='skinType')S.treatment._skinTypeAuto=false;
+  if(field==='skinTouch'||field.indexOf('skinAsk')===0){const P=pmuSkinProfile(S.treatment);if(P.type&&(!S.treatment.skinType||S.treatment._skinTypeAuto)){S.treatment.skinType=P.type;S.treatment._skinTypeAuto=true;}}
   const c=$('pg-content');if(c)c.innerHTML=renderPage();
   setTimeout(()=>{if(typeof initFaceCanvas==='function')initFaceCanvas();},60);
 };
@@ -7667,6 +7823,7 @@ window.pmuSubmit=async()=>{
     styleChoice:t.styleChoice,styleCustom:t.styleCustom,
     eduSymmetry:t.eduSymmetry,eduScab:t.eduScab,eduRetention:t.eduRetention,
     templeHollow:t.templeHollow,skinType:t.skinType,
+    skinLook:t.skinLook||[],skinTouch:t.skinTouch||'',skinAskAcid:t.skinAskAcid||'',skinAskSun:t.skinAskSun||'',skinAskStress:t.skinAskStress||'',skinTags:pmuSkinProfile(t).tags,
     motivations:t.motivations||[],colorLine:t.colorLine,colorEffect:t.colorEffect,colorPick:t.colorPick,colorNote:t.colorNote,
     browHairTone:t.browHairTone,hairTone:t.hairTone,skinTone:t.skinTone,colorRecipe:pmuColorRecipeText(t),
     templeLeft:t.templeLeft,templeRight:t.templeRight,templeNote:t.templeNote,hairFlowNote:t.hairFlowNote,muscleNote:t.muscleNote,boneNote:t.boneNote,
