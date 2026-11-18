@@ -6183,6 +6183,7 @@ function pgTreatment(){
 const PMU_STAGES=[
   {id:'consent',label:'諮詢簽約',icon:'📜'},
   {id:'design',label:'眉型設計',icon:'✏️'},
+  {id:'summary',label:'設計總表',icon:'📋'},
   {id:'operation',label:'操作紀錄',icon:'🎨'},
   {id:'finish',label:'完成',icon:'✅'}
 ];
@@ -6219,6 +6220,7 @@ function pgPmuView(t){
   var body='';
   if(stage==='consent')body=pmuConsentStage(t);
   else if(stage==='design')body=pmuDesignStage(t);
+  else if(stage==='summary')body=pmuSummaryStage(t);
   else if(stage==='operation')body=pmuOperationStage(t);
   else if(stage==='finish')body=pmuFinishStage(t);
 
@@ -6734,6 +6736,14 @@ window.pmuCopyAfterTips=async function(){
   if(ok)toast('✅ 已複製，貼到 LINE 傳給客人');else alert(text);
 };
 
+// 📋 設計總表（獨立一頁）
+function pmuSummaryStage(t){
+  return '<div style="font-size:14px;color:#6b7280;margin-bottom:12px;line-height:1.7;">諮詢和設計的重點都整理在這一頁。操作前再看一次，確認技術決定都對了 ✓</div>'
+    +pmuDesignSummaryHtml(t)
+    +'<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">'
+    +'<button type="button" class="btn btn-s" style="flex:1;min-width:150px;padding:14px;" onclick="pmuNext(&quot;design&quot;);window.scrollTo(0,0);">← 回眉型設計修改</button>'
+    +'<button type="button" class="btn btn-p" style="flex:2;min-width:180px;padding:14px;background:#9333ea;font-size:16px;" onclick="pmuNext(&quot;operation&quot;);window.scrollTo(0,0);">確認無誤 → 開始操作紀錄 →</button></div>';
+}
 function pmuDesignStage(t){
   const custList=(S.data.customers||[]).map(c=>c.name);
   function chipsOne(field,opts,accent){
@@ -6826,11 +6836,10 @@ function pmuDesignStage(t){
   h+='<div class="card" style="margin-bottom:14px;border-left:4px solid #16a34a;"><div class="card-hd" style="background:#f0fdf4;"><span class="card-ttl" style="color:#16a34a;">⑥ 我幫客人的設計溝通紀錄</span></div><div class="card-bd">'
     +'<textarea id="pmu_designNote" rows="9" style="width:100%;min-height:240px;font-size:17px;line-height:1.75;padding:14px 16px;border-radius:12px;resize:vertical;box-sizing:border-box;" placeholder="怎麼設計的、量了什麼、客人在鏡子前確認了什麼、最後定案的方向" oninput="S.treatment.designNote=this.value">'+((t.designNote||'').replace(/</g,'&lt;'))+'</textarea></div></div>';
 
-  h+='<div style="margin:18px 0 14px;">'+pmuDesignSummaryHtml(t)+'</div>';
   h+='<div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;">✓ 身體狀況與健康聲明已在「① 諮詢簽約」階段由客人誠實告知並簽署。</div>';
   h+='<div style="background:var(--goldL);padding:14px;border-radius:12px;text-align:center;margin-top:10px;">'
     +'<div class="tm" style="font-size:13px;margin-bottom:10px;">設計確認、客人在鏡子前確認滿意了？</div>'
-    +'<button type="button" class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuNext(&quot;operation&quot;)">完成設計 → 進入操作紀錄 →</button></div>';
+    +'<button type="button" class="btn btn-p" style="background:#9333ea;font-size:16px;padding:14px 32px;" onclick="pmuNext(&quot;summary&quot;);window.scrollTo(0,0);">完成設計 → 看設計總表 →</button></div>';
   return h;
 }
 
@@ -7263,7 +7272,7 @@ function pmuOperationStage(t){
   const pigments=S2.pmuPigments||['棕色','咖啡色','灰棕色','紅棕色','橘調'];
   const numbTimes=S2.pmuNumbTimes||['20分','30分','40分','45分','60分'];
   return`
-    <details open style="margin-bottom:14px;"><summary style="cursor:pointer;font-size:16px;font-weight:900;color:#6b21a8;padding:10px 0;">📋 設計總表（點一下收合／展開）</summary>${pmuDesignSummaryHtml(t)}</details>
+    <details style="margin-bottom:14px;"><summary style="cursor:pointer;font-size:15px;font-weight:800;color:#6b21a8;padding:10px 14px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;">📋 操作中想再看設計總表？點這裡打開</summary><div style="margin-top:10px;">${pmuDesignSummaryHtml(t)}</div></details>
     <div class="notice" style="background:var(--grnL);border-left-color:var(--grn);color:var(--grn);font-size:13px;margin-bottom:14px;">
       ✓ 同意書已簽署（${t.consentSignedAt}）。現在邊操作邊記錄，這些之後在客戶檔案都查得到。
     </div>
