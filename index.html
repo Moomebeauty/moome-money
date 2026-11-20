@@ -943,6 +943,7 @@ function startSync(){
     S.data.reels=d.reels||null;
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.lastBackupAt=d.lastBackupAt||'';
+    S.data.gsync=d.gsync||{};
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
     if(Array.isArray(d.customers)&&d.customers.length>0){
@@ -978,6 +979,7 @@ function startSync(){
   // 簽名／大圖改成「畫面用到才讀」，不再每次打開就全部下載
   _sigsLoaded=true;
   setTimeout(usageDailyCheck,15000);
+  setTimeout(gsAutoCheck,12000);
 }
 
 // 停止同步（登出時用，清掉所有監聽器）
@@ -1254,6 +1256,160 @@ window.runArchive=async function(){
     alert('✅ 打包完成：'+done+' 筆舊紀錄已整理好。\n報表和查詢都照常，下次打開系統會讀得比較少。');
   }catch(e){console.error(e);alert('打包中途停止：'+(e.message||e)+'\n\n已完成 '+done+' 筆，紀錄不會遺失。明天再按一次「打包舊紀錄」會接著做完。');}
 };
+
+
+// ═══ 📗 自動同步到 Google 試算表（給人看、給人查的備份）═══
+// 為什麼：完整備份檔是給系統還原用的；試算表是給你自己用 Excel 習慣去查。
+// 每天第一次打開系統會自動同步一次。若資料突然比上次少一成以上，會停下來不覆蓋，保護舊資料。
+function brandFile(){return window.SALE_EDITION?((S.data.settings||{}).brandName||'我的工作室'):'沐蜜';}
+function buildExportTables(){
+  const byDate=(a,b)=>String(a.date||'').localeCompare(String(b.date||''));
+  const L=k=>(S.data[k]||[]).slice().sort(byDate);
+  const t=[];
+  t.push(['銷售記錄',[['日期','類型','項目','細項備註','金額','付款','老師','客戶'],...L('sales').map(s=>[s.date||'',s.type==='service'?'服務':s.type==='product'?'產品':s.type==='course'?'課程':(s.type||''),s.item||'',s.subNote||'',toN(s.amount),s.payMethod||'',s.staff||'',s.customer||''])]]);
+  t.push(['支出記錄',[['日期','類別','金額','付款','備註'],...L('expenses').map(e=>[e.date||'',e.category||'',toN(e.amount),e.payMethod||'',e.note||''])]]);
+  t.push(['進貨記錄',[['日期','產品','類別','數量','單價','總成本','供應商'],...L('purchases').map(p=>[p.date||'',p.productName||'',p.category||'',toN(p.qty),toN(p.unitCost),toN(p.totalCost),p.supplier||''])]]);
+  t.push(['現金流水帳',[['日期','金額','類別','說明'],...L('cashFlow').map(c=>[c.date||'',toN(c.amount),c.cat||'',c.note||''])]]);
+  t.push(['客戶資料',[['姓名','電話','生日','來源','儲值餘額','累計消費','消費次數','備註'],...(S.data.customers||[]).map(c=>{let h={totalSpent:0,visitCount:0},bal=0;try{h=getCustomerHistory(c.name)||h;}catch(e){}try{bal=getCustomerBalance(c.name)||0;}catch(e){}return [c.name||'',c.phone||'',c.birthday||'',c.source||'',toN(bal),toN(h.totalSpent),toN(h.visitCount),c.note||''];})]]);
+  t.push(['儲值紀錄',[['日期','客戶','面額','實收','付款','範圍','備註'],...L('deposits').map(d=>[d.date||'',d.customer||'',toN(d.amount),d.actualReceived==null?'':toN(d.actualReceived),d.payMethod||'',d.scope==='restricted'?('限定：'+(d.allowedServices||[]).join('/')):'一般',d.note||''])]]);
+  t.push(['吃到飽合約',[['客戶','電話','方案','開始日','到期日','已用次數','價格','付款','狀態'],...(S.data.passContracts||[]).map(p=>{let end=p.endDate||'';if(!end&&p.startDate){try{end=addMonthsToDate(p.startDate,p.months||6)+'（推算）';}catch(e){}}return [p.customer||'',p.phone||'',p.planName||'',p.startDate||'',end,toN(p.usedCount),toN(p.price),p.payMethod||'',p.status==='active'?'使用中':(p.status||'')];})]]);
+  t.push(['庫存清單',[['產品名稱','類別','現有庫存','最低庫存','售價','成本','庫存價值'],...(S.data.products||[]).map(p=>{let i={qty:0,minQty:1};try{i=getInv(p.id)||i;}catch(e){}return [p.name||'',p.category||'',toN(i.qty),toN(i.minQty||1),toN(p.price),toN(p.cost||0),toN(i.qty)*toN(p.cost||0)];})]]);
+  return t;
+}
+const GS_SCRIPT=`// 工作室系統 → Google 試算表 自動同步（整段貼上即可，不用改任何字）
+function doPost(e){
+  var lock=LockService.getScriptLock();lock.waitLock(30000);
+  try{
+    var body=JSON.parse(e.postData.contents);
+    var props=PropertiesService.getScriptProperties();
+    var tok=props.getProperty('TOKEN');
+    if(!tok){props.setProperty('TOKEN',body.token);tok=body.token;}
+    if(body.token!==tok)return out({ok:false,err:'token'});
+    var ss=SpreadsheetApp.getActiveSpreadsheet();
+    var last=JSON.parse(props.getProperty('COUNTS')||'{}');
+    var shrink=[];
+    body.sheets.forEach(function(s){var n=s.rows.length-1,p=last[s.name]||0;if(p>=20&&n<p*0.9)shrink.push(s.name+' '+p+'→'+n);});
+    if(shrink.length&&!body.force)return out({ok:false,err:'shrink',detail:shrink});
+    body.sheets.forEach(function(s){
+      var sh=ss.getSheetByName(s.name)||ss.insertSheet(s.name);
+      sh.clearContents();
+      if(s.rows.length){
+        var w=1;s.rows.forEach(function(r){if(r.length>w)w=r.length;});
+        var rows=s.rows.map(function(r){var o=[];for(var i=0;i<w;i++){var v=r[i];if(v===null||v===undefined)v='';if(typeof v==='string'&&(/^0\\d/.test(v)||/^[=+@-]/.test(v)))v="'"+v;o.push(v);}return o;});
+        sh.getRange(1,1,rows.length,w).setValues(rows);
+        sh.setFrozenRows(1);sh.getRange(1,1,1,w).setFontWeight('bold').setBackground('#fdf2e3');
+      }
+      last[s.name]=s.rows.length-1;
+    });
+    props.setProperty('COUNTS',JSON.stringify(last));
+    var log=ss.getSheetByName('同步紀錄')||ss.insertSheet('同步紀錄');
+    if(log.getLastRow()===0)log.appendRow(['同步時間','方式']);
+    log.appendRow([new Date(),body.note||'']);
+    var d=ss.getSheetByName('工作表1')||ss.getSheetByName('Sheet1');
+    if(d&&d.getLastRow()===0&&ss.getSheets().length>1)ss.deleteSheet(d);
+    return out({ok:true,url:ss.getUrl()});
+  }catch(err){return out({ok:false,err:String(err)});}
+  finally{lock.releaseLock();}
+}
+function doGet(){return out({ok:true,msg:'同步程式已啟用'});}
+function out(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);}`;
+let _gsBusy=false;
+async function gsheetSync(opts){
+  opts=opts||{};
+  const g=Object.assign({},S.data.gsync||{});
+  if(!g.url)return {ok:false,err:'nourl'};
+  if(_gsBusy)return {ok:false,err:'busy'};
+  if(!g.token)g.token=uid()+uid();
+  const tables=buildExportTables();
+  const counts={};tables.forEach(([n,r])=>counts[n]=r.length-1);
+  _gsBusy=true;
+  try{
+    const res=await fetch(g.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:g.token,force:!!opts.force,note:opts.auto?'每日自動':'手動',sheets:tables.map(([name,rows])=>({name,rows}))})});
+    const j=await res.json();
+    if(j.ok){g.lastAt=nowLocal();g.lastDate=today();g.counts=counts;g.err='';if(j.url)g.sheetUrl=j.url;}
+    else{g.err=j.err==='shrink'?('資料比上次少很多：'+(j.detail||[]).join('、')):j.err==='token'?'這份試算表已經連到別的系統（通行碼不符）':('同步失敗：'+j.err);g.errAt=nowLocal();if(j.err==='shrink')g.lastDate=today();}
+    S.data.gsync=g;await saveMainSilent({gsync:g});
+    return j;
+  }catch(e){
+    console.warn('同步試算表失敗',e);
+    g.err='連不上同步網址，請檢查網址是否完整、部署時「誰可以存取」是否選「所有人」';g.errAt=nowLocal();
+    S.data.gsync=g;await saveMainSilent({gsync:g});
+    return {ok:false,err:'net'};
+  }finally{_gsBusy=false;}
+}
+window.gsSyncNow=async function(force){
+  toast('⏳ 正在同步到 Google 試算表…');
+  const j=await gsheetSync({force});
+  if(j.ok){toast('✅ 已同步到 Google 試算表');}
+  else if(j.err==='shrink'){
+    if(confirm('⚠️ 這次的資料比上次少很多：\n'+(j.detail||[]).join('\n')+'\n\n如果是你自己刪除或打包造成的，可以按「確定」更新試算表。\n如果你不確定、或系統資料看起來不見了，請按「取消」，試算表會保留舊資料。')){render();return gsSyncNow(true);}
+  }else if(j.err!=='busy')alert('同步沒有成功：'+((S.data.gsync||{}).err||j.err));
+  render();
+};
+window.gsSaveUrl=async function(){
+  const v=(($('gs_url')||{}).value||'').trim();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(v)){alert('網址看起來不對。\n請貼上部署後的「網頁應用程式網址」，開頭是 https://script.google.com/macros/s/ ，結尾是 /exec');return;}
+  const g=Object.assign({},S.data.gsync||{},{url:v,err:''});if(!g.token)g.token=uid()+uid();
+  S.data.gsync=g;await saveMainSilent({gsync:g});
+  await gsSyncNow(false);
+};
+window.gsCopyScript=function(){
+  const done=()=>toast('📋 已複製同步程式，貼到 Apps Script 裡');
+  try{navigator.clipboard.writeText(GS_SCRIPT).then(done,()=>{const ta=$('gs_code');if(ta){ta.select();document.execCommand('copy');done();}});}
+  catch(e){const ta=$('gs_code');if(ta){ta.select();document.execCommand('copy');done();}}
+};
+window.gsReset=async function(){
+  if(!confirm('要改連到另一份試算表嗎？\n目前的試算表內容會保留在你的 Google 雲端硬碟，不會被刪除。'))return;
+  const g={};S.data.gsync=g;await saveMainSilent({gsync:g});render();
+};
+function gsAllLoaded(){return S._mainLoaded&&_archLoaded&&LIVE_COLS.every(c=>_live[c]);}
+function gsAutoCheck(tries){
+  tries=tries||0;
+  if(!S.auth)return;
+  if(!gsAllLoaded()){if(tries<20)setTimeout(()=>gsAutoCheck(tries+1),5000);return;}
+  const g=S.data.gsync||{};
+  if(!g.url||g.lastDate===today())return;
+  gsheetSync({auto:true}).then(j=>{
+    if(j&&j.err==='shrink')alert('⚠️ 今天的自動同步已暫停\n\n系統裡的資料比上次同步少很多：\n'+(j.detail||[]).join('\n')+'\n\n為了保護 Google 試算表裡的舊資料，這次沒有覆蓋。\n如果是你自己刪除的，到「基本設定 → Google 試算表同步」按「立即同步」確認即可。');
+  });
+}
+function gsheetCard(){
+  const g=S.data.gsync||{};
+  const why='<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:14px;color:var(--acc,#a05a2c);">為什麼要同步到試算表？</summary><div class="tm" style="font-size:13px;line-height:1.8;margin-top:6px;">'
+    +'・試算表是給你自己看、自己查的備份，用 Excel 的習慣就能篩選、加總。萬一系統打不開，過去的金額都還查得到。<br>'
+    +'・每天第一次打開系統會自動同步一次，旁邊也可以隨時按「立即同步」。<br>'
+    +'・保護機制：如果系統裡的資料突然比上次少一成以上，會停下來不覆蓋，試算表會保留最後一份正常的資料。<br>'
+    +'・簽名、設定、方案放不進試算表，所以「完整備份檔」還是要每月下載一次，那是用來把系統救回來的。<br>'
+    +'・資料存在你自己的 Google 雲端硬碟，裡面有客戶電話，試算表不要分享給別人。</div></details>';
+  const head='<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-ttl">📗 Google 試算表同步</span></div><div class="card-bd">';
+  if(!g.url){
+    return head
+      +'<div style="font-size:14px;margin-bottom:10px;">把銷售、支出、進貨、現金流、客戶、儲值、吃到飽合約、庫存，每天自動寫進你自己的 Google 試算表。只要設定一次，建議用電腦操作，約 5 分鐘。</div>'
+      +'<ol style="font-size:14px;line-height:1.9;padding-left:20px;margin:0 0 10px;">'
+      +'<li>按這顆 <button class="btn btn-sm" onclick="gsCopyScript()">📋 複製同步程式</button></li>'
+      +'<li>打開 <b>sheets.google.com</b> → 按「空白試算表」，取個名字（例如：店名＋備份）。</li>'
+      +'<li>上方選單「擴充功能」→「Apps Script」。把裡面原本的文字全部刪掉，貼上剛剛複製的程式，按 💾 儲存。</li>'
+      +'<li>右上角「部署」→「新增部署作業」→ 齒輪選「網頁應用程式」。「執行身分」選<b>我</b>，「誰可以存取」選<b>所有人</b>，按「部署」。</li>'
+      +'<li>第一次會要求授權：選你的 Google 帳號 →「進階」→「前往（不安全）」→「允許」。這是 Google 對自己寫的程式的固定提醒，這段程式只會寫入這一份試算表。</li>'
+      +'<li>複製「網頁應用程式網址」，貼到下面，按「儲存並同步」。</li></ol>'
+      +'<input id="gs_url" type="text" placeholder="https://script.google.com/macros/s/……/exec" style="width:100%;font-size:16px;margin-bottom:8px;">'
+      +'<button class="btn btn-sm" onclick="gsSaveUrl()">💾 儲存並同步</button>'
+      +'<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;" class="tm">複製按鈕沒反應？點這裡手動複製程式</summary><textarea id="gs_code" readonly style="width:100%;height:140px;font-size:12px;font-family:monospace;margin-top:6px;">'+GS_SCRIPT.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea></details>'
+      +why+'</div></div>';
+  }
+  const cnt=g.counts?Object.entries(g.counts).filter(([k,v])=>v).map(([k,v])=>k.replace('記錄','').replace('紀錄','')+' '+v.toLocaleString()+' 筆').join('、'):'';
+  const stale=g.lastDate&&(new Date(today())-new Date(g.lastDate))/86400000>3;
+  return head
+    +'<div style="font-size:15px;margin-bottom:6px;">'+(g.lastAt?'✅ 上次同步：<b>'+g.lastAt+'</b>':'還沒有同步成功過')+'</div>'
+    +(cnt?'<div class="tm" style="font-size:13px;margin-bottom:8px;">'+cnt+'</div>':'')
+    +(g.err?'<div style="background:#fef2f2;color:#b91c1c;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:8px;">⚠️ '+g.err+(g.errAt?'（'+g.errAt+'）':'')+'</div>':'')
+    +(stale&&!g.err?'<div style="color:#d97706;font-size:13px;margin-bottom:8px;">已經超過 3 天沒同步了，按一下「立即同步」。</div>':'')
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+      +'<button class="btn btn-sm" onclick="gsSyncNow()">🔄 立即同步</button>'
+      +(g.sheetUrl?'<a class="btn-out btn-sm" href="'+g.sheetUrl+'" target="_blank" rel="noopener" style="text-decoration:none;">📗 打開試算表</a>':'')
+      +'<button class="btn-out btn-sm" onclick="gsReset()">更換試算表</button>'
+    +'</div>'+why+'</div></div>';
+}
 
 // ── 用量提醒：每天最多提醒一次 ──
 function usageDailyCheck(){
@@ -11631,7 +11787,7 @@ function pgSettings(){
           </div>`).join('')}
       </div>
     </div>
-  </div>${(window.SALE_EDITION?brandSettingsCard():'')+teacherSettingsCard()+featureToggleCard()+usageCard()+sigCleanCard()}
+  </div>${(window.SALE_EDITION?brandSettingsCard():'')+teacherSettingsCard()+featureToggleCard()+usageCard()+gsheetCard()+sigCleanCard()}
   `;
 }
 
@@ -20249,27 +20405,8 @@ window.doOut=async()=>{
 window.exportXLSX=()=>{
   if(typeof XLSX==='undefined'){toast('⏳ 載入中請稍候');return;}
   const wb=XLSX.utils.book_new();
-  const ds=today();
-  const salesRows=[['日期','類型','項目','細項備註','金額','付款','老師','客戶'],...S.data.sales.map(s=>[s.date,s.type==='service'?'服務':s.type==='product'?'產品':'課程',s.item,s.subNote||'',s.amount,s.payMethod,s.staff,s.customer])];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(salesRows),'銷售記錄');
-  const expRows=[['日期','類別','金額','付款','備註'],...S.data.expenses.map(e=>[e.date,e.category,e.amount,e.payMethod,e.note])];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(expRows),'支出記錄');
-  const invRows=[['產品名稱','類別','現有庫存','最低庫存','售價','成本','庫存價值'],...(S.data.products||[]).map(p=>{const i=getInv(p.id);return[p.name,p.category,i.qty,i.minQty||1,p.price,p.cost||0,toN(i.qty)*toN(p.cost||0)];})];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(invRows),'庫存清單');
-  const purRows=[['日期','產品','類別','數量','單價','總成本','供應商'],...S.data.purchases.map(p=>[p.date,p.productName,p.category,p.qty,p.unitCost,p.totalCost,p.supplier])];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(purRows),'進貨記錄');
-  const cfRows=[['日期','金額','類別','說明'],...S.data.cashFlow.map(c=>[c.date,c.amount,c.cat,c.note])];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cfRows),'現金流水帳');
-  // 客戶資料
-  const custRows=[['姓名','電話','生日','來源','儲值餘額','累計消費','消費次數','備註'],...(S.data.customers||[]).map(c=>{
-    const h=getCustomerHistory(c.name);
-    return[c.name,c.phone||'',c.birthday||'',c.source||'',getCustomerBalance(c.name),h.totalSpent,h.visitCount,c.note||''];
-  })];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(custRows),'客戶資料');
-  // 儲值紀錄
-  const dpRows=[['日期','客戶','儲值金額','實際收款方式','備註'],...(S.data.deposits||[]).map(d=>[d.date,d.customer,d.amount,d.payMethod,d.note])];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dpRows),'儲值入帳');
-  XLSX.writeFile(wb,`沐蜜財務_${ds}.xlsx`);
+  buildExportTables().forEach(([name,rows])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),name));
+  XLSX.writeFile(wb,brandFile()+'財務_'+today()+'.xlsx');
   toast('✅ Excel 已下載');
 };
 
