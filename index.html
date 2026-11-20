@@ -926,6 +926,7 @@ function startSync(){
     S.data.mindNotes=d.mindNotes||[];
     S.data.skinSolutions=d.skinSolutions||[];
     S.data.ritual=d.ritual||{};
+    S.data.reels=d.reels||null;
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
@@ -938,7 +939,7 @@ function startSync(){
       await initDefaults();
     }
     hydrateMainImages();
-    setSyncing('synced');render();
+    S._mainLoaded=true;setSyncing('synced');render();
     setTimeout(migrateMainImages,3000);
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
@@ -1128,6 +1129,7 @@ function appHTML(){
     {id:'overview',ico:'📊',lbl:'總覽'},
     {id:'action',ico:'🎯',lbl:'行動計畫'},
     {id:'ritual',ico:'🌅',lbl:'金錢儀式'},
+    {id:'reels',ico:'🎬',lbl:'短影音企劃'},
     {id:'cashflow',ico:'🏦',lbl:'現金流帳目'},
     {id:'myfinance',ico:'👑',lbl:'我的理財'},
     {id:'advisor',ico:'📈',lbl:'經營報表',group:'report'},
@@ -1232,6 +1234,7 @@ function _renderPageInner(){
     case'notes':     return pgNotes();
     case'action':    return pgAction();
     case'ritual':    return pgRitual();
+    case'reels':     return pgReels();
     case'cases':     return pgCases();
     case'staff':     return pgStaff();
     case'cashflow':  return pgCashflow();
@@ -1840,6 +1843,180 @@ window.actSaveGoal=async function(id){
   closeMod();actRefresh();
 };
 window.actDelGoal=async function(id){if(!confirm('刪除這個目標？（相關行動會保留）'))return;await delSub('actionItems',id);closeMod();actRefresh();};
+
+// ═══════════ 🎬 短影音企劃（帳號企劃・列點腳本・提詞・成效覆盤）═══════════
+const REEL_STATUS=[['idea','💡 點子'],['script','📝 腳本好了'],['shot','🎥 已拍'],['posted','🚀 已發布']];
+const REEL_PILLARS_DEFAULT=['🎓 專業知識','✨ 作品與過程','💬 客人與我的故事'];
+const REEL_HOOKS=['你是不是也…？（說出觀眾的痛點）','做霧眉前，一定要知道的 3 件事','90% 的人都不知道…','千萬不要再…了！','我做了 ___ 年，最常被問的問題是…','如果你是 ___ 膚質，一定要看完','花 ___ 元做霧眉，差別在哪？','她說：「___」（客人原話開場）'];
+const REEL_CTAS=['留言「___」，我私訊教你','存起來，做眉毛前再看一次','分享給也在煩惱的朋友','你是哪一種？留言告訴我','想知道自己適合什麼眉型？私訊我'];
+const REEL_STARTER=[
+ {p:0,title:'霧眉前，我一定先做這 3 個動作',hook:'做霧眉前，老師有先摸過你的皮膚嗎？',pts:['看：毛孔跟油光，判斷你是油肌、乾肌還是敏感肌','觸：輕推眉骨的皮膚，決定我下手要多輕多深','問：有沒有擦酸類、常曬太陽、常熬夜'],cta:'留言「膚質」，我告訴你怎麼判斷自己是哪一種',shots:['特寫：手指輕推眉骨','特寫：近看眉周毛孔','畫面：拿評估卡問客人']},
+ {p:0,title:'油肌霧眉為什麼容易暈開？',hook:'霧眉做完一個月就暈開、掉光？可能不是技術問題',pts:['油脂會把色料慢慢推出來','所以油肌我用「點刺」，點跟點之間留空間','1～1.5 個月內一定要回來補第一次'],cta:'你是油肌嗎？留言 +1，我再拍保養篇',shots:['特寫：T 字油光','特寫：點刺手法','前後對比：補色前後']},
+ {p:0,title:'每天擦 A 醇的人，眉毛掉比較快？',hook:'每天擦 A 醇、果酸的你，眉毛可能掉得比別人快',pts:['酸類會讓皮膚代謝變快，色料也跟著代謝','所以我會把邊緣做得柔霧，褪色時才自然','擦酸類前，先在眉毛擦一層凡士林，避開眉周 1 公分'],cta:'存起來，擦保養品前看一次',shots:['畫面：常見酸類保養品','特寫：用棉花棒在眉毛擦凡士林']},
+ {p:0,title:'愛曬太陽的人，眉毛會變紅變藍？',hook:'常爬山、游泳的人，霧眉為什麼會變紅？',pts:['紫外線會讓色料氧化變色','我調色時會加一點中和色，降低變色機率','眉毛也要防曬：帽子、陽傘、物理性防曬'],cta:'分享給愛戶外運動的朋友',shots:['畫面：戶外陽光','特寫：調色過程','畫面：戴帽子示範']},
+ {p:0,title:'敏感肌可以做霧眉嗎？',hook:'皮膚很敏感可以做霧眉嗎？答案可能讓你意外',pts:['薄皮、敏感肌我會「寧淺勿深」','用細膩好上色的色乳，減少皮膚負擔','回家保濕做好、痂不乾裂，留色反而最好'],cta:'你也是敏感肌嗎？留言問我',shots:['特寫：輕柔下針','畫面：塗修復霜']},
+ {p:0,title:'霧眉第 3 天像蠟筆小新？正常！',hook:'霧眉做完第 3 天顏色好深，是不是做失敗了？',pts:['前幾天顏色偏深是正常的','第 5～7 天開始脫屑，千萬不要用手摳','大約 2～4 週後才是真正的顏色'],cta:'存起來，做完霧眉那週不用慌',shots:['照片：第 1、3、7、14 天變化（客人同意）']},
+ {p:0,title:'霧眉補色是在推銷嗎？',hook:'霧眉一定要補色嗎？是不是在推銷？',pts:['第一次做完，每個人吸色不同，有空洞很正常','補色是把不均勻的地方補滿，讓顏色穩定','油肌 1～1.5 個月、一般 3 個月內補最剛好'],cta:'想知道你適合幾個月補？私訊我',shots:['前後對比：補色前 vs 補色後']},
+ {p:1,title:'從評估到完成：一位客人的霧眉過程',hook:'一支霧眉，我會花 30 分鐘先「看」你',pts:['膚質評估：看、觸、問','眉型設計：骨骼、肌肉、毛流，客人坐著照鏡子確認','上色完成，前後對比'],cta:'想看更多過程，追蹤我',shots:['縮時：設計過程','特寫：量眉型','鏡子前確認的表情','完成前後對比']},
+ {p:1,title:'沒有人的眉毛是 100% 對稱的',hook:'你的左右眉毛，其實本來就不一樣',pts:['骨骼、肌肉、表情習慣，左右都不同','所以我會讓客人坐著、說話、微笑時照鏡子確認','設計的是「看起來對稱」，不是死板的一樣'],cta:'你有高低眉嗎？留言告訴我',shots:['特寫：挑眉、皺眉的肌肉','畫面：坐著照鏡子確認']},
+ {p:2,title:'她說：「我每天畫眉要 15 分鐘」',hook:'她說：「我每天早上畫眉要 15 分鐘，還常常畫歪」',pts:['她的困擾：手殘、高低眉、上班要早起','我幫她做的設計：依骨骼調整高低、走自然霧感','做完她說：每天可以多睡 10 分鐘'],cta:'你也想多睡 10 分鐘嗎？私訊我',shots:['客人原本素顏（同意後）','設計過程','完成後客人的反應']}
+];
+function reelsData(){const r=S.data.reels||{};if(!r.plan)r.plan={};if(!r.items)r.items=[];return r;}
+function reelPillars(){const p=reelsData().plan.pillars;return (p&&p.length)?p:REEL_PILLARS_DEFAULT;}
+async function reelsSave(fn){
+  const r=JSON.parse(JSON.stringify(reelsData()));fn(r);S.data.reels=r;
+  try{await saveMain({reels:r});}catch(e){}
+}
+function reelsRefresh(){const c=document.getElementById('pg-content');if(c){const y=window.scrollY;c.innerHTML=renderPage();window.scrollTo(0,y);}}
+window.reelsRefresh=reelsRefresh;
+function reelWhy(t,b){return '<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:13px;color:#2563eb;font-weight:700;">💡 '+t+'</summary><div style="margin-top:6px;background:#eff6ff;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.85;color:#1e3a8a;">'+b+'</div></details>';}
+const reelEsc=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function pgReels(){
+  const r=reelsData();
+  // 第一次打開：放入 10 支起步腳本
+  if((S._mainLoaded||S.sync==='done')&&(!S.data.reels||!S.data.reels.seeded)){
+    const items=REEL_STARTER.map((x,i)=>({id:'r'+Date.now().toString(36)+i,title:x.title,pillar:REEL_PILLARS_DEFAULT[x.p],hook:x.hook,points:x.pts,cta:x.cta,shots:x.shots,status:'script',date:'',created:today()}));
+    reelsSave(rr=>{rr.items=(rr.items||[]).concat(items);rr.seeded=true;});
+  }
+  const tab=S.reelTab||'scripts';
+  const items=reelsData().items;
+  const posted=items.filter(x=>x.status==='posted').length;
+  let h='<div class="pg-ttl">🎬 短影音企劃</div><div class="pg-sub">企劃決定「你是誰」，腳本決定「留不留得住人」</div>';
+  // 起步進度
+  h+='<div class="card" style="background:linear-gradient(135deg,#fdf2f8,#fff);"><div class="card-bd">'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><b style="flex:1;font-size:16px;color:#9d174d;">🚀 起步目標：先穩定發 15 支</b><b style="font-size:20px;color:#be185d;">'+posted+' / 15</b></div>'
+    +'<div style="height:10px;background:#fce7f3;border-radius:5px;margin-top:8px;overflow:hidden;"><div style="height:100%;width:'+Math.min(100,posted/15*100)+'%;background:linear-gradient(90deg,#f472b6,#be185d);"></div></div>'
+    +reelWhy('為什麼先求「穩定 15 支」，不求完美？','前期最重要的是讓演算法認識你、讓你找到手感。用簡單架構先拍出 10～15 支，看真實數據就知道觀眾喜歡什麼，比花一個月寫完美企劃更有效。')
+    +'</div></div>';
+  const tb=(k,l)=>'<button type="button" onclick="S.reelTab=\''+k+'\';S.reelEdit=null;reelsRefresh();" style="flex:1;padding:11px 6px;border-radius:12px;border:none;font-size:15px;font-weight:800;cursor:pointer;'+(tab===k?'background:#be185d;color:#fff;':'background:#f5f5f4;color:#78716c;')+'">'+l+'</button>';
+  h+='<div style="display:flex;gap:6px;margin-bottom:14px;">'+tb('plan','📋 帳號企劃')+tb('scripts','📝 腳本')+tb('stats','📊 成效')+'</div>';
+  if(tab==='plan')h+=reelPlanHtml(r);
+  else if(tab==='stats')h+=reelStatsHtml(items);
+  else h+=S.reelEdit?reelEditHtml(items.find(x=>x.id===S.reelEdit)):reelListHtml(items);
+  return h;
+}
+function reelPlanHtml(r){
+  const p=r.plan||{},pil=reelPillars();
+  const fld=(k,lbl,ph,why)=>'<div class="fgrp" style="margin-top:12px;"><label style="font-size:15px;">'+lbl+'</label><input type="text" value="'+reelEsc(p[k])+'" placeholder="'+ph+'" onchange="reelPlanSet(\''+k+'\',this.value)" style="font-size:16px;">'+(why||'')+'</div>';
+  return '<div class="card"><div class="card-bd">'
+    +'<div style="font-size:16px;font-weight:900;color:#9d174d;">我是誰？讓觀眾看 3 支影片就記住我</div>'
+    +fld('position','🎯 定位：一句話介紹我','例：會先看膚質再決定怎麼做的霧眉師',reelWhy('為什麼要有一句話定位？','沒有定位，容易今天拍美食、明天拍穿搭，演算法沒辦法幫你貼標籤，觀眾也不知道為什麼要追蹤你。一句話講得清楚，你拍的每支影片才會往同一個方向累積。'))
+    +fld('audience','👥 我的觀眾是誰','例：25～40 歲、手殘不會畫眉、在意自然感的上班族',reelWhy('為什麼要想清楚觀眾？','影片是拍給「一個人」看的。想著她的困擾、她會用的話，鉤子才會打中她；也只有這些人追蹤你，才會變成你的客人。'))
+    +fld('core','🏠 核心領域（1 個）','例：霧眉與膚質管理')
+    +'<div class="fgrp" style="margin-top:12px;"><label style="font-size:15px;">📚 固定子主題（3 個，輪流拍）</label>'
+    +[0,1,2].map(i=>'<input type="text" value="'+reelEsc(pil[i]||'')+'" onchange="reelPillarSet('+i+',this.value)" style="font-size:16px;margin-top:6px;">').join('')
+    +reelWhy('為什麼固定 3 個子主題？','只拍作品會像型錄，只拍知識會像老師。三種輪流拍，觀眾會「信任你（專業）＋看見你的實力（作品）＋喜歡你（故事）」，這三個加起來才會預約。')
+    +'</div></div></div>';
+}
+window.reelPlanSet=function(k,v){reelsSave(r=>{r.plan[k]=v;});};
+window.reelPillarSet=function(i,v){reelsSave(r=>{const p=(r.plan.pillars&&r.plan.pillars.length?r.plan.pillars:REEL_PILLARS_DEFAULT).slice();const old=p[i];p[i]=v;r.plan.pillars=p;(r.items||[]).forEach(x=>{if(x.pillar===old)x.pillar=v;});});};
+function reelListHtml(items){
+  const pil=reelPillars();
+  let h='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button class="btn btn-p" style="background:#be185d;" onclick="reelNew()">＋ 新腳本</button>'
+    +'<input type="text" id="reel_quick" placeholder="💡 想到點子先丟這裡，按 Enter" onkeydown="if(event.key===\'Enter\'&&!event.isComposing){reelQuick(this.value);}" style="flex:1;min-width:200px;font-size:16px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--bdr);"></div>';
+  h+=reelWhy('為什麼每支都要寫腳本？','短影音節奏很快，靠臨場發揮常常重點講太慢，前 3 秒沒抓住注意力就被滑走。腳本只要「列點」不用逐字稿：鉤子、3 個重點、收尾，照平常聊天的口氣講，最自然。');
+  REEL_STATUS.forEach(([st,lbl])=>{
+    const arr=items.filter(x=>(x.status||'idea')===st).sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
+    if(!arr.length)return;
+    h+='<div style="margin:18px 0 8px;font-size:16px;font-weight:900;color:#6b21a8;">'+lbl+' <span class="tm" style="font-size:13px;">'+arr.length+'</span></div>';
+    h+=arr.map(x=>{
+      const pi=pil.indexOf(x.pillar),col=['#2563eb','#db2777','#d97706'][pi]||'#64748b';
+      const nx=REEL_STATUS[REEL_STATUS.findIndex(s=>s[0]===st)+1];
+      return '<div style="background:#fff;border:1px solid var(--bdr);border-left:5px solid '+col+';border-radius:12px;padding:12px 14px;margin-bottom:8px;">'
+        +'<div style="display:flex;gap:8px;align-items:flex-start;"><div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:800;line-height:1.45;">'+reelEsc(x.title||'（沒有標題）')+'</div>'
+        +'<div style="font-size:12px;margin-top:3px;"><span style="color:'+col+';font-weight:800;">'+reelEsc(x.pillar||'')+'</span>'+(x.date?'<span class="tm">　📅 '+x.date+'</span>':'')+'</div>'
+        +(x.hook?'<div style="font-size:14px;color:#9d174d;margin-top:6px;">🪝 '+reelEsc(x.hook)+'</div>':'')+'</div></div>'
+        +'<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">'
+        +'<button class="btn btn-s btn-sm" onclick="S.reelEdit=\''+x.id+'\';reelsRefresh();window.scrollTo(0,0);">✏️ 編輯</button>'
+        +(x.hook||(x.points||[]).length?'<button class="btn btn-s btn-sm" onclick="reelPrompter(\''+x.id+'\')">🎥 提詞模式</button>':'')
+        +(nx?'<button class="btn btn-sm" style="background:#fdf2f8;color:#be185d;border:1px solid #fbcfe8;" onclick="reelStatus(\''+x.id+'\',\''+nx[0]+'\')">→ '+nx[1]+'</button>':'')
+        +'</div></div>';
+    }).join('');
+  });
+  return h;
+}
+window.reelNew=function(){const id='r'+Date.now().toString(36);reelsSave(r=>{r.items.push({id,title:'',pillar:reelPillars()[0],hook:'',points:['','',''],cta:'',shots:[],status:'idea',date:'',created:today()});});S.reelEdit=id;reelsRefresh();window.scrollTo(0,0);};
+window.reelQuick=function(v){v=(v||'').trim();if(!v)return;reelsSave(r=>{r.items.push({id:'r'+Date.now().toString(36),title:v,pillar:reelPillars()[0],hook:'',points:['','',''],cta:'',shots:[],status:'idea',date:'',created:today()});});toast('💡 點子已存好');reelsRefresh();setTimeout(()=>{const e=$('reel_quick');if(e)e.focus();},50);};
+window.reelStatus=function(id,st){reelsSave(r=>{const x=r.items.find(i=>i.id===id);if(x){x.status=st;if(st==='posted'&&!x.postedAt)x.postedAt=today();}});toast(st==='posted'?'🚀 發布了！記得過 2～3 天回來填成效':'✓ 已更新');reelsRefresh();};
+function reelEditHtml(x){
+  if(!x){S.reelEdit=null;return reelListHtml(reelsData().items);}
+  const pil=reelPillars();
+  const pts=(x.points&&x.points.length?x.points:['','','']);
+  const inp=(f,v,ph,big)=>'<input type="text" value="'+reelEsc(v)+'" placeholder="'+ph+'" onchange="reelSet(\''+x.id+'\',\''+f+'\',this.value)" style="width:100%;font-size:'+(big?17:16)+'px;padding:11px 12px;border-radius:10px;border:1.5px solid var(--bdr);">';
+  let h='<button class="btn btn-s btn-sm" onclick="S.reelEdit=null;reelsRefresh();">← 回腳本清單</button>';
+  h+='<div class="card" style="margin-top:12px;"><div class="card-bd">';
+  h+='<div class="fgrp"><label>標題（給自己看的）</label>'+inp('title',x.title,'例：油肌霧眉為什麼容易暈開？')+'</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><div class="fgrp" style="flex:2;min-width:180px;"><label>子主題</label><div>'+pil.map(p=>'<button type="button" onclick="reelSet(\''+x.id+'\',\'pillar\',\''+reelEsc(p)+'\',1)" style="padding:7px 12px;margin:2px;border-radius:16px;border:none;cursor:pointer;font-size:14px;'+(x.pillar===p?'background:#be185d;color:#fff;':'background:var(--bg2);')+'">'+reelEsc(p)+'</button>').join('')+'</div></div>'
+    +'<div class="fgrp" style="flex:1;min-width:140px;"><label>預計發布日</label><input type="date" value="'+(x.date||'')+'" onchange="reelSet(\''+x.id+'\',\'date\',this.value)" style="font-size:16px;"></div></div>';
+  // 鉤子
+  h+='<div style="margin-top:16px;font-size:16px;font-weight:900;color:#be185d;">🪝 開頭鉤子（前 3 秒）</div>'+inp('hook',x.hook,'一句話抓住注意力',1)
+    +'<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:13px;color:#be185d;">看鉤子句型</summary><div style="margin-top:6px;">'+REEL_HOOKS.map(k=>'<div style="font-size:14px;padding:5px 0;border-bottom:1px dashed #fce7f3;">'+k+'</div>').join('')+'</div></details>'
+    +reelWhy('為什麼前 3 秒最重要？','觀眾滑手機時，3 秒內沒被抓住就會滑走，後面講得再好也沒人看到。最好的鉤子是直接說出她的困擾或疑問，讓她覺得「這在說我」。');
+  // 重點
+  h+='<div style="margin-top:16px;font-size:16px;font-weight:900;color:#6b21a8;">📌 核心重點（列點就好，不用逐字稿）</div>'
+    +pts.map((pt,i)=>'<div style="display:flex;gap:6px;align-items:center;margin-top:6px;"><b style="color:#6b21a8;">'+(i+1)+'</b><input type="text" value="'+reelEsc(pt)+'" placeholder="一句話一個重點" onchange="reelPt(\''+x.id+'\','+i+',this.value)" style="flex:1;font-size:16px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--bdr);"></div>').join('')
+    +(pts.length<5?'<button class="btn btn-s btn-sm" style="margin-top:6px;" onclick="reelPt(\''+x.id+'\','+pts.length+',\'\')">＋ 加一點</button>':'')
+    +reelWhy('為什麼用列點，不寫逐字稿？','背稿子會變得很僵硬，觀眾聽得出來。把 3 個重點寫在便條紙或提詞模式上，用平常跟朋友聊天的口氣講出來，反而更有魅力，也更像你。');
+  // 收尾
+  h+='<div style="margin-top:16px;font-size:16px;font-weight:900;color:#0f766e;">💬 互動收尾（CTA）</div>'+inp('cta',x.cta,'告訴觀眾看完要做什麼')
+    +'<div style="margin-top:6px;">'+REEL_CTAS.map(k=>'<button type="button" onclick="reelSet(\''+x.id+'\',\'cta\',\''+k+'\',1)" style="padding:6px 10px;margin:2px;border-radius:14px;border:1px solid #99f6e4;background:#f0fdfa;color:#0f766e;font-size:13px;cursor:pointer;">'+k+'</button>').join('')+'</div>'
+    +reelWhy('為什麼結尾要叫觀眾做一件事？','留言、收藏、分享都會讓演算法覺得「這支影片有價值」，推給更多人；私訊則是直接變成客人的入口。不說的話，大部分人看完就滑走了。');
+  // 畫面清單
+  h+='<div style="margin-top:16px;font-size:16px;font-weight:900;color:#d97706;">🎞️ 畫面清單（要補拍的特寫）</div>'
+    +'<textarea rows="3" placeholder="一行一個，例：&#10;特寫：手指輕推眉骨&#10;前後對比：補色前後" onchange="reelSet(\''+x.id+'\',\'shots\',this.value.split(\'\\n\').map(s=>s.trim()).filter(Boolean))" style="width:100%;font-size:16px;line-height:1.7;padding:10px 12px;border-radius:10px;border:1.5px solid var(--bdr);">'+reelEsc((x.shots||[]).join('\n'))+'</textarea>'
+    +reelWhy('為什麼要先列畫面清單？','一直講話的畫面很容易無聊。先想好要穿插哪些特寫（下針、調色、前後對比），拍的時候就不會漏掉，剪接時畫面才會豐富、留得住人。');
+  h+='<div class="fgrp" style="margin-top:14px;"><label>備註</label><input type="text" value="'+reelEsc(x.note)+'" onchange="reelSet(\''+x.id+'\',\'note\',this.value)" placeholder="音樂、穿搭、要找哪位客人拍…" style="font-size:16px;"></div>';
+  h+='<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">'
+    +'<button class="btn btn-p" style="flex:2;background:#be185d;padding:13px;" onclick="reelPrompter(\''+x.id+'\')">🎥 用提詞模式開拍</button>'
+    +'<button class="btn btn-s" style="flex:1;padding:13px;" onclick="S.reelEdit=null;reelsRefresh();">✓ 存好了</button></div>'
+    +'<div style="text-align:right;margin-top:10px;"><button class="bdel" onclick="reelDel(\''+x.id+'\')">刪除這支</button></div>';
+  h+='</div></div>';
+  return h;
+}
+window.reelSet=function(id,f,v,redraw){reelsSave(r=>{const x=r.items.find(i=>i.id===id);if(x){x[f]=v;if(f==='hook'&&v&&x.status==='idea')x.status='script';}});if(redraw)reelsRefresh();};
+window.reelPt=function(id,i,v){reelsSave(r=>{const x=r.items.find(it=>it.id===id);if(!x)return;x.points=(x.points||[]).slice();x.points[i]=v;});if(v==='')reelsRefresh();};
+window.reelDel=function(id){if(!confirm('刪除這支腳本？'))return;reelsSave(r=>{r.items=r.items.filter(x=>x.id!==id);});S.reelEdit=null;reelsRefresh();};
+// 🎥 提詞模式：大字、黑底，拍攝時放在鏡頭旁
+window.reelPrompter=function(id){
+  const x=reelsData().items.find(i=>i.id===id);if(!x)return;
+  if(!x.hook&&!(x.points||[]).some(Boolean)){toast('先寫好鉤子和重點，再開提詞模式');return;}
+  const d=document.createElement('div');d.id='reel_prompter';
+  d.style.cssText='position:fixed;inset:0;z-index:5000;background:#111;color:#fff;overflow-y:auto;padding:28px 22px 60px;font-family:inherit;';
+  const pts=(x.points||[]).filter(Boolean);
+  d.innerHTML='<button onclick="document.getElementById(\'reel_prompter\').remove()" style="position:fixed;top:14px;right:14px;background:#333;color:#fff;border:none;border-radius:20px;padding:10px 16px;font-size:16px;cursor:pointer;">✕ 關閉</button>'
+    +'<div style="max-width:760px;margin:0 auto;">'
+    +'<div style="font-size:15px;color:#f9a8d4;margin-bottom:6px;">🪝 開頭（前 3 秒）</div><div style="font-size:34px;font-weight:900;line-height:1.5;color:#fde047;margin-bottom:28px;">'+reelEsc(x.hook)+'</div>'
+    +pts.map((p,i)=>'<div style="display:flex;gap:14px;margin-bottom:22px;"><span style="font-size:30px;font-weight:900;color:#f472b6;">'+(i+1)+'</span><span style="font-size:30px;font-weight:700;line-height:1.5;">'+reelEsc(p)+'</span></div>').join('')
+    +(x.cta?'<div style="font-size:15px;color:#5eead4;margin:30px 0 6px;">💬 收尾</div><div style="font-size:28px;font-weight:800;line-height:1.5;color:#5eead4;">'+reelEsc(x.cta)+'</div>':'')
+    +((x.shots||[]).length?'<div style="margin-top:36px;border-top:1px solid #333;padding-top:16px;font-size:18px;color:#a3a3a3;line-height:1.9;">🎞️ 別忘了補拍：<br>'+x.shots.map(s=>'・'+reelEsc(s)).join('<br>')+'</div>':'')
+    +'<div style="margin-top:30px;font-size:15px;color:#737373;">用聊天的口氣講，不用一字不差 ♡</div></div>';
+  document.body.appendChild(d);
+};
+// 📊 成效
+function reelStatsHtml(items){
+  const posted=items.filter(x=>x.status==='posted');
+  if(!posted.length)return '<div class="card"><div class="card-bd"><div class="empty" style="padding:30px;"><div class="empty-ico">📊</div><p>還沒有發布的影片</p><div class="tm" style="font-size:13px;">在腳本清單按「→ 🚀 已發布」，過 2～3 天回來填數字</div></div></div></div>';
+  const pil=reelPillars();
+  const n=v=>toN(v);
+  let h=reelWhy('要看哪些數字？為什麼？','<b>完播率</b>：多少人看完，代表內容有沒有留住人，最能看出腳本好不好。<br><b>分享數</b>：觀眾願意轉給朋友，代表「有價值」，是演算法最看重的訊號之一。<br><b>收藏數</b>：觀眾想留著再看，代表實用。<br><b>私訊／預約</b>：真正變成客人的數字。<br>觀看數會受很多因素影響，不用太在意單支高低，看「哪種主題」比較好更重要。');
+  // 依主題比較
+  const by=pil.map(p=>{const a=posted.filter(x=>x.pillar===p&&n(x.views)>0);return {p,cnt:a.length,comp:a.length?a.reduce((s,x)=>s+n(x.completion),0)/a.length:0,share:a.reduce((s,x)=>s+n(x.shares),0),save:a.reduce((s,x)=>s+n(x.saves),0),dm:a.reduce((s,x)=>s+n(x.dms),0),views:a.reduce((s,x)=>s+n(x.views),0)};});
+  const withData=by.filter(b=>b.cnt);
+  if(withData.length){
+    const best=withData.slice().sort((a,b)=>(b.share+b.save+b.dm*3)/Math.max(1,b.cnt)-(a.share+a.save+a.dm*3)/Math.max(1,a.cnt))[0];
+    h+='<div class="card" style="margin-top:10px;"><div class="card-bd"><div style="font-size:16px;font-weight:900;color:#6b21a8;margin-bottom:8px;">哪種主題最有效？</div>'
+      +'<div class="tw"><table style="font-size:14px;"><thead><tr><th>主題</th><th>支數</th><th>平均完播率</th><th>分享</th><th>收藏</th><th>私訊</th></tr></thead><tbody>'
+      +by.map(b=>'<tr><td><b>'+reelEsc(b.p)+'</b></td><td>'+b.cnt+'</td><td>'+(b.cnt?Math.round(b.comp)+'%':'—')+'</td><td>'+b.share+'</td><td>'+b.save+'</td><td>'+b.dm+'</td></tr>').join('')+'</tbody></table></div>'
+      +'<div style="margin-top:10px;background:#fdf2f8;border-radius:10px;padding:10px 14px;font-size:15px;line-height:1.8;">💬 目前觀眾最有反應的是 <b>'+reelEsc(best.p)+'</b>。下個月可以多拍這類，其他主題也保留，讓帳號不單調。</div></div></div>';
+  }
+  h+='<div style="margin:16px 0 8px;font-size:16px;font-weight:900;color:#6b21a8;">每支影片的數字</div>';
+  const num=(x,f,ph)=>'<div style="flex:1;min-width:70px;"><div style="font-size:11px;color:#64748b;">'+ph+'</div><input type="number" inputmode="numeric" value="'+(x[f]||'')+'" onchange="reelSet(\''+x.id+'\',\''+f+'\',this.value)" style="width:100%;font-size:16px;padding:8px;border-radius:8px;border:1.5px solid var(--bdr);"></div>';
+  h+=posted.sort((a,b)=>(b.postedAt||'').localeCompare(a.postedAt||'')).map(x=>'<div style="background:#fff;border:1px solid var(--bdr);border-radius:12px;padding:12px 14px;margin-bottom:8px;">'
+    +'<div style="font-size:15px;font-weight:800;">'+reelEsc(x.title)+'</div><div class="tm" style="font-size:12px;margin-bottom:8px;">'+reelEsc(x.pillar)+'・發布 '+(x.postedAt||'')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'+num(x,'views','觀看')+num(x,'completion','完播率%')+num(x,'shares','分享')+num(x,'saves','收藏')+num(x,'dms','私訊／預約')+'</div>'
+    +'<input type="text" value="'+reelEsc(x.review)+'" placeholder="下一支要微調什麼？（例：鉤子再短一點、多一點特寫）" onchange="reelSet(\''+x.id+'\',\'review\',this.value)" style="width:100%;margin-top:8px;font-size:15px;padding:9px 10px;border-radius:8px;border:1.5px solid var(--bdr);"></div>').join('');
+  return h;
+}
 
 // ═══════════ 🌅 每日金錢儀式 ═══════════
 const RITUAL_POOL=[
