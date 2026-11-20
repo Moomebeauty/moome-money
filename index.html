@@ -256,6 +256,19 @@ const FID='mumei_studio';
 // 安全性：程式裡不放任何密碼。登入時由使用者輸入 Firebase 帳號的密碼。
 const BACKEND_EMAIL='moome5391@gmail.com';
 
+// ── 販售版：把畫面上的 {{店名}}／{{老闆}} 換成店家自己的設定 ──
+if(window.SALE_EDITION){
+  const _b=()=>{const st=(typeof S!=='undefined'&&S.data&&S.data.settings)||{};return {n:st.brandName||'我的工作室',o:st.ownerName||'老闆'};};
+  const bfy=v=>(typeof v==='string'&&v.indexOf('{{')>=0)?v.replace(/\{\{店名\}\}/g,_b().n).replace(/\{\{老闆\}\}/g,_b().o):v;
+  window.brandify=bfy;
+  const wrapProp=(proto,prop)=>{const d=Object.getOwnPropertyDescriptor(proto,prop);if(!d||!d.set)return;Object.defineProperty(proto,prop,{get:d.get,set(v){d.set.call(this,bfy(v));},configurable:true});};
+  wrapProp(Element.prototype,'innerHTML');wrapProp(Node.prototype,'textContent');wrapProp(HTMLElement.prototype,'innerText');wrapProp(HTMLInputElement.prototype,'value');wrapProp(HTMLTextAreaElement.prototype,'value');
+  const _ia=Element.prototype.insertAdjacentHTML;Element.prototype.insertAdjacentHTML=function(pos,h){return _ia.call(this,pos,bfy(h));};
+  const _dw=Document.prototype.write;Document.prototype.write=function(...a){return _dw.apply(this,a.map(bfy));};
+  ['alert','confirm','prompt'].forEach(f=>{const o=window[f];window[f]=function(m,...r){return o.call(window,bfy(m),...r);};});
+  if(navigator.clipboard&&navigator.clipboard.writeText){const o=navigator.clipboard.writeText.bind(navigator.clipboard);navigator.clipboard.writeText=t=>o(bfy(t));}
+  setInterval(()=>{const t=bfy(document.title);if(t!==document.title)document.title=t;},2000);
+}
 // ── CONSTANTS ──────────────────────────────────────────────
 // 日期往後推 N 個月（自動處理月底，如 1/31 + 1月 = 2/28）
 function addMonthsToDate(dateStr, months){
@@ -651,7 +664,8 @@ const DEFAULT_PMU_TERMS={
   closing:`本人係在最佳認知狀態下，仔細閱讀過此份同意書，並經服務人員以本人能充分理解之語言講解後，已完全了解本人權益，並簽名同意施作。`
 };
 
-const TEACHERS=['于蜜','璇璇','婉甄','其他']; // 服務老師
+const TEACHERS_DEFAULT=['于蜜','璇璇','婉甄','其他']; // 服務老師（預設，可在基本設定改）
+function teachers(){const t=S.data&&S.data.settings&&S.data.settings.teachers;return (Array.isArray(t)&&t.length)?t:TEACHERS_DEFAULT;}
 const DEFAULT_COMMISSION_RATE=0.6;  // 老師抽成預設率（60%），抽成基準=原價面額
 const SERVICE_PRESETS=['美容做臉','霧眉霧唇','熱蠟除毛','彩妝服務','美體按摩','自訂項目'];
 const PRODUCT_CATS=['保養品販售','做臉耗材','霧唇霧眉耗材','彩妝耗材','熱蠟耗材','美體耗材','工作室耗材'];
@@ -1151,6 +1165,8 @@ function appHTML(){
     {id:'staff',ico:'👩‍💼',lbl:'老師業績'},
     {id:'settings',ico:'⚙️',lbl:'基本設定',group:'settings'},
   ];
+  const _hid=(S.data.settings&&S.data.settings.hiddenPages)||[];
+  const NAV_PAGES=PAGES.filter(p=>!_hid.includes(p.id));
   const curGroup=navGroupOf(S.page);
   const curPage=PAGES.find(p=>p.id===S.page)||(curGroup&&PAGES.find(p=>p.group===curGroup))||PAGES[0];
   // 判斷是否為客戶簽名模式（隱藏側邊欄與頂部欄，全螢幕沉浸體驗）
@@ -1159,7 +1175,7 @@ function appHTML(){
 <div class="app${isCustomerMode?' customer-mode':''}">
   ${isCustomerMode?'':`<div class="nav-mask" onclick="toggleNav(false)"></div><nav class="sidebar">
     <div class="sb-brand">🌸 沐蜜美學</div>
-    ${PAGES.map(p=>`<div class="sb-item${(S.page===p.id||(p.group&&p.group===curGroup))?' active':''}" onclick="setP('${p.id}')">
+    ${NAV_PAGES.map(p=>`<div class="sb-item${(S.page===p.id||(p.group&&p.group===curGroup))?' active':''}" onclick="setP('${p.id}')">
       <span class="ico">${p.ico}</span><span>${p.lbl}</span>
     </div>`).join('')}
     <div class="sb-extra">
@@ -1180,7 +1196,7 @@ function appHTML(){
     </div>`}
     <div class="content${isCustomerMode?' content-customer':''}" id="pg-content">${renderPage()}</div>
   </div>
-  ${isCustomerMode?'':`<div class="bnav">${[['overview','📊','總覽'],['sales','💰','記帳'],['customers','👤','客戶'],['action','🎯','行動'],['__menu','☰','全部']].map(([id,ic,lb])=>`<button class="bnav-i${S.page===id?' on':''}" onclick="${id==='__menu'?'toggleNav()':`setP('${id}')`}"><span class="bnav-ic">${ic}</span><span>${lb}</span></button>`).join('')}</div>`}
+  ${isCustomerMode?'':`<div class="bnav">${[['overview','📊','總覽'],['sales','💰','記帳'],['customers','👤','客戶'],['action','🎯','行動'],['__menu','☰','全部']].filter(([id])=>!_hid.includes(id)).map(([id,ic,lb])=>`<button class="bnav-i${S.page===id?' on':''}" onclick="${id==='__menu'?'toggleNav()':`setP('${id}')`}"><span class="bnav-ic">${ic}</span><span>${lb}</span></button>`).join('')}</div>`}
 </div>
 <div class="modal-bg${S.modal?' open':''}" id="modal-bg">
   <div class="modal${S.modal&&S.modal.lg?' lg':''}" id="modal-inner">${renderModal()}</div>
@@ -5273,7 +5289,7 @@ function pgOrder(){
             </datalist>
             <div id="m_od_hint" class="tm" style="margin-top:4px;"></div>
           </div>
-          <div class="fgrp"><label>服務老師</label><select id="m_od5">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+          <div class="fgrp"><label>服務老師</label><select id="m_od5">${teachers().map(u=>`<option>${u}</option>`).join('')}</select></div>
           <div class="fgrp"><label>付款方式</label>
             <select id="m_od6" onchange="updateBalanceHint('od')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
           </div>
@@ -5340,7 +5356,7 @@ function pgOrder(){
             </datalist>
             <div id="m_pd_hint" class="tm" style="margin-top:4px;"></div>
           </div>
-          <div class="fgrp"><label>服務老師</label><select id="m_pd6">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+          <div class="fgrp"><label>服務老師</label><select id="m_pd6">${teachers().map(u=>`<option>${u}</option>`).join('')}</select></div>
           <div class="fgrp"><label>付款方式</label>
             <select id="m_pd7" onchange="updateBalanceHint('pd')">${PAY.map(p=>`<option>${p}</option>`).join('')}</select>
           </div>
@@ -6328,7 +6344,7 @@ function pgTreatment(){
       mode:'staff',     // 'staff'=老師設定 / 'customer'=客戶顯示簽名 / 'newCustomer'=首次建檔
       customer:'',
       date:today(),
-      staff:TEACHERS[0]||'于蜜',
+      staff:teachers()[0]||'',
       services:[],
       products:[],
       skinCondition:'',
@@ -11392,7 +11408,7 @@ function pgSettings(){
           </div>`).join('')}
       </div>
     </div>
-  </div>${sigCleanCard()}
+  </div>${(window.SALE_EDITION?brandSettingsCard():'')+teacherSettingsCard()+featureToggleCard()+sigCleanCard()}
   `;
 }
 
@@ -11652,7 +11668,7 @@ function renderModal(){
       <div class="fgrp"><label>細項備註</label><input type="text" id="m_sNote" placeholder="選填"></div>
       <div class="fgrp"><label>金額</label><input type="number" id="m_s3" placeholder="0"></div>
       <div class="fgrp"><label>付款方式</label><select id="m_s4">${PAY.map(p=>`<option>${p}</option>`).join('')}</select></div>
-      <div class="fgrp"><label>服務老師</label><select id="m_s5">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>服務老師</label><select id="m_s5">${teachers().map(u=>`<option>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>客戶</label><input type="text" id="m_s6" placeholder="選填"></div>
     </div>
     <div class="mbtns"><button class="btn btn-s" onclick="closeMod()">取消</button><button class="btn btn-p" onclick="saveSale()">✓ 確認</button></div>`;}
@@ -11670,7 +11686,7 @@ function renderModal(){
       <div class="fgrp"><label>原價面額</label><input type="number" id="m_sFace" value="${curFace}"><div class="tm" style="font-size:11px;">老師抽成的計算基礎（例：價目表 $2,080）</div></div>
       <div class="fgrp"><label>認列營收（實際金額）</label><input type="number" id="m_s3" value="${s.amount||0}"><div class="tm" style="font-size:11px;">客戶實際買單（折扣後）</div></div>
       <div class="fgrp"><label>付款方式</label><select id="m_s4">${PAY.map(p=>`<option${p===s.payMethod?' selected':''}>${p}</option>`).join('')}</select></div>
-      <div class="fgrp"><label>服務老師</label><select id="m_s5">${TEACHERS.map(u=>`<option${u===s.staff?' selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>服務老師</label><select id="m_s5">${teachers().map(u=>`<option${u===s.staff?' selected':''}>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>客戶</label><input type="text" id="m_s6" value="${s.customer||''}"></div>
       <div class="fgrp" style="grid-column:1/-1;background:var(--bluL);padding:10px;border-radius:8px;border-left:3px solid var(--blu);">
         <label style="color:var(--blu);">👩‍💼 老師抽成設定（可單筆調整）</label>
@@ -12003,7 +12019,7 @@ function renderModal(){
       <div class="fgrp"><label>課程名稱</label><input type="text" id="m_c0" placeholder="課程名稱"></div>
       <div class="fgrp"><label>類別</label><select id="m_c1">${COURSE_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div class="fgrp"><label>日期</label><input type="date" id="m_c2" value="${today()}"></div>
-      <div class="fgrp"><label>講師</label><select id="m_c3">${TEACHERS.map(u=>`<option>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>講師</label><select id="m_c3">${teachers().map(u=>`<option>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>學費/人</label><input type="number" id="m_c4" placeholder="0"></div>
       <div class="fgrp"><label>備註</label><input type="text" id="m_c5" placeholder="選填"></div>
     </div>
@@ -12014,7 +12030,7 @@ function renderModal(){
       <div class="fgrp"><label>課程名稱</label><input type="text" id="m_c0" value="${co.name||''}"></div>
       <div class="fgrp"><label>類別</label><select id="m_c1">${COURSE_CATS.map(cc=>`<option${cc===co.category?' selected':''}>${cc}</option>`).join('')}</select></div>
       <div class="fgrp"><label>日期</label><input type="date" id="m_c2" value="${co.date||today()}"></div>
-      <div class="fgrp"><label>講師</label><select id="m_c3">${TEACHERS.map(u=>`<option${u===co.instructor?' selected':''}>${u}</option>`).join('')}</select></div>
+      <div class="fgrp"><label>講師</label><select id="m_c3">${teachers().map(u=>`<option${u===co.instructor?' selected':''}>${u}</option>`).join('')}</select></div>
       <div class="fgrp"><label>學費/人</label><input type="number" id="m_c4" value="${co.price||0}"></div>
       <div class="fgrp"><label>備註</label><input type="text" id="m_c5" value="${co.note||''}"></div>
     </div>
@@ -15846,7 +15862,7 @@ window.startPmuFlow=()=>{
     birthday:'',address:'',email:'',
     isMinor:false,guardianName:'',
     date:today(),
-    staff:TEACHERS[0]||'于蜜',
+    staff:teachers()[0]||'',
     serviceType:'霧眉',
     designNote:'',designStyle:'',expectation:'',
     conditions:[],conditionNote:'',allergies:[],allergyNote:'',
@@ -16147,7 +16163,7 @@ window.startNewGuestFlow=()=>{
     mode:'guestIntake',
     customer:'',        // 客人自己填
     date:today(),
-    staff:TEACHERS[0]||'于蜜',
+    staff:teachers()[0]||'',
     services:[],products:[],
     skinCondition:'',feedback:'',nextSuggestion:'',
     payMethod:'轉帳',agreed:false,signature:null,
@@ -19731,6 +19747,47 @@ window.sigCleanRun=async function(){
   S.sigSel={};
   toast('🗑 已刪除 '+r.n+' 份簽名'+(r.freed?'，省下約 '+Math.max(1,Math.round(r.freed*0.75/1024))+' KB':''));
   render();
+};
+// ── 服務老師名單 ──
+function teacherSettingsCard(){
+  return '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-ttl">👩‍🎨 服務老師名單</span></div><div class="card-bd">'
+    +'<div class="tm" style="font-size:13px;margin-bottom:8px;">開單、收入記帳時「服務老師」的選項。用頓號或逗號分隔，第一位是預設。</div>'
+    +'<input type="text" value="'+teachers().join('、').replace(/"/g,'&quot;')+'" onchange="saveTeachers(this.value)" style="width:100%;font-size:16px;">'
+    +'</div></div>';
+}
+window.saveTeachers=async function(v){
+  const arr=v.split(/[、,，\s]+/).map(x=>x.trim()).filter(Boolean);
+  if(!arr.length){toast('至少要有一位老師');return;}
+  const settings=Object.assign({},S.data.settings||{},{teachers:arr});S.data.settings=settings;
+  await saveMain({settings});toast('✅ 老師名單已更新');
+};
+// ── 顯示哪些功能（用不到的可以藏起來，資料不會刪）──
+const FEATURE_LIST=[['action','🎯 行動計畫'],['ritual','🌅 金錢儀式'],['reels','🎬 短影音企劃'],['cashflow','🏦 現金流帳目'],['myfinance','👑 我的理財'],['advisor','📈 經營報表'],['customerAsset','💎 客戶資產名單'],['order','🧴 銷售開單'],['purchase','📦 進貨管理'],['inventory','🗂️ 庫存盤點'],['costcompare','🆚 成本比價'],['stockout','📤 出貨耗用'],['equipment','🛋️ 設備資產健檢'],['serviceCost','💎 服務成本卡'],['courses','📋 課程管理'],['notes','📒 備課筆記'],['cases','📚 案例研究室'],['staff','👩‍💼 老師業績']];
+function featureToggleCard(){
+  const hid=(S.data.settings&&S.data.settings.hiddenPages)||[];
+  return '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-ttl">🧩 選單要顯示哪些功能</span></div><div class="card-bd">'
+    +'<div class="tm" style="font-size:13px;margin-bottom:10px;">用不到的功能取消勾選，就會從選單藏起來，資料不會被刪除，隨時可以再打開。</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px;">'
+    +FEATURE_LIST.map(([id,l])=>'<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bdr);border-radius:10px;cursor:pointer;font-size:14px;"><input type="checkbox" style="transform:scale(1.2);" '+(hid.includes(id)?'':'checked')+' onchange="toggleFeature(\''+id+'\',this.checked)">'+l+'</label>').join('')
+    +'</div></div></div>';
+}
+window.toggleFeature=async function(id,on){
+  let hid=((S.data.settings&&S.data.settings.hiddenPages)||[]).filter(x=>x!==id);
+  if(!on)hid.push(id);
+  const settings=Object.assign({},S.data.settings||{},{hiddenPages:hid});S.data.settings=settings;
+  render();await saveMain({settings});
+};
+// ── 販售版：店名／老闆名稱（畫面上的「{{店名}}」「{{老闆}}」會換成這裡的設定）──
+function brandSettingsCard(){
+  const st=S.data.settings||{};
+  return '<div class="card" style="margin-top:16px;border:2px solid var(--gold);"><div class="card-hd" style="background:var(--goldL);"><span class="card-ttl">🏷️ 店家資料</span></div><div class="card-bd">'
+    +'<div class="fg fg2"><div class="fgrp"><label>店名</label><input type="text" value="'+(st.brandName||'').replace(/"/g,'&quot;')+'" placeholder="例：花漾美學" onchange="saveBrand(\'brandName\',this.value)" style="font-size:16px;"></div>'
+    +'<div class="fgrp"><label>老闆／主理人名稱</label><input type="text" value="'+(st.ownerName||'').replace(/"/g,'&quot;')+'" placeholder="例：小花" onchange="saveBrand(\'ownerName\',this.value)" style="font-size:16px;"></div></div>'
+    +'<div class="tm" style="font-size:12px;margin-top:6px;">同意書、訊息範本、畫面標題裡的店名都會自動換成這裡的設定。</div></div></div>';
+}
+window.saveBrand=async function(k,v){
+  const settings=Object.assign({},S.data.settings||{},{[k]:v.trim()});S.data.settings=settings;
+  render();await saveMain({settings});toast('✅ 已更新');
 };
 function sigCleanCard(){
   const list=(S.data.deposits||[]).filter(d=>d.signature).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
