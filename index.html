@@ -236,7 +236,7 @@ tr:hover td{background:var(--bg);}
 <body>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getFirestore,doc,collection,onSnapshot,setDoc,addDoc,deleteDoc,getDocs,query,where,orderBy,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,doc,collection,onSnapshot,setDoc,addDoc,deleteDoc,getDoc,getDocs,query,where,orderBy,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged,setPersistence,browserLocalPersistence,browserSessionPersistence}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const FCFG={
@@ -942,6 +942,7 @@ function startSync(){
     S.data.ritual=d.ritual||{};
     S.data.reels=d.reels||null;
     S.data.treatmentRecords=d.treatmentRecords||[];  // 療程紀錄
+    S.data.lastBackupAt=d.lastBackupAt||'';
     S.data.allocation=d.allocation||{risk:15,operation:20,study:15,invest:35,bonus:15,bigPurchaseLimit:30000,monthlyHouseFund:0};
     // 客戶資料：合併主文件和子集合（向下相容）
     if(Array.isArray(d.customers)&&d.customers.length>0){
@@ -958,21 +959,25 @@ function startSync(){
   },()=>setSyncing('error'));
   _unsubList.push(unsubMain);
 
-  ['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases','actionItems'].forEach(col=>{
+  LIVE_COLS.forEach(col=>{
     const unsub=onSnapshot(collection(db,'studios',FID,col),snap=>{
-      S.data[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
+      _live[col]=snap.docs.map(d=>({id:d.id,...d.data()}));
+      mergeCol(col);
       render();
     });
     _unsubList.push(unsub);
   });
-  // 簽名／大圖的獨立空間：載入後把主資料裡的編號接回圖片
-  const unsubSigs=onSnapshot(collection(db,'studios',FID,'sigs'),snap=>{
-    snap.docs.forEach(d=>{const x=d.data();if(x&&x.img)_imgMap[d.id]=x.img;});
-    _sigsLoaded=true;
-    hydrateMainImages();render();
-    setTimeout(migrateMainImages,3000);
+  // 打包的舊紀錄（每月一份）：讀取次數只算「份數」，不算筆數
+  const unsubArch=onSnapshot(collection(db,'studios',FID,'archive'),snap=>{
+    _archDocs=snap.docs.map(d=>({id:d.id,...d.data()}));
+    rebuildArchIdx();_archLoaded=true;
+    ARCH_COLS.forEach(mergeCol);
+    render();
   });
-  _unsubList.push(unsubSigs);
+  _unsubList.push(unsubArch);
+  // 簽名／大圖改成「畫面用到才讀」，不再每次打開就全部下載
+  _sigsLoaded=true;
+  setTimeout(usageDailyCheck,15000);
 }
 
 // 停止同步（登出時用，清掉所有監聽器）
@@ -1048,7 +1053,7 @@ async function addSub(col,data){
   // 不在這裡 push 本地，因為 onSnapshot 的 pendingWrites 已經會更新 S.data[col]
   setSyncing('syncing');
   try{
-    const r=await addDoc(collection(db,'studios',FID,col),fsClean({...data,_at:Date.now()}));
+    const r=await addDoc(collection(db,'studios',FID,col),fsClean(await resolveSigRefs({...data,_at:Date.now()})));
     setSyncing('synced');
     return r;
   }catch(e){console.error(e);setSyncing('error');toast('儲存失敗');}
@@ -1058,8 +1063,9 @@ async function setSub(col,id,data){
   setSyncing('syncing');
   try{
     // 移除 data 裡的 id 欄位（避免混淆），一律用參數 id 當文件路徑
-    const {id:_omit,...clean}=data;
-    await setDoc(doc(db,'studios',FID,col,id),fsClean({...clean,_at:Date.now()}));
+    const {id:_omit,_archived:_a,...clean}=data;
+    await setDoc(doc(db,'studios',FID,col,id),fsClean(await resolveSigRefs({...clean,_at:Date.now()})));
+    await archRemove(col,id);
     // 立即本地更新（避免 onSnapshot 延遲）
     if(!S.data[col])S.data[col]=[];
     const idx=S.data[col].findIndex(x=>x.id===id);
@@ -1072,10 +1078,227 @@ async function delSub(col,id){
   setSyncing('syncing');
   try{
     await deleteDoc(doc(db,'studios',FID,col,id));
+    await archRemove(col,id);
     // 立即本地移除
     if(S.data[col])S.data[col]=S.data[col].filter(x=>x.id!==id);
     setSyncing('synced');
   }catch(e){console.error(e);setSyncing('error');toast('刪除失敗');}
+}
+
+// ═══ 📊 長期使用：舊紀錄打包、簽名用到才讀、完整備份／還原、用量計算 ═══
+// 為什麼：Firebase 免費方案每天可讀 5 萬次。系統每次打開都會把每一筆紀錄讀一次，
+// 紀錄越多、讀越多。把舊紀錄「每月打包成一份」後，一個月幾百筆只算 1 次。
+const LIVE_COLS=['sales','expenses','purchases','courses','courseStudents','cashFlow','houseFund','quarterReviews','coolingDecisions','advisorChats','deposits','stockOuts','learnGoals','appointments','pmuPhotos','pmuCases','actionItems'];
+const ARCH_COLS=['sales','expenses','purchases','cashFlow','stockOuts'];   // 只打包「有日期的流水帳」
+const COL_LABEL={sales:'銷售',expenses:'支出',purchases:'進貨',cashFlow:'現金流',stockOuts:'出貨／耗材',appointments:'預約',deposits:'儲值',courses:'課程',courseStudents:'學員',houseFund:'存錢基金',quarterReviews:'季度回顧',coolingDecisions:'冷靜期決定',advisorChats:'顧問對話',learnGoals:'學習目標',pmuPhotos:'紋繡照片',pmuCases:'紋繡案例',actionItems:'行動計畫'};
+const FREE_READS=50000,OPENS_PER_DAY=5;
+const _live={};
+let _archDocs=[];
+const _archIdx={};
+let _archLoaded=false;
+function mergeCol(col){
+  const live=_live[col]||[];
+  if(ARCH_COLS.indexOf(col)<0){S.data[col]=live.slice();return;}
+  const seen=new Set(live.map(x=>x.id));const arr=live.slice();
+  _archDocs.forEach(b=>{if(b.col!==col)return;(b.items||[]).forEach(it=>{if(it&&it.id&&!seen.has(it.id)){seen.add(it.id);arr.push(Object.assign({},it,{_archived:b.id}));}});});
+  S.data[col]=arr;
+}
+function rebuildArchIdx(){
+  Object.keys(_archIdx).forEach(k=>delete _archIdx[k]);
+  _archDocs.forEach(b=>{if(!_archIdx[b.col])_archIdx[b.col]={};(b.items||[]).forEach(it=>{if(it&&it.id)_archIdx[b.col][it.id]=b.id;});});
+}
+// 修改或刪除一筆「已打包」的紀錄：先從打包裡拿掉（修改的會變回一般紀錄）
+async function archRemove(col,id){
+  const bid=_archIdx[col]&&_archIdx[col][id];if(!bid)return;
+  const b=_archDocs.find(x=>x.id===bid);if(!b)return;
+  const items=(b.items||[]).filter(x=>x&&x.id!==id);
+  const ref=doc(db,'studios',FID,'archive',bid);
+  const {id:_omit,...rest}=b;
+  if(items.length)await setDoc(ref,{...rest,items,_at:Date.now()});else await deleteDoc(ref);
+  b.items=items;delete _archIdx[col][id];
+}
+function archCutoff(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-12);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function archCandidates(){
+  const cut=archCutoff(),out={};
+  ARCH_COLS.forEach(c=>{out[c]=(_live[c]||[]).filter(x=>{const dt=String(x.date||'');return /^\d{4}-\d{2}/.test(dt)&&dt.slice(0,7)<cut&&JSON.stringify(x).indexOf('data:image/')<0;});});
+  return out;
+}
+function usageStats(){
+  const per={};let liveN=0;LIVE_COLS.forEach(c=>{const n=(_live[c]||[]).length;per[c]=n;liveN+=n;});
+  const archItems=_archDocs.reduce((s,b)=>s+(b.items||[]).length,0);
+  const perOpen=1+liveN+_archDocs.length;
+  const cand=archCandidates();
+  return {per,liveN,archDocsN:_archDocs.length,archItems,perOpen,daily:perOpen*OPENS_PER_DAY,candN:Object.values(cand).reduce((s,a)=>s+a.length,0)};
+}
+
+// ── 簽名／大圖：畫面用到才讀（每張只讀一次）──
+const _imgWait={};
+function sigFetch(id){
+  if(_imgMap[id])return Promise.resolve(_imgMap[id]);
+  if(!_imgWait[id])_imgWait[id]=getDoc(doc(db,'studios',FID,'sigs',id)).then(sn=>{const v=sn.exists()?((sn.data()||{}).img||''):'';if(v)_imgMap[id]=v;else delete _imgWait[id];return v;}).catch(e=>{console.warn('讀取簽名失敗',e);delete _imgWait[id];return '';});
+  return _imgWait[id];
+}
+(function(){
+  const d=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
+  if(!d||!d.set)return;
+  Object.defineProperty(HTMLImageElement.prototype,'src',{configurable:true,enumerable:d.enumerable,
+    get(){return d.get.call(this);},
+    set(v){
+      if(typeof v==='string'&&v.slice(0,8)==='sig:img_'){
+        const id=v.slice(4),el=this;
+        if(_imgMap[id]){d.set.call(el,_imgMap[id]);return;}
+        if(el.getAttribute('data-sigp')===id)return;
+        el.setAttribute('data-sigp',id);
+        sigFetch(id).then(im=>{if(el.getAttribute('data-sigp')!==id)return;el.removeAttribute('data-sigp');d.set.call(el,im||'');});
+        return;
+      }
+      if(this.hasAttribute&&this.hasAttribute('data-sigp'))this.removeAttribute('data-sigp');
+      d.set.call(this,v);
+    }});
+  let q=false;
+  const scan=()=>{q=false;document.querySelectorAll('img[src^="sig:img_"]').forEach(el=>{const v=el.getAttribute('src');if(el.getAttribute('data-sigp')!==v.slice(4))el.src=v;});};
+  const go=()=>{if(!q){q=true;Promise.resolve().then(scan);}};
+  const st=document.createElement('style');st.textContent='img[src^="sig:"]{opacity:0}';document.head.appendChild(st);
+  new MutationObserver(go).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
+})();
+
+// 子集合的紀錄要存「真的圖片」：如果從主資料複製過來的是簽名編號，先換回圖片
+async function resolveSigRefs(v){
+  if(typeof v==='string'&&v.slice(0,8)==='sig:img_'){const im=await sigFetch(v.slice(4));return im||v;}
+  if(Array.isArray(v)){const o=[];for(const x of v)o.push(await resolveSigRefs(x));return o;}
+  if(v&&typeof v==='object'){const o={};for(const k of Object.keys(v))o[k]=await resolveSigRefs(v[k]);return o;}
+  return v;
+}
+// ── 完整備份：一個檔案帶走全部資料（含簽名、打包紀錄）──
+function downloadBlob(blob,name){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},5000);
+}
+window.downloadFullBackup=async function(quiet){
+  toast('⏳ 正在打包完整備份…');
+  try{
+    const mainSnap=await getDoc(doc(db,'studios',FID));
+    const sigSnap=await getDocs(collection(db,'studios',FID,'sigs'));
+    const sigs={};sigSnap.docs.forEach(d=>{sigs[d.id]=d.data();});
+    const cols={};LIVE_COLS.forEach(c=>{cols[c]=(_live[c]||[]).map(x=>Object.assign({},x));});
+    const data={app:'studio-backup',v:1,at:nowLocal(),main:mainSnap.exists()?mainSnap.data():{},cols,archive:_archDocs.map(x=>Object.assign({},x)),sigs};
+    const nRec=Object.values(cols).reduce((s,a)=>s+a.length,0)+_archDocs.reduce((s,b)=>s+(b.items||[]).length,0);
+    downloadBlob(new Blob([JSON.stringify(data)],{type:'application/json'}),'完整備份_'+today()+'.json');
+    S.data.lastBackupAt=today();saveMainSilent({lastBackupAt:today()});
+    if(!quiet)toast('✅ 已下載完整備份：'+nRec+' 筆紀錄、'+Object.keys(sigs).length+' 張簽名');
+    render();
+    return true;
+  }catch(e){console.error(e);alert('備份失敗：'+(e.message||e));return false;}
+};
+window.restoreBackupPick=function(){
+  const i=document.createElement('input');i.type='file';i.accept='.json,application/json';
+  i.onchange=()=>{const f=i.files&&i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>restoreBackup(String(r.result||''));r.readAsText(f);};
+  i.click();
+};
+async function restoreBackup(txt){
+  let b;try{b=JSON.parse(txt);}catch(e){alert('這個檔案打不開，不是備份檔');return;}
+  if(!b||b.app!=='studio-backup'||!b.main){alert('這不是本系統的「完整備份」檔');return;}
+  const nCols=Object.values(b.cols||{}).reduce((s,a)=>s+(a||[]).length,0);
+  const nArch=(b.archive||[]).reduce((s,x)=>s+(x.items||[]).length,0);
+  if(!confirm('要用「'+b.at+'」的備份還原嗎？\n\n・寫回 '+(nCols+nArch)+' 筆紀錄、'+Object.keys(b.sigs||{}).length+' 張簽名\n・客戶、設定、方案等基本資料會回到備份當時\n・備份之後才新增的紀錄會保留，不會被刪掉'))return;
+  if(!confirm('再確認一次：開始還原？還原中請不要關掉畫面。'))return;
+  const ops=[[doc(db,'studios',FID),b.main]];
+  Object.entries(b.sigs||{}).forEach(([id,v])=>ops.push([doc(db,'studios',FID,'sigs',id),v]));
+  (b.archive||[]).forEach(x=>{const {id,...r}=x;if(id)ops.push([doc(db,'studios',FID,'archive',id),r]);});
+  Object.entries(b.cols||{}).forEach(([c,arr])=>{if(LIVE_COLS.indexOf(c)<0)return;(arr||[]).forEach(x=>{const {id,_archived,...r}=x;if(id)ops.push([doc(db,'studios',FID,c,id),r]);});});
+  let done=0;
+  try{
+    let batch=writeBatch(db),n=0,size=0;
+    for(const [ref,val] of ops){
+      const sz=JSON.stringify(val).length;
+      if(n&&(n>=400||size+sz>7000000)){await batch.commit();done+=n;toast('⏳ 還原中 '+done+'／'+ops.length);batch=writeBatch(db);n=0;size=0;}
+      batch.set(ref,val);n++;size+=sz;
+    }
+    if(n){await batch.commit();done+=n;}
+    alert('✅ 還原完成，共寫回 '+done+' 份資料。畫面會重新整理。');
+    location.reload();
+  }catch(e){console.error(e);alert('還原中途停止：'+(e.message||e)+'\n\n已寫回 '+done+' 份。可能是今天的免費額度用完，明天再按一次「從備份還原」即可（重複還原不會產生重複資料）。');}
+}
+
+// ── 舊紀錄打包（超過 12 個月、每月一份）──
+window.runArchive=async function(){
+  if(!_archLoaded){alert('資料還在載入，請等幾秒再按');return;}
+  const cand=archCandidates();const total=Object.values(cand).reduce((s,a)=>s+a.length,0);
+  if(!total){alert('目前沒有超過 12 個月的舊紀錄需要打包 👍');return;}
+  if(!confirm('要打包 '+total+' 筆超過 12 個月的舊紀錄嗎？\n\n・會先自動下載一份完整備份到你的裝置\n・紀錄不會消失：報表、查詢照樣看得到，也能修改\n・之後每次打開系統，讀取次數約少 '+total+' 次'))return;
+  const ok=await downloadFullBackup(true);
+  if(!ok){alert('備份沒有成功，為了安全這次先不打包');return;}
+  if(!confirm('備份檔「完整備份_'+today()+'.json」已下載，請確認裝置裡有這個檔案。\n\n確定開始打包？'))return;
+  let done=0;
+  try{
+    for(const c of ARCH_COLS){
+      const list=cand[c];if(!list.length)continue;
+      const byYm={};list.forEach(x=>{const ym=String(x.date).slice(0,7);(byYm[ym]=byYm[ym]||[]).push(x);});
+      for(const ym of Object.keys(byYm).sort()){
+        const exist=_archDocs.filter(b=>b.col===c&&b.ym===ym);
+        const map=new Map();exist.forEach(b=>(b.items||[]).forEach(it=>{if(it&&it.id)map.set(it.id,it);}));
+        byYm[ym].forEach(x=>{const {_archived,...r}=x;map.set(x.id,fsClean(r));});
+        const items=[...map.values()].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+        const parts=[];let cur=[],size=0;
+        items.forEach(it=>{const sz=JSON.stringify(it).length*1.3;if(cur.length&&size+sz>600000){parts.push(cur);cur=[];size=0;}cur.push(it);size+=sz;});
+        if(cur.length)parts.push(cur);
+        const bt=writeBatch(db);
+        parts.forEach((p,i)=>bt.set(doc(db,'studios',FID,'archive',c+'__'+ym+'__'+(i+1)),{col:c,ym,part:i+1,items:p,_at:Date.now()}));
+        exist.forEach(b=>{if(!parts.some((p,i)=>b.id===c+'__'+ym+'__'+(i+1)))bt.delete(doc(db,'studios',FID,'archive',b.id));});
+        await bt.commit();
+        const ids=byYm[ym].map(x=>x.id);
+        for(let i=0;i<ids.length;i+=400){const bd=writeBatch(db);ids.slice(i,i+400).forEach(id=>bd.delete(doc(db,'studios',FID,c,id)));await bd.commit();}
+        done+=ids.length;toast('📦 已打包 '+done+'／'+total+' 筆');
+      }
+    }
+    alert('✅ 打包完成：'+done+' 筆舊紀錄已整理好。\n報表和查詢都照常，下次打開系統會讀得比較少。');
+  }catch(e){console.error(e);alert('打包中途停止：'+(e.message||e)+'\n\n已完成 '+done+' 筆，紀錄不會遺失。明天再按一次「打包舊紀錄」會接著做完。');}
+};
+
+// ── 用量提醒：每天最多提醒一次 ──
+function usageDailyCheck(){
+  try{
+    if(!S.auth)return;
+    const u=usageStats();
+    if(u.daily<FREE_READS*0.7)return;
+    const k='usage_warn_'+today();
+    try{if(localStorage.getItem(k))return;localStorage.setItem(k,'1');}catch(e){}
+    toast('📊 資料變多了，估計每天讀取約 '+u.daily.toLocaleString()+' 次（免費 5 萬）。到「基本設定 → 系統用量」按「打包舊紀錄」');
+  }catch(e){}
+}
+function usageCard(){
+  const u=usageStats();
+  const pct=Math.min(100,Math.round(u.daily/FREE_READS*100));
+  const col=pct>=70?'#dc2626':pct>=50?'#d97706':'#16a34a';
+  const word=pct>=70?'快到上限了，建議現在打包':pct>=50?'過半了，可以開始打包':'很安全';
+  const rows=LIVE_COLS.filter(c=>u.per[c]).sort((a,b)=>u.per[b]-u.per[a]).slice(0,6)
+    .map(c=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--bdr);font-size:14px;"><span>'+(COL_LABEL[c]||c)+'</span><b>'+u.per[c].toLocaleString()+' 筆</b></div>').join('');
+  const lb=S.data.lastBackupAt;
+  const days=lb?Math.floor((new Date(today())-new Date(lb))/86400000):null;
+  const bkTxt=lb?('上次完整備份：'+lb+'（'+days+' 天前）'):'還沒有下載過完整備份';
+  const bkWarn=(!lb||days>31)?'color:#dc2626;font-weight:700;':'';
+  return '<div class="card" style="margin-top:16px;"><div class="card-hd"><span class="card-ttl">📊 系統用量與資料保存</span></div><div class="card-bd">'
+    +'<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">'
+      +'<div style="flex:1;min-width:140px;background:var(--bg2,#faf6f0);border-radius:10px;padding:10px 12px;"><div class="tm" style="font-size:12px;">每次打開系統讀取</div><div style="font-size:24px;font-weight:700;">'+u.perOpen.toLocaleString()+' 次</div></div>'
+      +'<div style="flex:1;min-width:140px;background:var(--bg2,#faf6f0);border-radius:10px;padding:10px 12px;"><div class="tm" style="font-size:12px;">估計每天（打開 '+OPENS_PER_DAY+' 次）</div><div style="font-size:24px;font-weight:700;color:'+col+';">'+u.daily.toLocaleString()+' 次</div></div>'
+    +'</div>'
+    +'<div style="height:12px;background:#eee;border-radius:6px;overflow:hidden;"><div style="height:100%;width:'+Math.max(2,pct)+'%;background:'+col+';"></div></div>'
+    +'<div style="font-size:14px;margin:6px 0 12px;">免費額度每天 50,000 次，目前約用 <b style="color:'+col+';">'+pct+'%</b>：'+word+'</div>'
+    +(rows?'<div style="margin-bottom:12px;"><div class="tm" style="font-size:12px;margin-bottom:4px;">筆數最多的紀錄</div>'+rows+'</div>':'')
+    +(u.archItems?'<div class="tm" style="font-size:13px;margin-bottom:10px;">📦 已打包 '+u.archItems.toLocaleString()+' 筆舊紀錄（'+u.archDocsN+' 份），每次打開只算 '+u.archDocsN+' 次。</div>':'')
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'
+      +'<button class="btn btn-sm" onclick="downloadFullBackup()">💾 下載完整備份</button>'
+      +'<button class="btn btn-sm" onclick="runArchive()"'+(u.candN?'':' style="opacity:.6;"')+'>📦 打包舊紀錄'+(u.candN?'（'+u.candN.toLocaleString()+' 筆可打包）':'')+'</button>'
+      +'<button class="btn-out btn-sm" onclick="restoreBackupPick()">♻️ 從備份還原</button>'
+    +'</div>'
+    +'<div style="font-size:13px;'+bkWarn+'margin-bottom:10px;">'+bkTxt+'（建議每月一次，存到雲端硬碟或電腦）</div>'
+    +'<details><summary style="cursor:pointer;font-size:14px;color:var(--acc,#a05a2c);">為什麼要看這個？</summary><div class="tm" style="font-size:13px;line-height:1.8;margin-top:6px;">'
+      +'・資料存在 Google 的 Firebase，免費方案每天可以讀 5 萬次。系統每打開一次（或離開 30 分鐘再回來），就會把每一筆紀錄讀一次，所以紀錄越多，讀越多。<br>'
+      +'・「打包舊紀錄」：把超過 12 個月的銷售、支出、進貨、現金流、出貨紀錄，每個月合成一份。一個月幾百筆只算 1 次。報表、查詢照常，也能修改。<br>'
+      +'・簽名和照片已改成「畫面用到才讀」，平常打開不會讀。<br>'
+      +'・「完整備份」是一個檔案，裡面有全部資料和簽名。Firebase 免費方案沒有自動備份，萬一刪錯或要搬家，就靠這個檔案「從備份還原」。<br>'
+      +'・就算超過額度，也可以在 Firebase 改成依用量付費，一間店大約每月幾十元。</div></details>'
+    +'</div></div>';
 }
 
 // ── AUTH ───────────────────────────────────────────────────
@@ -11408,7 +11631,7 @@ function pgSettings(){
           </div>`).join('')}
       </div>
     </div>
-  </div>${(window.SALE_EDITION?brandSettingsCard():'')+teacherSettingsCard()+featureToggleCard()+sigCleanCard()}
+  </div>${(window.SALE_EDITION?brandSettingsCard():'')+teacherSettingsCard()+featureToggleCard()+usageCard()+sigCleanCard()}
   `;
 }
 
@@ -19710,7 +19933,8 @@ window.finalizeDeposit=async(data)=>{
 // ── 刪除儲值簽名（保留儲值金額與紀錄，只拿掉簽名圖）──
 function sigImgUsedElsewhere(img,exceptDepIds){
   if(!img)return false;
-  const hit=v=>{if(v===img)return true;if(Array.isArray(v))return v.some(hit);if(v&&typeof v==='object')return Object.values(v).some(hit);return false;};
+  const ref=(typeof img==='string'&&img.startsWith('data:'))?'sig:img_'+imgHash(img):'';
+  const hit=v=>{if(v===img||(ref&&v===ref))return true;if(Array.isArray(v))return v.some(hit);if(v&&typeof v==='object')return Object.values(v).some(hit);return false;};
   if((S.data.deposits||[]).some(d=>!exceptDepIds.includes(d.id)&&d.signature===img))return true;
   return IMG_MAIN_KEYS.some(k=>hit(S.data[k]));
 }
@@ -19724,7 +19948,7 @@ async function removeDepositSigs(ids){
     if(typeof img==='string'&&img.startsWith('data:')){
       if(sigImgUsedElsewhere(img,ids)){kept++;continue;}
       const hid='img_'+imgHash(img);
-      if(_imgMap[hid]){try{await deleteDoc(doc(db,'studios',FID,'sigs',hid));delete _imgMap[hid];}catch(e){console.warn(e);}}
+      try{await deleteDoc(doc(db,'studios',FID,'sigs',hid));delete _imgMap[hid];}catch(e){console.warn(e);}
       freed+=img.length;
     }
   }
