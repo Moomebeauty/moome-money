@@ -980,6 +980,7 @@ function startSync(){
   _sigsLoaded=true;
   setTimeout(usageDailyCheck,15000);
   setTimeout(gsAutoCheck,12000);
+  setTimeout(backupRemindCheck,6000);
 }
 
 // 停止同步（登出時用，清掉所有監聽器）
@@ -1411,6 +1412,31 @@ function gsheetCard(){
     +'</div>'+why+'</div></div>';
 }
 
+
+// ── 每月備份提醒：超過 30 天沒下載完整備份，跳出提醒（一天最多一次，客人操作畫面不跳）──
+function bkDaysSince(){const lb=S.data.lastBackupAt;return lb?Math.floor((new Date(today())-new Date(lb))/86400000):null;}
+function backupRemindCheck(tries){
+  tries=tries||0;
+  if(!S.auth)return;
+  const busy=!gsAllLoaded()||S.modal||S.page==='treatment';
+  if(busy){if(tries<60)setTimeout(()=>backupRemindCheck(tries+1),10000);return;}
+  const days=bkDaysSince();
+  if(days!==null&&days<30)return;
+  try{const sn=localStorage.getItem('bk_snooze');if(sn&&sn>today())return;if(localStorage.getItem('bk_remind_'+today()))return;localStorage.setItem('bk_remind_'+today(),'1');}catch(e){}
+  const last=S.data.lastBackupAt?('上次備份：<b>'+S.data.lastBackupAt+'</b>（'+days+' 天前）'):'你<b>還沒有下載過</b>完整備份';
+  const html='<div class="mttl">💾 該下載這個月的完整備份了</div>'
+    +'<div style="font-size:15px;line-height:1.9;">'+last+'<br>'
+    +'<div class="tm" style="font-size:13px;margin:8px 0 14px;">為什麼：Firebase 免費方案沒有自動備份。這個檔案裡有全部資料和簽名，萬一資料不見或要搬家，靠它把系統救回來。Google 試算表只能查，救不回系統。<br>下載後，存到 Google 雲端硬碟或電腦。</div></div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;">'
+    +'<button class="btn" style="font-size:16px;padding:12px;" onclick="bkRemindDo()">💾 現在下載備份</button>'
+    +'<button class="btn-out" onclick="bkRemindSnooze(1)">明天再提醒我</button>'
+    +'<button class="btn-out" onclick="bkRemindSnooze(7)">7 天後再提醒我</button></div>';
+  S.modal={t:'bkRemind',html};
+  const bg=$('modal-bg'),inn=$('modal-inner');
+  if(bg&&inn){inn.innerHTML=html;bg.className='modal-bg open';inn.className='modal';}
+}
+window.bkRemindDo=async function(){closeMod();const ok=await downloadFullBackup();if(ok)toast('✅ 備份已下載，記得存到雲端硬碟或電腦');};
+window.bkRemindSnooze=function(n){const d=new Date();d.setDate(d.getDate()+n);const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');try{localStorage.setItem('bk_snooze',ds);}catch(e){}closeMod();toast(n===1?'好，明天再提醒你':'好，'+n+' 天後再提醒你');};
 // ── 用量提醒：每天最多提醒一次 ──
 function usageDailyCheck(){
   try{
