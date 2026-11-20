@@ -3752,8 +3752,11 @@ function passListSection(){
   const all=allPassItems();
   if(!all.length)return '';
   const active=all.filter(x=>!x.expired).length;
+  const soon=all.filter(x=>!x.expired&&x.daysLeft!=null&&x.daysLeft<=14).length;
+  // 平常收成一顆小按鈕，需要時才展開
+  if(!S.passOpen)return '<button type="button" onclick="S.passOpen=true;var c=document.getElementById(\'pg-content\');if(c)c.innerHTML=renderPage();setTimeout(function(){var i=document.getElementById(\'pass_search\');if(i)i.focus();},50);" style="display:inline-flex;align-items:center;gap:8px;margin:4px 0 14px;padding:9px 16px;border-radius:20px;border:1.5px solid #86efac;background:#f0fdf4;color:#166534;font-size:14px;font-weight:800;cursor:pointer;">🎫 查吃到飽合約 <span style="font-weight:400;">使用中 '+active+' 筆</span>'+(soon?'<span style="background:#f59e0b;color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;">'+soon+' 筆快到期</span>':'')+' ›</button>';
   return '<div class="card" style="margin:18px 0;border-top:4px solid var(--grn);"><div class="card-bd">'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><span style="flex:1;font-size:17px;font-weight:900;">🎫 除毛吃到飽合約</span><span class="bdg grn">使用中 '+active+' 筆</span><span class="tm" style="font-size:12px;">共 '+all.length+' 筆</span></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><span style="flex:1;font-size:17px;font-weight:900;">🎫 除毛吃到飽合約</span><span class="bdg grn">使用中 '+active+' 筆</span><span class="tm" style="font-size:12px;">共 '+all.length+' 筆</span><button type="button" class="btn btn-s btn-sm" onclick="S.passOpen=false;var c=document.getElementById(\'pg-content\');if(c)c.innerHTML=renderPage();">收起 ✕</button></div>'
     +'<input type="text" id="pass_search" placeholder="🔍 打客人名字查到期日，例如：珮慈" value="'+(S.passSearch||'').replace(/"/g,'&quot;')+'" oninput="if(!event.isComposing)passSearchGo(this.value)" oncompositionend="passSearchGo(this.value)" style="width:100%;font-size:16px;padding:11px 14px;border-radius:12px;margin-bottom:10px;">'
     +'<div id="pass_rows">'+passListRows()+'</div>'
     +(all.length>active?'<button class="btn btn-s btn-sm" onclick="S.passShowAll=!S.passShowAll;var c=document.getElementById(\'pg-content\');if(c)c.innerHTML=renderPage();">'+(S.passShowAll?'只看使用中的':'也顯示已到期的（'+(all.length-active)+' 筆）')+'</button>':'')
